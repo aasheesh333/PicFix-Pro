@@ -32,3 +32,6 @@ google-services.json
 
 # Lint reports
 /app/build/outputs/lint-results-*.html
+*.hprof
+*.log
+*.txt

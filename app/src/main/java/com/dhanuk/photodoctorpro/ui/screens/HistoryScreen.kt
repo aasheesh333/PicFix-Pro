@@ -15,7 +15,9 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(navController: NavController) {
     val context = androidx.compose.ui.platform.LocalContext.current

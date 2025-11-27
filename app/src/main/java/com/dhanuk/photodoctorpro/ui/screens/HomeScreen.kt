@@ -25,6 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 // To change the app logo, replace app/src/main/res/drawable/app_logo.png with a new PNG using the SAME name.
 
@@ -68,33 +70,35 @@ fun FeatureCard(feature: Feature, navController: NavController, animationDelay: 
     var pressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (pressed) 0.95f else 1f)
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .scale(scale)
-            .clickable {
-                pressed = true
-                navController.navigate(feature.route)
-            }
-            .animateEnterExit(
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(durationMillis = 300, delayMillis = animationDelay)
-                )
-            ),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    AnimatedVisibility(
+        visible = true,
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(durationMillis = 300, delayMillis = animationDelay)
+        )
     ) {
-        Row(
-            modifier = Modifier.padding(24.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .scale(scale)
+                .clickable {
+                    pressed = true
+                    navController.navigate(feature.route)
+                },
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
-            Icon(feature.icon, contentDescription = null, modifier = Modifier.size(40.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(feature.title, style = MaterialTheme.typography.titleLarge)
-                Text(feature.subtitle, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.padding(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(feature.icon, contentDescription = null, modifier = Modifier.size(40.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(feature.title, style = MaterialTheme.typography.titleLarge)
+                    Text(feature.subtitle, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }

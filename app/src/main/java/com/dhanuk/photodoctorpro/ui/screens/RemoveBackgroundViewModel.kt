@@ -50,8 +50,13 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
                 segmenter.process(inputImage)
                     .addOnSuccessListener { result ->
                         viewModelScope.launch {
-                            val processedBitmap = processMask(result.foregroundBitmap, originalBitmap)
-                            _uiState.value = _uiState.value.copy(isLoading = false, processedBitmap = processedBitmap)
+                            val foreground = result.foregroundBitmap
+                            if (foreground != null) {
+                                val processedBitmap = processMask(foreground, originalBitmap)
+                                _uiState.value = _uiState.value.copy(isLoading = false, processedBitmap = processedBitmap)
+                            } else {
+                                _uiState.value = _uiState.value.copy(isLoading = false, error = "Could not segment subject")
+                            }
                         }
                     }
                     .addOnFailureListener { e ->

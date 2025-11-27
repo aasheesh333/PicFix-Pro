@@ -1,7 +1,29 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
     id("kotlin-kapt")
+}
+
+// Helper to get properties from local.properties or environment variables
+fun getProperty(key: String, defaultValue: String = ""): String {
+    val rootProjectDir = rootProject.projectDir
+    val localPropertiesFile = File(rootProjectDir, "local.properties")
+    val localProperties = Properties()
+    if (localPropertiesFile.exists()) {
+        localProperties.load(FileInputStream(localPropertiesFile))
+    }
+
+    // Also check app-level local.properties
+    val appLocalPropertiesFile = File(project.projectDir, "local.properties")
+    if (appLocalPropertiesFile.exists()) {
+        localProperties.load(FileInputStream(appLocalPropertiesFile))
+    }
+
+    // Order: System Env -> local.properties -> defaultValue
+    return System.getenv(key) ?: localProperties.getProperty(key) ?: defaultValue
 }
 
 android {
@@ -10,14 +32,36 @@ android {
 
     defaultConfig {
         applicationId = "com.dhanuk.photodoctorpro"
-        minSdk = 21
+        minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+
+        val vCode = getProperty("VERSION_CODE", "1").toIntOrNull() ?: 1
+        val vName = getProperty("VERSION_NAME", "1.0")
+
+        versionCode = vCode
+        versionName = vName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+
+        val admobAppId = getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
+        manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
+
+        val oneSignalAppId = getProperty("ONESIGNAL_APP_ID", "")
+        buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalAppId\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePath = getProperty("KEYSTORE_FILE")
+            if (keystorePath.isNotEmpty()) {
+                storeFile = File(keystorePath)
+                storePassword = getProperty("KEYSTORE_PASSWORD")
+                keyAlias = "mykey"
+                keyPassword = getProperty("KEY_PASSWORD")
+            }
         }
     }
 
@@ -28,6 +72,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -39,9 +84,10 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -59,6 +105,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
 
     // Room
@@ -79,7 +126,7 @@ dependencies {
     implementation(libs.opencv)
 
     // RealESRGAN
-    implementation(libs.realesrgan.mobile)
+    // implementation(libs.realesrgan.mobile)
 
 
     testImplementation(libs.junit)
@@ -89,5 +136,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation(libs.reorderable)
+    // implementation(libs.reorderable)
+    implementation(libs.onesignal)
 }

@@ -6,12 +6,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -21,11 +24,8 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
-import org.burnoutcrew.composereorder.ReorderableItem
-import org.burnoutcrew.composereorder.detectReorderAfterLongPress
-import org.burnoutcrew.composereorder.rememberReorderableLazyListState
-import org.burnoutcrew.composereorder.reorderable
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImageToPdfScreen(navController: NavController) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -58,20 +58,12 @@ fun ImageToPdfScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.selectedImageUris.isNotEmpty()) {
-                val state = rememberReorderableLazyListState(onMove = { from, to ->
-                    viewModel.onImageReordered(from.index, to.index)
-                })
                 LazyColumn(
-                    state = state.listState,
                     modifier = Modifier
                         .weight(1f)
-                        .reorderable(state)
-                        .detectReorderAfterLongPress(state)
                 ) {
-                    items(uiState.selectedImageUris.size, { it }) { index ->
-                        ReorderableItem(state, key = uiState.selectedImageUris[index]) { isDragging ->
-                            ImageRow(uri = uiState.selectedImageUris[index])
-                        }
+                    items(uiState.selectedImageUris) { item ->
+                        ImageRow(uri = item, modifier = Modifier.shadow(0.dp))
                     }
                 }
             } else {

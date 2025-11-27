@@ -23,6 +23,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RemoveBackgroundScreen(navController: NavController) {
     val context = LocalContext.current

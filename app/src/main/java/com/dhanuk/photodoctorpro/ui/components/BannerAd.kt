@@ -14,7 +14,7 @@ fun BannerAd() {
         modifier = Modifier.fillMaxWidth(),
         factory = { context ->
             AdView(context).apply {
-                adSize = AdSize.BANNER
+                setAdSize(AdSize.BANNER)
                 adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test ad unit ID
                 loadAd(AdRequest.Builder().build())
             }

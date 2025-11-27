@@ -21,6 +21,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnhanceImageScreen(navController: NavController) {
     val context = LocalContext.current
@@ -58,9 +59,19 @@ fun EnhanceImageScreen(navController: NavController) {
                 } else {
                     Crossfade(targetState = uiState.processedBitmap) { bitmap ->
                         if (bitmap != null) {
-                            ImageView(bitmap = bitmap)
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Enhanced Image",
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         } else if (uiState.originalBitmap != null) {
-                            ImageView(bitmap = uiState.originalBitmap)
+                            uiState.originalBitmap?.let { bitmap ->
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Original Image",
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         } else {
                             Text(stringResource(R.string.select_an_image_to_enhance))
                         }
