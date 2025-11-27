@@ -16,6 +16,8 @@ class HistoryRepository(private val historyDao: HistoryDao) {
             latest.inputFilePath != history.inputFilePath
         ) {
             historyDao.insert(history)
+        } else {
+            android.util.Log.d("HistoryRepository", "Skipping duplicate history entry: $history")
         }
     }
 

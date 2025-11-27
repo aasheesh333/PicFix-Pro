@@ -10,16 +10,17 @@ import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
-import com.github.ibrahimghadre.realesrgan.RealESRGAN
+import com.dhanuk.photodoctorpro.utils.ImageEnhancer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EnhanceImageUiState())
     val uiState = _uiState.asStateFlow()
-    private var realESRGAN: RealESRGAN? = null
 
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
@@ -43,10 +44,10 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
 
         viewModelScope.launch {
             try {
-                if (realESRGAN == null) {
-                    realESRGAN = RealESRGAN(activity.assets)
+                // Use the new helper with OpenCV
+                val enhancedBitmap = withContext(Dispatchers.Default) {
+                    ImageEnhancer.enhance(bitmap)
                 }
-                val enhancedBitmap = realESRGAN!!.upscale(bitmap, 4)
                 _uiState.value = _uiState.value.copy(isEnhancing = false, processedBitmap = enhancedBitmap)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isEnhancing = false, error = "Enhancement failed: ${e.message}")
@@ -70,13 +71,22 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                     )
                 )
                 AdManager.showInterstitialAd(activity)
-                _uiState.value = EnhanceImageUiState() // Reset state
+                // Do not reset state completely, just notify success
+                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             } finally {
                 _uiState.value = _uiState.value.copy(isEnhancing = false)
             }
         }
+    }
+
+    fun onErrorShown() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun onSavedMessageShown() {
+         _uiState.value = _uiState.value.copy(savedFilePath = null)
     }
 }
 
@@ -86,5 +96,6 @@ data class EnhanceImageUiState(
     val processedBitmap: Bitmap? = null,
     val isEnhancing: Boolean = false,
     val showEnhanceSuggestion: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val savedFilePath: String? = null
 )

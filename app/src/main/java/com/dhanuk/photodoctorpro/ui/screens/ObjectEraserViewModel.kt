@@ -24,6 +24,7 @@ import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
+import android.util.Log
 
 class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
 
@@ -32,7 +33,10 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     init {
         if (!OpenCVLoader.initDebug()) {
+            Log.e("ObjectEraserViewModel", "OpenCV initialization failed.")
             _uiState.value = _uiState.value.copy(error = "OpenCV initialization failed.")
+        } else {
+            Log.d("ObjectEraserViewModel", "OpenCV initialized successfully.")
         }
     }
 
@@ -61,7 +65,15 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     fun onReset() {
         val uri = _uiState.value.selectedImageUri
         val bitmap = _uiState.value.originalBitmap
-        _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap)
+        _uiState.value = ObjectEraserUiState(
+            selectedImageUri = uri,
+            originalBitmap = bitmap,
+            resetPerformed = true // Trigger snackbar
+        )
+    }
+
+    fun onResetMessageShown() {
+        _uiState.value = _uiState.value.copy(resetPerformed = false)
     }
 
     fun eraseObjects() {
@@ -70,6 +82,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         if (paths.isEmpty()) return
 
         _uiState.value = _uiState.value.copy(isErasing = true, error = null)
+        Log.d("ObjectEraserViewModel", "Starting eraseObjects")
 
         viewModelScope.launch {
             try {
@@ -80,7 +93,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                     processedBitmap = resultBitmap,
                     paths = emptyList() // Clear paths after processing
                 )
+                Log.d("ObjectEraserViewModel", "eraseObjects finished successfully")
             } catch (e: Exception) {
+                Log.e("ObjectEraserViewModel", "Error during inpainting", e)
                 _uiState.value = _uiState.value.copy(isErasing = false, error = "Error during inpainting: ${e.message}")
             }
         }
@@ -137,13 +152,23 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                     )
                 )
                 AdManager.showInterstitialAd(activity)
-                _uiState.value = ObjectEraserUiState() // Reset state
+                Log.d("ObjectEraserViewModel", "Image saved to: ${file.absolutePath}")
+                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
             } catch (e: Exception) {
+                Log.e("ObjectEraserViewModel", "Failed to save image", e)
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             } finally {
                 _uiState.value = _uiState.value.copy(isErasing = false)
             }
         }
+    }
+
+    fun onErrorShown() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun onSavedMessageShown() {
+        _uiState.value = ObjectEraserUiState() // Reset state completely after save notification is handled
     }
 }
 
@@ -154,5 +179,7 @@ data class ObjectEraserUiState(
     val paths: List<Pair<Path, Float>> = emptyList(),
     val brushSize: Float = 20f,
     val isErasing: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val savedFilePath: String? = null,
+    val resetPerformed: Boolean = false
 )

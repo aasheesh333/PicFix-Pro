@@ -1,22 +1,26 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
@@ -24,16 +28,18 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImageToPdfScreen(navController: NavController) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val activity = context as Activity
     val db = AppDatabase.getDatabase(context)
     val repository = HistoryRepository(db.historyDao())
     val viewModel: ImageToPdfViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -41,8 +47,37 @@ fun ImageToPdfScreen(navController: NavController) {
         viewModel.onImagesSelected(uris)
     }
 
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar("Error: $it")
+            viewModel.onErrorShown()
+        }
+    }
+
+    LaunchedEffect(uiState.savedFilePath) {
+        uiState.savedFilePath?.let { path ->
+            val result = snackbarHostState.showSnackbar(
+                message = context.getString(R.string.saved_to, File(path).name),
+                actionLabel = context.getString(R.string.open),
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                val file = File(path)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                context.startActivity(intent)
+            }
+            viewModel.onSavedMessageShown()
+             // Do not pop back stack automatically, let user decide or see the result
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.image_to_pdf)) }) }
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.image_to_pdf)) }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -58,12 +93,18 @@ fun ImageToPdfScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.selectedImageUris.isNotEmpty()) {
+                Text(stringResource(R.string.reorder_instructions), style = MaterialTheme.typography.bodySmall)
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
                 ) {
-                    items(uiState.selectedImageUris) { item ->
-                        ImageRow(uri = item, modifier = Modifier.shadow(0.dp))
+                    itemsIndexed(uiState.selectedImageUris) { index, item ->
+                        ImageRow(
+                            uri = item,
+                            modifier = Modifier.shadow(0.dp),
+                            onMoveUp = if (index > 0) { { viewModel.onImageReordered(index, index - 1) } } else null,
+                            onMoveDown = if (index < uiState.selectedImageUris.size - 1) { { viewModel.onImageReordered(index, index + 1) } } else null
+                        )
                     }
                 }
             } else {
@@ -84,22 +125,17 @@ fun ImageToPdfScreen(navController: NavController) {
                     Text(stringResource(R.string.create_pdf))
                 }
             }
-
-            if (uiState.pdfCreationSuccess) {
-                LaunchedEffect(Unit) {
-                    navController.popBackStack()
-                }
-            }
-
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
         }
     }
 }
 
 @Composable
-fun ImageRow(uri: Uri, modifier: Modifier = Modifier) {
+fun ImageRow(
+    uri: Uri,
+    modifier: Modifier = Modifier,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?
+) {
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -116,7 +152,15 @@ fun ImageRow(uri: Uri, modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(uri.lastPathSegment ?: "Image", modifier = Modifier.weight(1f))
-            Icon(Icons.Default.Reorder, contentDescription = stringResource(R.string.drag_to_reorder))
+
+            Column {
+                IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.move_up))
+                }
+                IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.move_down))
+                }
+            }
         }
     }
 }

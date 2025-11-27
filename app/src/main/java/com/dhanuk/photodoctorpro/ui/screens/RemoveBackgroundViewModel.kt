@@ -79,19 +79,34 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     fun saveImage(activity: Activity) {
         val bitmap = _uiState.value.processedBitmap ?: return
         val uri = _uiState.value.selectedImageUri ?: return
+        _uiState.value = _uiState.value.copy(isLoading = true)
         viewModelScope.launch {
-            val file = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
-            repository.addHistory(
-                History(
-                    operationType = "Background Removed",
-                    inputFilePath = uri.toString(),
-                    filePath = file.absolutePath,
-                    timestamp = System.currentTimeMillis()
+            try {
+                val file = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
+                repository.addHistory(
+                    History(
+                        operationType = "Background Removed",
+                        inputFilePath = uri.toString(),
+                        filePath = file.absolutePath,
+                        timestamp = System.currentTimeMillis()
+                    )
                 )
-            )
-            AdManager.showInterstitialAd(activity)
-            _uiState.value = _uiState.value.copy(processedBitmap = null, selectedImageUri = null)
+                AdManager.showInterstitialAd(activity)
+                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
+            } catch (e: Exception) {
+                 _uiState.value = _uiState.value.copy(error = "Save failed: ${e.message}")
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            }
         }
+    }
+
+    fun onErrorShown() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun onSavedMessageShown() {
+        _uiState.value = _uiState.value.copy(savedFilePath = null, processedBitmap = null, selectedImageUri = null)
     }
 }
 
@@ -99,5 +114,6 @@ data class RemoveBackgroundUiState(
     val selectedImageUri: Uri? = null,
     val processedBitmap: Bitmap? = null,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val savedFilePath: String? = null
 )

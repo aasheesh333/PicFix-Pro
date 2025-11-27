@@ -63,7 +63,7 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
                         timestamp = System.currentTimeMillis()
                     )
                 )
-                _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true)
+                _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = file.absolutePath)
                 AdManager.showInterstitialAd(activity)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isCreating = false, error = e.message)
@@ -76,11 +76,20 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
         document.writeTo(FileOutputStream(file))
         file
     }
+
+    fun onErrorShown() {
+         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun onSavedMessageShown() {
+        _uiState.value = _uiState.value.copy(savedFilePath = null, pdfCreationSuccess = false)
+    }
 }
 
 data class ImageToPdfUiState(
     val selectedImageUris: List<Uri> = emptyList(),
     val isCreating: Boolean = false,
     val pdfCreationSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val savedFilePath: String? = null
 )

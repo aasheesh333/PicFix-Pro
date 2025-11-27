@@ -1,6 +1,7 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,12 +17,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +35,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
     val repository = HistoryRepository(db.historyDao())
     val viewModel: RemoveBackgroundViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -39,8 +43,36 @@ fun RemoveBackgroundScreen(navController: NavController) {
         uri?.let { viewModel.onImageSelected(it) }
     }
 
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar("Error: $it")
+            viewModel.onErrorShown()
+        }
+    }
+
+    LaunchedEffect(uiState.savedFilePath) {
+        uiState.savedFilePath?.let { path ->
+            val result = snackbarHostState.showSnackbar(
+                message = context.getString(R.string.saved_to, File(path).name),
+                actionLabel = context.getString(R.string.open),
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                 val file = File(path)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "image/*")
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                context.startActivity(intent)
+            }
+            viewModel.onSavedMessageShown()
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.remove_background)) }) }
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.remove_background)) }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -92,10 +124,6 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.save_png))
-            }
-
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
             }
         }
     }

@@ -44,4 +44,17 @@
     <string name="select_an_image_to_start">Select an image to start.</string>
     <string name="select_an_image_to_enhance">Select an image to enhance.</string>
     <string name="save_image">Save Image</string>
+    <string name="saved_to">Saved to: %s</string>
+    <string name="open">Open</string>
+    <string name="share">Share</string>
+    <string name="error_prefix">Error: %s</string>
+    <string name="changes_reset">Changes reset</string>
+    <string name="reorder_instructions">Use buttons to reorder pages.</string>
+    <string name="move_up">Move Up</string>
+    <string name="move_down">Move Down</string>
+    <string name="original">Original</string>
+    <string name="enhanced">Enhanced</string>
+    <string name="no_history">No history yet.</string>
+    <string name="open_file">Open File</string>
+    <string name="file_not_found">File not found.</string>
 </resources>
