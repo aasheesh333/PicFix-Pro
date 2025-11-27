@@ -1,0 +1,34 @@
+# Gradle files
+.gradle
+build/
+# Local configuration
+local.properties
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Keystore files
+*.jks
+*.keystore
+
+# NDK files
+.externalNativeBuild/
+obj/
+libs/
+packaged_resources/
+
+# Google Services
+google-services.json
+
+# Log files
+*.log
+
+# Test reports
+/app/build/reports/
+/app/build/test-results/
+
+# Lint reports
+/app/build/outputs/lint-results-*.html
