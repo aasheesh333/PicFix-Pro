@@ -63,7 +63,7 @@ android {
         create("release") {
             val keystorePath = getProperty("KEYSTORE_FILE")
             if (keystorePath.isNotEmpty()) {
-                storeFile = File(keystorePath)
+                storeFile = file(keystorePath)
                 storePassword = getProperty("APP_KEYSTORE_PASSWORD")
                 keyAlias = "mykey"
                 keyPassword = getProperty("APP_KEY_PASSWORD")
