@@ -40,13 +40,14 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
 
     fun enhanceImage(activity: Activity) {
         val bitmap = _uiState.value.originalBitmap ?: return
+        val scale = _uiState.value.scaleFactor
         _uiState.value = _uiState.value.copy(isEnhancing = true, error = null)
 
         viewModelScope.launch {
             try {
                 // Use the new helper with OpenCV
                 val enhancedBitmap = withContext(Dispatchers.Default) {
-                    ImageEnhancer.enhance(bitmap)
+                    ImageEnhancer.enhance(bitmap, scale)
                 }
                 _uiState.value = _uiState.value.copy(isEnhancing = false, processedBitmap = enhancedBitmap)
             } catch (e: Exception) {
@@ -55,24 +56,28 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         }
     }
 
+    fun onScaleChanged(scale: Int) {
+        _uiState.value = _uiState.value.copy(scaleFactor = scale)
+    }
+
     fun saveImage(activity: Activity) {
         val bitmap = _uiState.value.processedBitmap ?: return
         val uri = _uiState.value.selectedImageUri ?: return
         _uiState.value = _uiState.value.copy(isEnhancing = true) // Reuse loading state
         viewModelScope.launch {
             try {
-                val file = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
                 repository.addHistory(
                     History(
                         operationType = "Image Enhanced",
                         inputFilePath = uri.toString(),
-                        filePath = file.absolutePath,
+                        filePath = filePath,
                         timestamp = System.currentTimeMillis()
                     )
                 )
                 AdManager.showInterstitialAd(activity)
                 // Do not reset state completely, just notify success
-                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
+                _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             } finally {
@@ -97,5 +102,6 @@ data class EnhanceImageUiState(
     val isEnhancing: Boolean = false,
     val showEnhanceSuggestion: Boolean = false,
     val error: String? = null,
-    val savedFilePath: String? = null
+    val savedFilePath: String? = null,
+    val scaleFactor: Int = 2
 )

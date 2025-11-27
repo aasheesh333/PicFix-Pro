@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -37,6 +38,36 @@ fun RemoveBackgroundScreen(navController: NavController) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+    val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
+
+    BackHandler(enabled = hasUnsavedChanges) {
+        showUnsavedDialog = true
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            title = { Text(stringResource(R.string.unsaved_changes)) },
+            text = { Text(stringResource(R.string.you_have_unsaved_changes_discard)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnsavedDialog = false
+                        navController.popBackStack()
+                    }
+                ) {
+                    Text(stringResource(R.string.discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnsavedDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -52,19 +83,27 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+            val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
             val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, File(path).name),
+                message = context.getString(R.string.saved_to, displayName),
                 actionLabel = context.getString(R.string.open),
                 duration = SnackbarDuration.Long
             )
             if (result == SnackbarResult.ActionPerformed) {
-                 val file = File(path)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val uri = if (path.startsWith("content://")) {
+                    Uri.parse(path)
+                } else {
+                     val file = File(path)
+                     FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                }
                 val intent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, "image/*")
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                 }
-                context.startActivity(intent)
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                }
             }
             viewModel.onSavedMessageShown()
         }

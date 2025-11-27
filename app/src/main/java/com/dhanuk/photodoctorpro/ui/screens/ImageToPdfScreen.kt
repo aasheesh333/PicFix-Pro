@@ -56,19 +56,27 @@ fun ImageToPdfScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+             val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
             val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, File(path).name),
+                message = context.getString(R.string.saved_to, displayName),
                 actionLabel = context.getString(R.string.open),
                 duration = SnackbarDuration.Long
             )
             if (result == SnackbarResult.ActionPerformed) {
-                val file = File(path)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val uri = if (path.startsWith("content://")) {
+                    Uri.parse(path)
+                } else {
+                     val file = File(path)
+                     FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                }
                 val intent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, "application/pdf")
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                 }
-                context.startActivity(intent)
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                }
             }
             viewModel.onSavedMessageShown()
              // Do not pop back stack automatically, let user decide or see the result

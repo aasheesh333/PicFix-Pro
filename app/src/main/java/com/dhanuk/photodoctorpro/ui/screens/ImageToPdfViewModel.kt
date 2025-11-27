@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.documentfile.provider.DocumentFile
+import com.dhanuk.photodoctorpro.utils.UserPreferences
 import java.io.File
 import java.io.FileOutputStream
 
@@ -52,18 +54,18 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
                     }
                 }
 
-                val file = savePdf(activity, pdfDocument)
+                val filePath = savePdf(activity, pdfDocument)
                 pdfDocument.close()
 
                 repository.addHistory(
                     History(
                         operationType = "PDF Created",
                         inputFilePath = uris.joinToString(","),
-                        filePath = file.absolutePath,
+                        filePath = filePath,
                         timestamp = System.currentTimeMillis()
                     )
                 )
-                _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = file.absolutePath)
+                _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = filePath)
                 AdManager.showInterstitialAd(activity)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isCreating = false, error = e.message)
@@ -71,10 +73,28 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
         }
     }
 
-    private suspend fun savePdf(activity: Activity, document: PdfDocument): File = withContext(Dispatchers.IO) {
-        val file = File(activity.getExternalFilesDir(null), "PhotoDoctorPro_${System.currentTimeMillis()}.pdf")
+    private suspend fun savePdf(context: Context, document: PdfDocument): String = withContext(Dispatchers.IO) {
+        val fileName = "PhotoDoctorPro_${System.currentTimeMillis()}.pdf"
+        val saveDirUriString = UserPreferences.getSaveDirectory(context)
+        if (saveDirUriString != null) {
+            try {
+                val treeUri = Uri.parse(saveDirUriString)
+                val docFile = DocumentFile.fromTreeUri(context, treeUri)
+                val file = docFile?.createFile("application/pdf", fileName)
+                if (file != null) {
+                    context.contentResolver.openOutputStream(file.uri)?.use {
+                        document.writeTo(it)
+                    }
+                    return@withContext file.uri.toString()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        val file = File(context.getExternalFilesDir(null), fileName)
         document.writeTo(FileOutputStream(file))
-        file
+        file.absolutePath
     }
 
     fun onErrorShown() {

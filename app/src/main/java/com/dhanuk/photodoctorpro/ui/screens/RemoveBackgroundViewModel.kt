@@ -27,6 +27,12 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     val uiState = _uiState.asStateFlow()
 
     private val segmenterOptions = SubjectSegmenterOptions.Builder()
+        .enableForegroundBitmap()
+        .enableMultipleSubjects(
+            SubjectSegmenterOptions.SubjectResultOptions.Builder()
+                .enableConfidenceMask()
+                .build()
+        )
         .build()
     private val segmenter = SubjectSegmentation.getClient(segmenterOptions)
 
@@ -71,7 +77,9 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     private suspend fun processMask(foregroundBitmap: Bitmap, originalBitmap: Bitmap): Bitmap = withContext(Dispatchers.IO) {
         val resultBitmap = Bitmap.createBitmap(originalBitmap.width, originalBitmap.height, Bitmap.Config.ARGB_8888).applyCanvas {
             drawColor(Color.TRANSPARENT)
-            drawBitmap(foregroundBitmap, 0f, 0f, null)
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            paint.isFilterBitmap = true
+            drawBitmap(foregroundBitmap, 0f, 0f, paint)
         }
         resultBitmap
     }
@@ -82,17 +90,17 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         _uiState.value = _uiState.value.copy(isLoading = true)
         viewModelScope.launch {
             try {
-                val file = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
+                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
                 repository.addHistory(
                     History(
                         operationType = "Background Removed",
                         inputFilePath = uri.toString(),
-                        filePath = file.absolutePath,
+                        filePath = filePath,
                         timestamp = System.currentTimeMillis()
                     )
                 )
                 AdManager.showInterstitialAd(activity)
-                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
+                _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             } catch (e: Exception) {
                  _uiState.value = _uiState.value.copy(error = "Save failed: ${e.message}")
             } finally {

@@ -3,6 +3,7 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -39,6 +40,36 @@ fun EnhanceImageScreen(navController: NavController) {
 
     // Hold to compare state
     var isHolding by remember { mutableStateOf(false) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
+
+    BackHandler(enabled = hasUnsavedChanges) {
+        showUnsavedDialog = true
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            title = { Text(stringResource(R.string.unsaved_changes)) },
+            text = { Text(stringResource(R.string.you_have_unsaved_changes_discard)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnsavedDialog = false
+                        navController.popBackStack()
+                    }
+                ) {
+                    Text(stringResource(R.string.discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnsavedDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -57,19 +88,31 @@ fun EnhanceImageScreen(navController: NavController) {
     // Effect for handling save success
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+            // Use path directly if it's a content URI string, or File name if it's a file path
+            val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
+
             val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, File(path).name),
+                message = context.getString(R.string.saved_to, displayName),
                 actionLabel = context.getString(R.string.open),
                 duration = SnackbarDuration.Long
             )
             if (result == SnackbarResult.ActionPerformed) {
-                val file = File(path)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val uri = if (path.startsWith("content://")) {
+                    Uri.parse(path)
+                } else {
+                    val file = File(path)
+                    FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                }
+
                 val intent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, "image/*")
                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                 }
-                context.startActivity(intent)
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    // Handle case where no app can open the file
+                }
             }
             viewModel.onSavedMessageShown()
         }
@@ -142,6 +185,19 @@ fun EnhanceImageScreen(navController: NavController) {
                     Text(stringResource(R.string.select_image))
                 }
             } else if (uiState.processedBitmap == null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf(2, 4, 6, 8).forEach { scale ->
+                        FilterChip(
+                            selected = uiState.scaleFactor == scale,
+                            onClick = { viewModel.onScaleChanged(scale) },
+                            label = { Text("${scale}x") }
+                        )
+                    }
+                }
+
                 Button(
                     onClick = { viewModel.enhanceImage(activity) },
                     enabled = !uiState.isEnhancing,

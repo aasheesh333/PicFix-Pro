@@ -36,30 +36,35 @@ fun HistoryScreen(navController: NavController) {
 
     if (selectedItem != null) {
         val item = selectedItem!!
+        val isContentUri = item.filePath.startsWith("content://")
+        val displayName = if (isContentUri) "Gallery/Selected Folder" else File(item.filePath).name
+
         AlertDialog(
             onDismissRequest = { selectedItem = null },
             title = { Text(item.operationType) },
             text = {
                 Column {
-                     Text(stringResource(R.string.saved_to, item.filePath))
+                     Text(stringResource(R.string.saved_to, displayName))
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val file = File(item.filePath)
-                        if (file.exists()) {
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                                setDataAndType(uri, mimeType)
-                                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
+                            val uri = if (isContentUri) {
+                                android.net.Uri.parse(item.filePath)
+                            } else {
+                                val file = File(item.filePath)
+                                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                             }
-                            try {
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                // Handle no app found
-                            }
+                            setDataAndType(uri, mimeType)
+                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // Handle no app found
                         }
                         selectedItem = null
                     }
@@ -70,17 +75,21 @@ fun HistoryScreen(navController: NavController) {
             dismissButton = {
                 OutlinedButton(
                     onClick = {
-                         val file = File(item.filePath)
-                        if (file.exists()) {
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                                type = mimeType
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
+                            val uri = if (isContentUri) {
+                                android.net.Uri.parse(item.filePath)
+                            } else {
+                                val file = File(item.filePath)
+                                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                             }
-                             context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
+                            type = mimeType
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                         }
+                        try {
+                             context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
+                        } catch (e: Exception) {}
                         selectedItem = null
                     }
                 ) {
@@ -120,6 +129,7 @@ fun HistoryScreen(navController: NavController) {
                 contentPadding = PaddingValues(16.dp)
             ) {
                 items(historyItems) { item ->
+                    val displayName = if (item.filePath.startsWith("content://")) "Gallery/Selected Folder" else File(item.filePath).name
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -128,7 +138,7 @@ fun HistoryScreen(navController: NavController) {
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(item.operationType, style = MaterialTheme.typography.titleMedium)
-                            Text(File(item.filePath).name, style = MaterialTheme.typography.bodyMedium)
+                            Text(displayName, style = MaterialTheme.typography.bodyMedium)
                             Text(
                                 SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.timestamp)),
                                 style = MaterialTheme.typography.bodySmall

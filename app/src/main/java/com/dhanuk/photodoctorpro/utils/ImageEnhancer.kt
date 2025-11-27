@@ -15,30 +15,35 @@ object ImageEnhancer {
         OpenCVLoader.initDebug()
     }
 
-    fun enhance(bitmap: Bitmap): Bitmap {
+    fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
         val src = Mat()
         Utils.bitmapToMat(bitmap, src)
         Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
 
-        // 1. Sharpening using Unsharp Mask
+        // 1. Upscale
+        val upscaled = Mat()
+        Imgproc.resize(src, upscaled, Size(src.cols() * scaleFactor.toDouble(), src.rows() * scaleFactor.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
+
+        // 2. Sharpening using Unsharp Mask
         val blur = Mat()
-        Imgproc.GaussianBlur(src, blur, Size(0.0, 0.0), 3.0)
+        Imgproc.GaussianBlur(upscaled, blur, Size(0.0, 0.0), 3.0)
         val sharpened = Mat()
-        Core.addWeighted(src, 1.5, blur, -0.5, 0.0, sharpened)
+        Core.addWeighted(upscaled, 1.5, blur, -0.5, 0.0, sharpened)
 
-        // 2. Increase Contrast and Brightness
-        // alpha = 1.2 (contrast), beta = 10 (brightness)
-        val contrast = Mat()
-        sharpened.convertTo(contrast, -1, 1.2, 10.0)
+        // 3. Subtle Contrast and Brightness (Natural look)
+        // alpha = 1.05 (contrast), beta = 5 (brightness)
+        val finalMat = Mat()
+        sharpened.convertTo(finalMat, -1, 1.05, 5.0)
 
-        val resultBitmap = Bitmap.createBitmap(contrast.cols(), contrast.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(contrast, resultBitmap)
+        val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(finalMat, resultBitmap)
 
         // Cleanup
         src.release()
+        upscaled.release()
         blur.release()
         sharpened.release()
-        contrast.release()
+        finalMat.release()
 
         return resultBitmap
     }

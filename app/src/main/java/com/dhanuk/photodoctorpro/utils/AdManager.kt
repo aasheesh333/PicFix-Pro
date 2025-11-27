@@ -8,6 +8,7 @@ import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import android.util.Log
+import com.dhanuk.photodoctorpro.BuildConfig
 
 object AdManager {
 
@@ -30,7 +31,7 @@ object AdManager {
         Log.d(TAG, "Loading Interstitial Ad")
         InterstitialAd.load(
             context,
-            "ca-app-pub-3940256099942544/1033173712", // Test ad unit ID
+            BuildConfig.ADMOB_INTERSTITIAL_ID,
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {

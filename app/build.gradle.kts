@@ -35,8 +35,8 @@ android {
         minSdk = 24
         targetSdk = 34
 
-        val vCode = getProperty("VERSION_CODE", "1").toIntOrNull() ?: 1
-        val vName = getProperty("VERSION_NAME", "1.0")
+        val vCode = getProperty("APP_VERSION_CODE", "1").toIntOrNull() ?: 1
+        val vName = getProperty("APP_VERSION_NAME", "1.0")
 
         versionCode = vCode
         versionName = vName
@@ -46,11 +46,17 @@ android {
             useSupportLibrary = true
         }
 
-        val admobAppId = getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
+        val admobAppId = getProperty("APP_ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
         manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
 
-        val oneSignalAppId = getProperty("ONESIGNAL_APP_ID", "")
+        val oneSignalAppId = getProperty("APP_ONESIGNAL_APP_ID", "")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalAppId\"")
+
+        val interstitialId = getProperty("APP_ADMOB_INTERSTITIAL_ID", "ca-app-pub-3940256099942544/1033173712") // Default Test ID
+        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$interstitialId\"")
+
+        val bannerId = getProperty("APP_ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111") // Default Test ID
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"$bannerId\"")
     }
 
     signingConfigs {
@@ -58,9 +64,9 @@ android {
             val keystorePath = getProperty("KEYSTORE_FILE")
             if (keystorePath.isNotEmpty()) {
                 storeFile = File(keystorePath)
-                storePassword = getProperty("KEYSTORE_PASSWORD")
+                storePassword = getProperty("APP_KEYSTORE_PASSWORD")
                 keyAlias = "mykey"
-                keyPassword = getProperty("KEY_PASSWORD")
+                keyPassword = getProperty("APP_KEY_PASSWORD")
             }
         }
     }
@@ -98,6 +104,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.documentfile)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

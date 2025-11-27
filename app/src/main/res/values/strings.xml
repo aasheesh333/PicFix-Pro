@@ -57,4 +57,7 @@
     <string name="no_history">No history yet.</string>
     <string name="open_file">Open File</string>
     <string name="file_not_found">File not found.</string>
+    <string name="unsaved_changes">Unsaved Changes</string>
+    <string name="you_have_unsaved_changes_discard">You have unsaved changes. Do you want to discard them?</string>
+    <string name="discard">Discard</string>
 </resources>

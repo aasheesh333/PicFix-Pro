@@ -25,11 +25,15 @@ import org.opencv.photo.Photo
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
 import android.util.Log
+import java.util.Stack
 
 class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ObjectEraserUiState())
     val uiState = _uiState.asStateFlow()
+
+    private val undoStack = Stack<Bitmap>()
+    private val redoStack = Stack<Bitmap>()
 
     init {
         if (!OpenCVLoader.initDebug()) {
@@ -43,7 +47,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
-            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap)
+            undoStack.clear()
+            redoStack.clear()
+            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, canUndo = false, canRedo = false)
         }
     }
 
@@ -56,19 +62,54 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     }
 
     fun onUndo() {
+        // 1. Try to undo path first
         val currentPaths = _uiState.value.paths
         if (currentPaths.isNotEmpty()) {
             _uiState.value = _uiState.value.copy(paths = currentPaths.dropLast(1))
+            return
+        }
+
+        // 2. If no paths, undo bitmap
+        if (undoStack.isNotEmpty()) {
+            val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
+            if (current != null) {
+                redoStack.push(current)
+            }
+            val prev = undoStack.pop()
+            _uiState.value = _uiState.value.copy(
+                processedBitmap = prev,
+                canUndo = undoStack.isNotEmpty(),
+                canRedo = true
+            )
+        }
+    }
+
+    fun onRedo() {
+        if (redoStack.isNotEmpty()) {
+            val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
+            if (current != null) {
+                undoStack.push(current)
+            }
+            val next = redoStack.pop()
+            _uiState.value = _uiState.value.copy(
+                processedBitmap = next,
+                canUndo = true,
+                canRedo = redoStack.isNotEmpty()
+            )
         }
     }
 
     fun onReset() {
         val uri = _uiState.value.selectedImageUri
         val bitmap = _uiState.value.originalBitmap
+        undoStack.clear()
+        redoStack.clear()
         _uiState.value = ObjectEraserUiState(
             selectedImageUri = uri,
             originalBitmap = bitmap,
-            resetPerformed = true // Trigger snackbar
+            resetPerformed = true,
+            canUndo = false,
+            canRedo = false
         )
     }
 
@@ -77,25 +118,36 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     }
 
     fun eraseObjects() {
-        val originalBitmap = _uiState.value.originalBitmap ?: return
+        val sourceBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap ?: return
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
 
         _uiState.value = _uiState.value.copy(isErasing = true, error = null)
         Log.d("ObjectEraserViewModel", "Starting eraseObjects")
 
+        // Push current state to Undo Stack
+        undoStack.push(sourceBitmap)
+        redoStack.clear() // New action clears redo history
+
         viewModelScope.launch {
             try {
-                val maskBitmap = createMask(originalBitmap.width, originalBitmap.height, paths)
-                val resultBitmap = applyInpainting(originalBitmap, maskBitmap)
+                val maskBitmap = createMask(sourceBitmap.width, sourceBitmap.height, paths)
+                val resultBitmap = applyInpainting(sourceBitmap, maskBitmap)
+
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
                     processedBitmap = resultBitmap,
-                    paths = emptyList() // Clear paths after processing
+                    paths = emptyList(), // Clear paths after processing
+                    canUndo = true,
+                    canRedo = false
                 )
                 Log.d("ObjectEraserViewModel", "eraseObjects finished successfully")
             } catch (e: Exception) {
                 Log.e("ObjectEraserViewModel", "Error during inpainting", e)
+                // Revert stack push on error?
+                if (undoStack.isNotEmpty() && undoStack.peek() == sourceBitmap) {
+                    undoStack.pop()
+                }
                 _uiState.value = _uiState.value.copy(isErasing = false, error = "Error during inpainting: ${e.message}")
             }
         }
@@ -129,7 +181,8 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         Imgproc.cvtColor(maskMat, maskMat, Imgproc.COLOR_BGRA2GRAY)
 
         val resultMat = Mat()
-        Photo.inpaint(src, maskMat, resultMat, 3.0, Photo.INPAINT_TELEA)
+        // Improved parameters: Radius increased to 5.0 for better coverage
+        Photo.inpaint(src, maskMat, resultMat, 5.0, Photo.INPAINT_TELEA)
 
         val resultBitmap = Bitmap.createBitmap(resultMat.cols(), resultMat.rows(), Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(resultMat, resultBitmap)
@@ -142,18 +195,18 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(isErasing = true) // Reuse loading state
         viewModelScope.launch {
             try {
-                val file = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Erased_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Erased_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
                 repository.addHistory(
                     History(
                         operationType = "Object Erased",
                         inputFilePath = uri.toString(),
-                        filePath = file.absolutePath,
+                        filePath = filePath,
                         timestamp = System.currentTimeMillis()
                     )
                 )
                 AdManager.showInterstitialAd(activity)
-                Log.d("ObjectEraserViewModel", "Image saved to: ${file.absolutePath}")
-                _uiState.value = _uiState.value.copy(savedFilePath = file.absolutePath)
+                Log.d("ObjectEraserViewModel", "Image saved to: $filePath")
+                _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             } catch (e: Exception) {
                 Log.e("ObjectEraserViewModel", "Failed to save image", e)
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
@@ -168,7 +221,8 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     }
 
     fun onSavedMessageShown() {
-        _uiState.value = ObjectEraserUiState() // Reset state completely after save notification is handled
+        // Just clear the message, don't reset the whole state so user can continue editing if they want
+        _uiState.value = _uiState.value.copy(savedFilePath = null)
     }
 }
 
@@ -181,5 +235,7 @@ data class ObjectEraserUiState(
     val isErasing: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
-    val resetPerformed: Boolean = false
+    val resetPerformed: Boolean = false,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false
 )
