@@ -67,6 +67,8 @@ android {
                 storePassword = getProperty("APP_KEYSTORE_PASSWORD")
                 keyAlias = "mykey"
                 keyPassword = getProperty("APP_KEY_PASSWORD")
+                // Explicitly set type to avoid detection errors
+                storeType = "PKCS12"
             }
         }
     }
