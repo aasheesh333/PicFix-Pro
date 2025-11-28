@@ -1,66 +1,69 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
-import com.dhanuk.photodoctorpro.data.local.AppDatabase
-import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
-import com.dhanuk.photodoctorpro.ui.components.BannerAd
-import java.net.URLDecoder
+import com.dhanuk.photodoctorpro.utils.UserPreferences
+
+class SettingsViewModel : ViewModel() {
+    var saveDirectory by mutableStateOf<String?>(null)
+        private set
+
+    fun loadSettings(context: Context) {
+        saveDirectory = UserPreferences.getSaveDirectory(context)
+    }
+
+    fun updateSaveDirectory(context: Context, uri: Uri?) {
+        if (uri != null) {
+            // Persist permission
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            UserPreferences.setSaveDirectory(context, uri.toString())
+            saveDirectory = uri.toString()
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavController) {
     val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val historyViewModel: HistoryViewModel = viewModel(factory = ViewModelFactory(repository))
-    val settingsViewModel: SettingsViewModel = viewModel()
+    val viewModel: SettingsViewModel = viewModel()
 
-    val saveDirectory by settingsViewModel.saveDirectory.collectAsState()
-    var showHistoryDialog by remember { mutableStateOf(false) }
-
-    val directoryPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            settingsViewModel.setSaveDirectory(uri)
-        }
+    LaunchedEffect(Unit) {
+        viewModel.loadSettings(context)
     }
 
-    if (showHistoryDialog) {
-        AlertDialog(
-            onDismissRequest = { showHistoryDialog = false },
-            title = { Text(stringResource(R.string.clear_history)) },
-            text = { Text(stringResource(R.string.are_you_sure_you_want_to_clear_all_history)) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        historyViewModel.clearHistory()
-                        showHistoryDialog = false
-                    }
-                ) {
-                    Text(stringResource(R.string.clear))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showHistoryDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
+    val directoryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        viewModel.updateSaveDirectory(context, uri)
     }
 
     Scaffold(
@@ -68,78 +71,59 @@ fun SettingsScreen(navController: NavController) {
     ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(padding)
+                .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text("Storage", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = "General",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text("Save Location:", style = MaterialTheme.typography.bodyMedium)
-
-            val displayPath = if (saveDirectory != null) {
-                try {
-                    // Try to decode readable path, though URI structure varies
-                    URLDecoder.decode(saveDirectory, "UTF-8")
-                } catch (e: Exception) {
-                    saveDirectory
-                }
-            } else {
-                "Default (App Folder)"
-            }
-
-            Text(
-                text = displayPath ?: "Default",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 4.dp)
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.default_save_location)) },
+                supportingContent = {
+                    Text(
+                        text = viewModel.saveDirectory?.let {
+                            try {
+                                Uri.parse(it).path ?: it
+                            } catch(e: Exception) { it }
+                        } ?: "Default (DCIM/PhotoDoctorPro)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                },
+                leadingContent = { Icon(Icons.Default.Folder, contentDescription = null) },
+                trailingContent = { Icon(Icons.Default.KeyboardArrowRight, contentDescription = null) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        directoryPickerLauncher.launch(null)
+                    }
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { directoryPicker.launch(null) }) {
-                    Text("Change Folder")
-                }
-                if (saveDirectory != null) {
-                    OutlinedButton(onClick = { settingsViewModel.clearSaveDirectory() }) {
-                        Text("Reset to Default")
-                    }
-                }
-            }
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-            Text(stringResource(R.string.app_info), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+             Text(
+                text = "About",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(stringResource(R.string.app_name))
-            Text(stringResource(R.string.version_1_0))
-            Text(stringResource(R.string.developer_dhanuk_software))
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-            Text("Data Management", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { showHistoryDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text(stringResource(R.string.clear_all_history))
-            }
-
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-            Text(stringResource(R.string.legal), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { navController.navigate("privacy_policy") }) {
-                    Text(stringResource(R.string.privacy_policy))
-                }
-                OutlinedButton(onClick = { navController.navigate("terms_and_conditions") }) {
-                    Text(stringResource(R.string.terms_conditions))
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-            BannerAd()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.privacy_policy)) },
+                modifier = Modifier.clickable { navController.navigate("privacy_policy") }
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.terms_conditions)) },
+                modifier = Modifier.clickable { navController.navigate("terms_conditions") }
+            )
+             ListItem(
+                headlineContent = { Text("App Version") },
+                supportingContent = { Text("1.0.0") }
+            )
         }
     }
 }

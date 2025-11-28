@@ -26,6 +26,8 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         viewModelScope.launch {
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
             if (bitmap != null) {
+                // Check if too large, maybe downscale initial view?
+                // For now, load as is, but ImageEnhancer will handle max size.
                 val showSuggestion = bitmap.width < 1280 || bitmap.height < 1280
                 _uiState.value = EnhanceImageUiState(
                     selectedImageUri = uri,
@@ -36,6 +38,10 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                 _uiState.value = _uiState.value.copy(error = "Failed to load image.")
             }
         }
+    }
+
+    fun toggleBeforeAfter() {
+        _uiState.value = _uiState.value.copy(showingOriginal = !_uiState.value.showingOriginal)
     }
 
     fun enhanceImage(activity: Activity) {
@@ -49,7 +55,11 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                 val enhancedBitmap = withContext(Dispatchers.Default) {
                     ImageEnhancer.enhance(bitmap, scale)
                 }
-                _uiState.value = _uiState.value.copy(isEnhancing = false, processedBitmap = enhancedBitmap)
+                _uiState.value = _uiState.value.copy(
+                    isEnhancing = false,
+                    processedBitmap = enhancedBitmap,
+                    showingOriginal = false // Show result immediately
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isEnhancing = false, error = "Enhancement failed: ${e.message}")
             }
@@ -66,7 +76,9 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(isEnhancing = true) // Reuse loading state
         viewModelScope.launch {
             try {
-                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+                // Update: Use new BitmapUtils saving logic (User Prefs / DCIM)
+                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}", Bitmap.CompressFormat.JPEG)
+
                 repository.addHistory(
                     History(
                         operationType = "Image Enhanced",
@@ -76,7 +88,6 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                     )
                 )
                 AdManager.showInterstitialAd(activity)
-                // Do not reset state completely, just notify success
                 _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
@@ -103,5 +114,6 @@ data class EnhanceImageUiState(
     val showEnhanceSuggestion: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
-    val scaleFactor: Int = 2
+    val scaleFactor: Int = 2,
+    val showingOriginal: Boolean = false
 )

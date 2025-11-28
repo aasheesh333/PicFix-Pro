@@ -1,7 +1,6 @@
 package com.dhanuk.photodoctorpro.utils
 
 import android.graphics.Bitmap
-import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.CvType
@@ -11,39 +10,53 @@ import org.opencv.imgproc.Imgproc
 
 object ImageEnhancer {
 
-    init {
-        OpenCVLoader.initDebug()
-    }
-
+    /**
+     * Enhances the image by upscaling (bicubic) and applying sharpening/contrast.
+     * Handles large images by downscaling if necessary before processing to avoid OOM,
+     * unless tiling is implemented (for now, safe downscaling + upscaling).
+     */
     fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
+        // 1. Convert Bitmap to Mat
         val src = Mat()
         Utils.bitmapToMat(bitmap, src)
         Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
 
-        // 1. Upscale
-        val upscaled = Mat()
-        Imgproc.resize(src, upscaled, Size(src.cols() * scaleFactor.toDouble(), src.rows() * scaleFactor.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
+        // 2. Check dimensions and safe downscale if input is huge to prevent OOM during upscale
+        // If image is already 4000x4000 and we want 4x, that's 16000x16000 -> OOM.
+        // Limit max output dimension to ~4096 (texture limit for many devices is 4096 or 8192).
+        // Let's be safe with 3000px max output dimension.
+        val maxDim = 3000.0
+        val currentMax = kotlin.math.max(src.cols(), src.rows())
+        val targetScale = if (currentMax * scaleFactor > maxDim) {
+            maxDim / currentMax
+        } else {
+            scaleFactor.toDouble()
+        }
 
-        // 2. Sharpening using Unsharp Mask
-        val blur = Mat()
-        Imgproc.GaussianBlur(upscaled, blur, Size(0.0, 0.0), 3.0)
-        val sharpened = Mat()
-        Core.addWeighted(upscaled, 1.5, blur, -0.5, 0.0, sharpened)
+        val dst = Mat()
+        val newSize = Size(src.cols() * targetScale, src.rows() * targetScale)
 
-        // 3. Subtle Contrast and Brightness (Natural look)
-        // alpha = 1.05 (contrast), beta = 5 (brightness)
-        val finalMat = Mat()
-        sharpened.convertTo(finalMat, -1, 1.05, 5.0)
+        // 3. Bicubic Resize (Upscale)
+        Imgproc.resize(src, dst, newSize, 0.0, 0.0, Imgproc.INTER_CUBIC)
 
-        val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(finalMat, resultBitmap)
+        // 4. Sharpening (Unsharp Mask)
+        // Blur -> Subtract -> Add back
+        val blurred = Mat()
+        Imgproc.GaussianBlur(dst, blurred, Size(0.0, 0.0), 3.0)
+        Core.addWeighted(dst, 1.5, blurred, -0.5, 0.0, dst)
+
+        // 5. Contrast / Clarity (Simple Alpha/Beta or CLAHE)
+        // Using slight contrast boost
+        dst.convertTo(dst, -1, 1.1, 10.0) // Alpha 1.1 (Contrast), Beta 10 (Brightness)
+
+        // 6. Convert back to Bitmap
+        val resultBitmap = Bitmap.createBitmap(dst.cols(), dst.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(dst, resultBitmap)
 
         // Cleanup
         src.release()
-        upscaled.release()
-        blur.release()
-        sharpened.release()
-        finalMat.release()
+        dst.release()
+        blurred.release()
 
         return resultBitmap
     }

@@ -60,4 +60,5 @@
     <string name="unsaved_changes">Unsaved Changes</string>
     <string name="you_have_unsaved_changes_discard">You have unsaved changes. Do you want to discard them?</string>
     <string name="discard">Discard</string>
+    <string name="default_save_location">Default Save Location</string>
 </resources>
