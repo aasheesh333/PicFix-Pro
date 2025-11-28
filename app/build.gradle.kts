@@ -8,6 +8,7 @@ plugins {
 }
 
 // Helper to get properties from local.properties or environment variables
+// It now checks for the key (GitHub Actions style) and APP_key (Jules environment style)
 fun getProperty(key: String, defaultValue: String = ""): String {
     val rootProjectDir = rootProject.projectDir
     val localPropertiesFile = File(rootProjectDir, "local.properties")
@@ -22,8 +23,15 @@ fun getProperty(key: String, defaultValue: String = ""): String {
         localProperties.load(FileInputStream(appLocalPropertiesFile))
     }
 
-    // Order: System Env -> local.properties -> defaultValue
-    return System.getenv(key) ?: localProperties.getProperty(key) ?: defaultValue
+    // Check System Env (Clean Name) -> System Env (APP_ Prefix) -> local.properties (Clean) -> local.properties (APP_) -> defaultValue
+    val cleanKey = key.removePrefix("APP_")
+    val appPrefixedKey = "APP_$cleanKey"
+
+    return System.getenv(cleanKey)
+        ?: System.getenv(appPrefixedKey)
+        ?: localProperties.getProperty(cleanKey)
+        ?: localProperties.getProperty(appPrefixedKey)
+        ?: defaultValue
 }
 
 android {
@@ -35,8 +43,8 @@ android {
         minSdk = 24
         targetSdk = 34
 
-        val vCode = getProperty("APP_VERSION_CODE", "1").toIntOrNull() ?: 1
-        val vName = getProperty("APP_VERSION_NAME", "1.0")
+        val vCode = getProperty("VERSION_CODE", "1").toIntOrNull() ?: 1
+        val vName = getProperty("VERSION_NAME", "1.0")
 
         versionCode = vCode
         versionName = vName
@@ -46,16 +54,16 @@ android {
             useSupportLibrary = true
         }
 
-        val admobAppId = getProperty("APP_ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
+        val admobAppId = getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
         manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
 
-        val oneSignalAppId = getProperty("APP_ONESIGNAL_APP_ID", "")
+        val oneSignalAppId = getProperty("ONESIGNAL_APP_ID", "")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalAppId\"")
 
-        val interstitialId = getProperty("APP_ADMOB_INTERSTITIAL_ID", "ca-app-pub-3940256099942544/1033173712") // Default Test ID
+        val interstitialId = getProperty("ADMOB_INTERSTITIAL_ID", "ca-app-pub-3940256099942544/1033173712") // Default Test ID
         buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$interstitialId\"")
 
-        val bannerId = getProperty("APP_ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111") // Default Test ID
+        val bannerId = getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111") // Default Test ID
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$bannerId\"")
     }
 
@@ -64,9 +72,9 @@ android {
             val keystorePath = getProperty("KEYSTORE_FILE")
             if (keystorePath.isNotEmpty()) {
                 storeFile = file(keystorePath)
-                storePassword = getProperty("APP_KEYSTORE_PASSWORD")
+                storePassword = getProperty("KEYSTORE_PASSWORD")
                 keyAlias = "mykey"
-                keyPassword = getProperty("APP_KEY_PASSWORD")
+                keyPassword = getProperty("KEY_PASSWORD")
                 // Explicitly set type to avoid detection errors
                 storeType = "PKCS12"
             }

@@ -3,6 +3,9 @@ package com.dhanuk.photodoctorpro
 import android.app.Application
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class PhotoDoctorApplication : Application() {
     override fun onCreate() {
@@ -16,6 +19,8 @@ class PhotoDoctorApplication : Application() {
 
         // requestPermission will show the native Android notification permission prompt.
         // NOTE: It's recommended to call this from your UI layer instead.
-        // OneSignal.Notifications.requestPermission(true)
+        CoroutineScope(Dispatchers.Main).launch {
+            OneSignal.Notifications.requestPermission(true)
+        }
     }
 }
