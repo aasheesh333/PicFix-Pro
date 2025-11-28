@@ -24,13 +24,18 @@ jobs:
     - name: Decode Keystore
       env:
         APP_KEYSTORE_BASE64: ${{ secrets.APP_KEYSTORE_BASE64 }}
+        APP_KEYSTORE_PASSWORD: ${{ secrets.APP_KEYSTORE_PASSWORD }}
       run: |
-        # Use Python for robust decoding
-        python3 -c "import os, base64; open('app/keystore.jks', 'wb').write(base64.b64decode(os.environ['APP_KEYSTORE_BASE64'].translate(str.maketrans('', '', ' \n\r'))))"
+        # Use Python for robust decoding (strip all whitespace)
+        python3 -c "import os, base64, string; open('app/keystore.jks', 'wb').write(base64.b64decode(os.environ['APP_KEYSTORE_BASE64'].translate(str.maketrans('', '', string.whitespace))))"
 
-        # Debug: Check file size and type
+        # Debug info
         ls -l app/keystore.jks
+        md5sum app/keystore.jks
         file app/keystore.jks || true
+
+        # Verify keystore validity with keytool
+        keytool -list -v -keystore app/keystore.jks -storepass "$APP_KEYSTORE_PASSWORD"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
