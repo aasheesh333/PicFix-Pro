@@ -26,8 +26,24 @@ jobs:
         APP_KEYSTORE_BASE64: ${{ secrets.APP_KEYSTORE_BASE64 }}
         APP_KEYSTORE_PASSWORD: ${{ secrets.APP_KEYSTORE_PASSWORD }}
       run: |
-        # Use Python for robust decoding (strip all whitespace)
-        python3 -c "import os, base64, string; open('app/keystore.jks', 'wb').write(base64.b64decode(os.environ['APP_KEYSTORE_BASE64'].translate(str.maketrans('', '', string.whitespace))))"
+        echo "Checking secret length..."
+        echo "Secret length: ${#APP_KEYSTORE_BASE64}"
+
+        if [ "${#APP_KEYSTORE_BASE64}" -eq 0 ]; then
+          echo "Error: APP_KEYSTORE_BASE64 secret is empty!"
+          exit 1
+        fi
+
+        # Save base64 to file first to avoid pipe/shell issues
+        printf "%s" "$APP_KEYSTORE_BASE64" > keystore.b64
+        echo "Base64 file size: $(stat -c%s keystore.b64)"
+
+        # Strip whitespace (using tr)
+        tr -d ' \r\n' < keystore.b64 > keystore.clean.b64
+        echo "Cleaned Base64 file size: $(stat -c%s keystore.clean.b64)"
+
+        # Decode
+        base64 -d keystore.clean.b64 > app/keystore.jks
 
         # Debug info
         ls -l app/keystore.jks
