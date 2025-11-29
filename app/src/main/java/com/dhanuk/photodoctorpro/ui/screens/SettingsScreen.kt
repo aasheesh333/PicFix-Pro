@@ -118,7 +118,7 @@ fun SettingsScreen(navController: NavController) {
             )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.terms_conditions)) },
-                modifier = Modifier.clickable { navController.navigate("terms_conditions") }
+                modifier = Modifier.clickable { navController.navigate("terms_and_conditions") }
             )
              ListItem(
                 headlineContent = { Text("App Version") },

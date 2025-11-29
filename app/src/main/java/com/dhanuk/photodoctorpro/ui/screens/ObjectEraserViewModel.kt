@@ -6,6 +6,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.net.Uri
+import android.util.Log
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.History
@@ -20,11 +23,9 @@ import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Mat
+import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asAndroidPath
-import android.util.Log
 import java.util.Stack
 
 class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
@@ -32,10 +33,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     private val _uiState = MutableStateFlow(ObjectEraserUiState())
     val uiState = _uiState.asStateFlow()
 
-    // Stack to store state history.
-    // We store the Bitmap at each step.
     private val undoStack = Stack<Bitmap>()
     private val redoStack = Stack<Bitmap>()
+    private val MAX_STACK_SIZE = 10
 
     init {
         if (!OpenCVLoader.initDebug()) {
@@ -45,18 +45,10 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
-            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
+            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             undoStack.clear()
             redoStack.clear()
-            // Downscale if too huge for eraser performance
-            val displayBitmap = if (bitmap != null && (bitmap.width > 2048 || bitmap.height > 2048)) {
-                val scale = 2048f / kotlin.math.max(bitmap.width, bitmap.height)
-                Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt(), (bitmap.height * scale).toInt(), true)
-            } else {
-                bitmap
-            }
-
-            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = displayBitmap, canUndo = false, canRedo = false)
+            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap)
         }
     }
 
@@ -64,19 +56,21 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(brushSize = newSize)
     }
 
+    fun onFeatherChanged(newFeather: Float) {
+        _uiState.value = _uiState.value.copy(feather = newFeather)
+    }
+
     fun onPathsChanged(newPaths: List<Pair<Path, Float>>) {
         _uiState.value = _uiState.value.copy(paths = newPaths)
     }
 
     fun onUndo() {
-        // If there are drawing paths (not erased yet), undo the last stroke
         val currentPaths = _uiState.value.paths
         if (currentPaths.isNotEmpty()) {
             _uiState.value = _uiState.value.copy(paths = currentPaths.dropLast(1))
             return
         }
 
-        // Undo Erase Operation
         if (undoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             if (current != null) {
@@ -95,7 +89,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         if (redoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             if (current != null) {
-                undoStack.push(current)
+                pushToStack(undoStack, current)
             }
             val next = redoStack.pop()
             _uiState.value = _uiState.value.copy(
@@ -114,9 +108,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = ObjectEraserUiState(
             selectedImageUri = uri,
             originalBitmap = bitmap,
-            resetPerformed = true,
-            canUndo = false,
-            canRedo = false
+            resetPerformed = true
         )
     }
 
@@ -128,47 +120,48 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         val sourceBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap ?: return
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
+        val feather = _uiState.value.feather
 
         _uiState.value = _uiState.value.copy(isErasing = true, error = null)
 
-        // Push current state BEFORE change to undo stack
-        undoStack.push(sourceBitmap)
+        pushToStack(undoStack, sourceBitmap)
         redoStack.clear()
 
         viewModelScope.launch {
             try {
-                // Ensure the bitmap is mutable or copy
-                val workingBitmap = if (sourceBitmap.isMutable && sourceBitmap.config == Bitmap.Config.ARGB_8888) {
-                    sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                } else {
-                    sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                }
+                // Ensure mutable
+                val workingBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
 
-                val maskBitmap = createMask(workingBitmap.width, workingBitmap.height, paths)
+                // Create Mask
+                val maskBitmap = createMask(workingBitmap.width, workingBitmap.height, paths, feather)
 
+                // Inpaint
                 val resultBitmap = applyInpainting(workingBitmap, maskBitmap)
 
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
                     processedBitmap = resultBitmap,
-                    paths = emptyList(), // Clear mask
+                    paths = emptyList(),
                     canUndo = true,
                     canRedo = false
                 )
             } catch (e: Exception) {
-                // Revert
-                if (undoStack.isNotEmpty() && undoStack.peek() == sourceBitmap) {
-                    undoStack.pop()
-                }
-                _uiState.value = _uiState.value.copy(isErasing = false, error = "Error during inpainting: ${e.message}")
+                if (undoStack.isNotEmpty()) undoStack.pop() // revert stack push
+                _uiState.value = _uiState.value.copy(isErasing = false, error = "Error: ${e.message}")
             }
         }
     }
 
-    private suspend fun createMask(width: Int, height: Int, paths: List<Pair<Path, Float>>): Bitmap = withContext(Dispatchers.Default) {
+    private fun pushToStack(stack: Stack<Bitmap>, bitmap: Bitmap) {
+        if (stack.size >= MAX_STACK_SIZE) {
+            stack.removeAt(0)
+        }
+        stack.push(bitmap)
+    }
+
+    private suspend fun createMask(width: Int, height: Int, paths: List<Pair<Path, Float>>, feather: Float): Bitmap = withContext(Dispatchers.Default) {
         val maskBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(maskBitmap)
-        // Background black, draw white paths
         canvas.drawColor(android.graphics.Color.BLACK)
 
         val paint = Paint().apply {
@@ -176,15 +169,39 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
+            isAntiAlias = true
         }
 
         paths.forEach { (path, strokeWidth) ->
             paint.strokeWidth = strokeWidth
             canvas.drawPath(path.asAndroidPath(), paint)
         }
-        maskBitmap
-    }
 
+        // Apply Feather (Blur) if needed
+        if (feather > 0) {
+            val mat = Mat()
+            Utils.bitmapToMat(maskBitmap, mat)
+            // Blur
+            val kSize = (feather * 2 + 1).toDouble()
+            Imgproc.GaussianBlur(mat, mat, Size(kSize, kSize), 0.0)
+
+            // Threshold to ensure mask isn't too faint?
+            // Telea expects mask. Non-zero pixels are inpainted.
+            // Blur spreads non-zero pixels outwards (dilation effectively) but reduces their intensity.
+            // This creates a smoother transition region? No, Telea uses mask to define region to fill.
+            // If we want "Feathered" edges, we essentially want to inpaint a slightly larger area to blend better?
+            // Actually, `Photo.inpaint` doesn't support alpha blending in the mask (it treats >0 as "unknown").
+            // So feathering the mask just expands the inpaint area if pixels > 0.
+            // To truly feather, we might need manual blending.
+            // But let's stick to expanding the mask (Dilation) which helps with "halo" effects.
+            // GaussianBlur does this by spreading values.
+
+            Utils.matToBitmap(mat, maskBitmap)
+            mat.release()
+        }
+
+        return@withContext maskBitmap
+    }
 
     private suspend fun applyInpainting(original: Bitmap, mask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         val src = Mat()
@@ -193,11 +210,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
         val maskMat = Mat()
         Utils.bitmapToMat(mask, maskMat)
-        // Ensure single channel mask
         Imgproc.cvtColor(maskMat, maskMat, Imgproc.COLOR_BGRA2GRAY)
 
         val resultMat = Mat()
-        // Use Telea with radius 5.0
         Photo.inpaint(src, maskMat, resultMat, 5.0, Photo.INPAINT_TELEA)
 
         val resultBitmap = Bitmap.createBitmap(resultMat.cols(), resultMat.rows(), Bitmap.Config.ARGB_8888)
@@ -210,13 +225,16 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         resultBitmap
     }
 
-    fun saveImage(activity: Activity) {
-        val bitmap = _uiState.value.processedBitmap ?: return
-        val uri = _uiState.value.selectedImageUri ?: return
+    fun saveImage(activity: Activity): Boolean {
+        val bitmap = _uiState.value.processedBitmap ?: return false
+        val uri = _uiState.value.selectedImageUri ?: return false
         _uiState.value = _uiState.value.copy(isErasing = true)
+
+        // Saving handled by VM, return boolean via state or...
+        // Here we just launch.
+        var success = false
         viewModelScope.launch {
             try {
-                // Update: Use new BitmapUtils saving logic
                 val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Erased_${System.currentTimeMillis()}", Bitmap.CompressFormat.JPEG)
 
                 repository.addHistory(
@@ -229,12 +247,14 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 )
                 AdManager.showInterstitialAd(activity)
                 _uiState.value = _uiState.value.copy(savedFilePath = filePath)
+                success = true
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             } finally {
                 _uiState.value = _uiState.value.copy(isErasing = false)
             }
         }
+        return true // Optimistic/Async
     }
 
     fun onErrorShown() {
@@ -251,7 +271,8 @@ data class ObjectEraserUiState(
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
     val paths: List<Pair<Path, Float>> = emptyList(),
-    val brushSize: Float = 20f,
+    val brushSize: Float = 40f,
+    val feather: Float = 0f,
     val isErasing: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,

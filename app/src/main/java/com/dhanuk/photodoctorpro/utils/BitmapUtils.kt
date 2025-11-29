@@ -2,14 +2,15 @@ package com.dhanuk.photodoctorpro.utils
 
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,15 +20,42 @@ import java.io.OutputStream
 
 object BitmapUtils {
 
-    suspend fun loadBitmapFromUri(uri: Uri, context: Context): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun loadBitmapFromUri(uri: Uri, context: Context, maxDimension: Int = 3000): Bitmap? = withContext(Dispatchers.IO) {
         var inputStream: InputStream? = null
         try {
+            // 1. Decode bounds only
             inputStream = context.contentResolver.openInputStream(uri)
             val options = BitmapFactory.Options().apply {
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-                inMutable = true
+                inJustDecodeBounds = true
             }
-            return@withContext BitmapFactory.decodeStream(inputStream, null, options)
+            BitmapFactory.decodeStream(inputStream, null, options)
+            inputStream?.close()
+
+            // 2. Calculate inSampleSize
+            options.inSampleSize = calculateInSampleSize(options, maxDimension, maxDimension)
+            options.inJustDecodeBounds = false
+            options.inPreferredConfig = Bitmap.Config.ARGB_8888
+            options.inMutable = true
+
+            // 3. Decode full bitmap with subsampling
+            inputStream = context.contentResolver.openInputStream(uri)
+            var bitmap = BitmapFactory.decodeStream(inputStream, null, options)
+
+            // 4. Handle EXIF Rotation
+            if (bitmap != null) {
+                inputStream?.close()
+                inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                   val exifInterface = ExifInterface(inputStream)
+                   val orientation = exifInterface.getAttributeInt(
+                       ExifInterface.TAG_ORIENTATION,
+                       ExifInterface.ORIENTATION_NORMAL
+                   )
+                   bitmap = rotateBitmap(bitmap, orientation)
+                }
+            }
+
+            return@withContext bitmap
         } catch (e: Exception) {
             e.printStackTrace()
             return@withContext null
@@ -36,23 +64,72 @@ object BitmapUtils {
         }
     }
 
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height: Int, width: Int) = options.run { outHeight to outWidth }
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = width / 2
+
+            // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+            // height and width larger than the requested height and width.
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
+    private fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            else -> return bitmap
+        }
+        return try {
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) {
+                bitmap.recycle()
+            }
+            rotated
+        } catch (e: OutOfMemoryError) {
+            e.printStackTrace()
+            bitmap
+        }
+    }
+
     /**
      * Saves the bitmap to the user's preferred directory or falls back to DCIM/PhotoDoctorPro.
      * Returns the URI string of the saved file.
+     * Handles Auto-Increment for filename collisions.
      */
     suspend fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String, format: Bitmap.CompressFormat): String = withContext(Dispatchers.IO) {
         val saveDirUriString = UserPreferences.getSaveDirectory(context)
         val mimeType = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
         val extension = if (format == Bitmap.CompressFormat.PNG) ".png" else ".jpg"
-        val finalFileName = if (fileName.endsWith(extension)) fileName else "$fileName$extension"
+
+        // Ensure filename doesn't have extension duplicated
+        val baseName = if (fileName.endsWith(extension, ignoreCase = true)) fileName.dropLast(extension.length) else fileName
 
         // 1. Try Custom User Directory (SAF)
         if (!saveDirUriString.isNullOrEmpty()) {
             try {
                 val treeUri = Uri.parse(saveDirUriString)
                 val docFile = DocumentFile.fromTreeUri(context, treeUri)
+
                 if (docFile != null && docFile.canWrite()) {
-                    val file = docFile.createFile(mimeType, finalFileName)
+                    // Auto-increment logic
+                    var finalName = "$baseName$extension"
+                    var counter = 1
+                    while (docFile.findFile(finalName) != null) {
+                        finalName = "$baseName($counter)$extension"
+                        counter++
+                    }
+
+                    val file = docFile.createFile(mimeType, finalName)
                     if (file != null) {
                         context.contentResolver.openOutputStream(file.uri)?.use { out ->
                             bitmap.compress(format, 95, out)
@@ -67,28 +144,52 @@ object BitmapUtils {
         }
 
         // 2. Fallback to MediaStore (DCIM/PhotoDoctorPro)
-        // This works for Android 10+ (Scoped Storage) and avoids "Permission Denied" on raw paths.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            var finalName = "$baseName$extension"
+            // Note: MediaStore automatically handles duplicates by adding (1), (2) usually,
+            // but for strict consistency we can rely on system behavior or try to check.
+            // Querying MediaStore to check existence is complex.
+            // We will trust MediaStore's native auto-increment or collision handling for now,
+            // as it generally behaves correctly (adding unique suffix).
+
             val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, finalFileName)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
                 put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
                 put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/PhotoDoctorPro")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
 
             val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
             if (uri != null) {
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    bitmap.compress(format, 95, out)
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        bitmap.compress(format, 95, out)
+                    }
+                    contentValues.clear()
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    context.contentResolver.update(uri, contentValues, null, null)
+                    return@withContext uri.toString()
+                } catch (e: Exception) {
+                    // Cleanup empty file
+                    context.contentResolver.delete(uri, null, null)
+                    throw e
                 }
-                return@withContext uri.toString()
             }
         }
 
-        // 3. Fallback for older Android versions or if MediaStore failed (Direct File)
+        // 3. Fallback for older Android versions (Direct File)
         val imagesDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "PhotoDoctorPro")
         if (!imagesDir.exists()) imagesDir.mkdirs()
 
-        val file = File(imagesDir, finalFileName)
+        var finalName = "$baseName$extension"
+        var counter = 1
+        var file = File(imagesDir, finalName)
+        while (file.exists()) {
+            finalName = "$baseName($counter)$extension"
+            file = File(imagesDir, finalName)
+            counter++
+        }
+
         FileOutputStream(file).use { out ->
             bitmap.compress(format, 95, out)
         }
