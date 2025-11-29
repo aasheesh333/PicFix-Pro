@@ -22,11 +22,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import java.util.Stack
+import kotlin.math.max
 
 class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
 
@@ -129,14 +133,13 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
         viewModelScope.launch {
             try {
-                // Ensure mutable
                 val workingBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
 
-                // Create Mask
-                val maskBitmap = createMask(workingBitmap.width, workingBitmap.height, paths, feather)
+                // Create Soft Mask (with Gaussian Blur)
+                val softMask = createMask(workingBitmap.width, workingBitmap.height, paths, feather)
 
-                // Inpaint
-                val resultBitmap = applyInpainting(workingBitmap, maskBitmap)
+                // Inpaint and Blend
+                val resultBitmap = applyInpainting(workingBitmap, softMask, feather)
 
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
@@ -146,7 +149,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                     canRedo = false
                 )
             } catch (e: Exception) {
-                if (undoStack.isNotEmpty()) undoStack.pop() // revert stack push
+                if (undoStack.isNotEmpty()) undoStack.pop()
                 _uiState.value = _uiState.value.copy(isErasing = false, error = "Error: ${e.message}")
             }
         }
@@ -177,24 +180,15 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
             canvas.drawPath(path.asAndroidPath(), paint)
         }
 
-        // Apply Feather (Blur) if needed
+        // Apply Feather (Gaussian Blur)
+        // If feather is 0, we still might want slight anti-aliasing, but GaussianBlur(0) does nothing if sigma 0.
         if (feather > 0) {
             val mat = Mat()
             Utils.bitmapToMat(maskBitmap, mat)
-            // Blur
-            val kSize = (feather * 2 + 1).toDouble()
-            Imgproc.GaussianBlur(mat, mat, Size(kSize, kSize), 0.0)
 
-            // Threshold to ensure mask isn't too faint?
-            // Telea expects mask. Non-zero pixels are inpainted.
-            // Blur spreads non-zero pixels outwards (dilation effectively) but reduces their intensity.
-            // This creates a smoother transition region? No, Telea uses mask to define region to fill.
-            // If we want "Feathered" edges, we essentially want to inpaint a slightly larger area to blend better?
-            // Actually, `Photo.inpaint` doesn't support alpha blending in the mask (it treats >0 as "unknown").
-            // So feathering the mask just expands the inpaint area if pixels > 0.
-            // To truly feather, we might need manual blending.
-            // But let's stick to expanding the mask (Dilation) which helps with "halo" effects.
-            // GaussianBlur does this by spreading values.
+            // kSize must be odd
+            val kSize = (feather * 2 + 1).toInt() or 1
+            Imgproc.GaussianBlur(mat, mat, Size(kSize.toDouble(), kSize.toDouble()), 0.0)
 
             Utils.matToBitmap(mat, maskBitmap)
             mat.release()
@@ -203,24 +197,74 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         return@withContext maskBitmap
     }
 
-    private suspend fun applyInpainting(original: Bitmap, mask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+    private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap, feather: Float): Bitmap = withContext(Dispatchers.Default) {
         val src = Mat()
         Utils.bitmapToMat(original, src)
         Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
 
-        val maskMat = Mat()
-        Utils.bitmapToMat(mask, maskMat)
-        Imgproc.cvtColor(maskMat, maskMat, Imgproc.COLOR_BGRA2GRAY)
+        val softMaskMat = Mat()
+        Utils.bitmapToMat(softMask, softMaskMat)
+        Imgproc.cvtColor(softMaskMat, softMaskMat, Imgproc.COLOR_BGRA2GRAY)
 
-        val resultMat = Mat()
-        Photo.inpaint(src, maskMat, resultMat, 5.0, Photo.INPAINT_TELEA)
+        // Create Hard Mask for Inpaint (Threshold)
+        val hardMaskMat = Mat()
+        // Threshold > 0 becomes 255. Any non-zero pixel in soft mask will be inpainted.
+        Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
 
-        val resultBitmap = Bitmap.createBitmap(resultMat.cols(), resultMat.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(resultMat, resultBitmap)
+        val inpaintedMat = Mat()
+        val radius = max(3.0, feather / 2.0)
+        Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
 
+        // Blend Logic: result = original * (1 - mask) + inpaint * mask
+        // Mask must be normalized 0..1 (Float)
+
+        val softMaskFloat = Mat()
+        softMaskMat.convertTo(softMaskFloat, CvType.CV_32F, 1.0/255.0)
+
+        // Expand mask to 3 channels for multiplication
+        val mask3 = Mat()
+        Imgproc.cvtColor(softMaskFloat, mask3, Imgproc.COLOR_GRAY2RGB)
+
+        // Inverted mask (1 - mask)
+        val invMask3 = Mat()
+        Core.subtract(Mat(mask3.size(), mask3.type(), Scalar(1.0, 1.0, 1.0)), mask3, invMask3)
+
+        val srcFloat = Mat()
+        src.convertTo(srcFloat, CvType.CV_32F)
+
+        val inpaintedFloat = Mat()
+        inpaintedMat.convertTo(inpaintedFloat, CvType.CV_32F)
+
+        // Multiply
+        val part1 = Mat()
+        Core.multiply(srcFloat, invMask3, part1)
+
+        val part2 = Mat()
+        Core.multiply(inpaintedFloat, mask3, part2)
+
+        val resultFloat = Mat()
+        Core.add(part1, part2, resultFloat)
+
+        val finalMat = Mat()
+        resultFloat.convertTo(finalMat, CvType.CV_8U)
+
+        val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(finalMat, resultBitmap)
+
+        // Release
         src.release()
-        maskMat.release()
-        resultMat.release()
+        softMaskMat.release()
+        hardMaskMat.release()
+        inpaintedMat.release()
+        softMaskFloat.release()
+        mask3.release()
+        invMask3.release()
+        srcFloat.release()
+        inpaintedFloat.release()
+        part1.release()
+        part2.release()
+        resultFloat.release()
+        finalMat.release()
 
         resultBitmap
     }
@@ -230,13 +274,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         val uri = _uiState.value.selectedImageUri ?: return false
         _uiState.value = _uiState.value.copy(isErasing = true)
 
-        // Saving handled by VM, return boolean via state or...
-        // Here we just launch.
-        var success = false
         viewModelScope.launch {
             try {
                 val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Erased_${System.currentTimeMillis()}", Bitmap.CompressFormat.JPEG)
-
                 repository.addHistory(
                     History(
                         operationType = "Object Erased",
@@ -247,14 +287,13 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 )
                 AdManager.showInterstitialAd(activity)
                 _uiState.value = _uiState.value.copy(savedFilePath = filePath)
-                success = true
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             } finally {
                 _uiState.value = _uiState.value.copy(isErasing = false)
             }
         }
-        return true // Optimistic/Async
+        return true
     }
 
     fun onErrorShown() {

@@ -8,6 +8,7 @@ import org.opencv.core.Mat
 import org.opencv.core.Rect
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import java.util.ArrayList
 import kotlin.math.max
 import kotlin.math.min
 
@@ -17,14 +18,14 @@ object ImageEnhancer {
     private const val PADDING = 32
 
     /**
-     * Enhances the image by upscaling (bicubic) and applying sharpening/contrast.
+     * Enhances the image by upscaling (bicubic) and applying sharpening/vibrance.
      * Uses tiling to handle larger images and prevent OOM during processing steps.
      * Note: The final result must still fit in memory.
      */
     fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        // If the output is relatively small (< 4MP), process fully for speed.
         val width = bitmap.width
         val height = bitmap.height
+        // Use full processing for smaller outputs to speed up
         if (width * height * scaleFactor * scaleFactor < 4_000_000) {
              return processFull(bitmap, scaleFactor)
         }
@@ -82,14 +83,6 @@ object ImageEnhancer {
                 val validWidth = min(TILE_SIZE, width - x) * scaleFactor
                 val validHeight = min(TILE_SIZE, height - y) * scaleFactor
 
-                // Ensure the crop rect is within the processed tile
-                // The processed tile size corresponds to tileMat size * scaleFactor
-                // tileMat width = endX - startX.
-                // processedTile width = (endX - startX) * scaleFactor.
-                // validSrcX = (x - startX) * scaleFactor.
-                // If x=startX (no padding left), validSrcX=0.
-                // validWidth = TILE_SIZE * scaleFactor (or less).
-
                 val cropRect = Rect(validSrcX, validSrcY, validWidth, validHeight)
                 val cropped = processedTile.submat(cropRect)
 
@@ -120,18 +113,25 @@ object ImageEnhancer {
         // 1. Bicubic Upscale
         Imgproc.resize(src, dst, newSize, 0.0, 0.0, Imgproc.INTER_CUBIC)
 
-        // 2. Unsharp Mask (Sharpening)
-        // Blur -> Subtract -> Add back
-        val blurred = Mat()
-        // Gaussian kernel size must be odd. 0.0 implies calculated from sigma.
-        Imgproc.GaussianBlur(dst, blurred, Size(0.0, 0.0), 2.0)
-        Core.addWeighted(dst, 1.4, blurred, -0.4, 0.0, dst)
-        blurred.release()
+        // 2. Vibrance (Boost Saturation)
+        val hsv = Mat()
+        Imgproc.cvtColor(dst, hsv, Imgproc.COLOR_RGB2HSV)
+        val channels = ArrayList<Mat>()
+        Core.split(hsv, channels)
+        // Boost Saturation (Channel 1) by 20%
+        channels[1].convertTo(channels[1], -1, 1.2, 0.0)
+        Core.merge(channels, hsv)
+        Imgproc.cvtColor(hsv, dst, Imgproc.COLOR_HSV2RGB)
 
-        // 3. Contrast / Clarity
-        // Alpha > 1.0 increases contrast. Beta adds brightness.
-        // Don't add too much brightness.
-        dst.convertTo(dst, -1, 1.05, 2.0)
+        // Cleanup HSV mats
+        hsv.release()
+        channels.forEach { it.release() }
+
+        // 3. Sharpening (Unsharp Mask)
+        val blurred = Mat()
+        Imgproc.GaussianBlur(dst, blurred, Size(0.0, 0.0), 3.0)
+        Core.addWeighted(dst, 1.5, blurred, -0.5, 0.0, dst)
+        blurred.release()
 
         return dst
     }
