@@ -77,6 +77,11 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(paths = newPaths)
     }
 
+    fun addPath(path: EraserPath) {
+        val currentPaths = _uiState.value.paths
+        _uiState.value = _uiState.value.copy(paths = currentPaths + path)
+    }
+
     fun undo() {
         if (undoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap

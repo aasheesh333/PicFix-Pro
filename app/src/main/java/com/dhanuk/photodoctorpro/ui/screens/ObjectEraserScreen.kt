@@ -391,8 +391,7 @@ fun EraserEditor(
                             val bitmapSoftness = uiState.brushSoftness / scaleFactor
 
                             val newPath = EraserPath(savedPath, bitmapBrushSize, bitmapSoftness)
-                            val newPaths = uiState.paths + newPath
-                            viewModel.onPathsChanged(newPaths)
+                            viewModel.addPath(newPath)
                         }
 
                         livePath = Path()
