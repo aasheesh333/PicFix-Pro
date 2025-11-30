@@ -18,9 +18,11 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -125,23 +128,39 @@ fun ObjectEraserScreen(navController: NavController) {
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
             onShare = {
-                 val file = File(path)
-                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(intent, "Share Image"))
+                 try {
+                     val uriString = path
+                     val uriToShare = if (uriString.startsWith("content://")) {
+                         Uri.parse(uriString)
+                     } else {
+                         val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
+                         val file = File(cleanPath!!)
+                         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                     }
+                     val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uriToShare)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share Image"))
+                 } catch (e: Exception) { e.printStackTrace() }
             },
             onOpen = {
-                val file = File(path)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "image/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                try { context.startActivity(intent) } catch (e: Exception) {}
+                try {
+                    val uriString = path
+                    val uriToOpen = if (uriString.startsWith("content://")) {
+                        Uri.parse(uriString)
+                    } else {
+                        val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
+                        val file = File(cleanPath!!)
+                        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                    }
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uriToOpen, "image/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) { e.printStackTrace() }
             }
         )
     }
@@ -291,175 +310,166 @@ fun EraserEditor(
 
     val bitmapToShow = uiState.processedBitmap ?: uiState.originalBitmap!!
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .onSizeChanged { layoutSize = it }
-            .pointerInput(uiState.brushSize, uiState.brushSoftness, zoomState, layoutSize) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-
-                    var isZooming = false
-
-                    // Reset Path
-                    currentPath = Path()
-                    currentPath.moveTo(Float.NaN, Float.NaN)
-
-                    fun mapToBitmap(x: Float, y: Float): Pair<Float, Float>? {
-                         if (layoutSize.width <= 0 || layoutSize.height <= 0) return null
-                         val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
-                         val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
-                         var drawWidth = layoutSize.width.toFloat()
-                         var drawHeight = layoutSize.height.toFloat()
-                         var drawX = 0f
-                         var drawY = 0f
-                         if (imageAspectRatio > viewAspectRatio) {
-                             drawHeight = drawWidth / imageAspectRatio
-                             drawY = (layoutSize.height - drawHeight) / 2f
-                         } else {
-                             drawWidth = drawHeight * imageAspectRatio
-                             drawX = (layoutSize.width - drawWidth) / 2f
-                         }
-                         val localX = x - drawX
-                         val localY = y - drawY
-                         val bitmapX = (localX / drawWidth) * bitmapToShow.width
-                         val bitmapY = (localY / drawHeight) * bitmapToShow.height
-                         return Pair(bitmapX, bitmapY)
-                    }
-
-                    val downX = (down.position.x - zoomState.offset.x) / zoomState.scale
-                    val downY = (down.position.y - zoomState.offset.y) / zoomState.scale
-
-                    val startPt = mapToBitmap(downX, downY)
-                    if (startPt != null) {
-                        currentPath.moveTo(startPt.first, startPt.second)
-                    }
-
-                    do {
-                        val event = awaitPointerEvent()
-                        val pointerCount = event.changes.size
-
-                        if (pointerCount >= 2) {
-                            isZooming = true
-                        }
-
-                        if (isZooming) {
-                            if (pointerCount >= 2) {
-                                 val zoomChange = event.calculateZoom()
-                                 val panChange = event.calculatePan()
-
-                                 val newScale = (zoomState.scale * zoomChange).coerceIn(1f, 10f)
-                                 zoomState.scale = newScale
-                                 zoomState.offset += panChange
-
-                                 event.changes.forEach { it.consume() }
-                            }
-                        } else {
-                            // Drawing
-                             event.changes.forEach { change ->
-                                if (change.positionChanged()) {
-                                     val currX = (change.position.x - zoomState.offset.x) / zoomState.scale
-                                     val currY = (change.position.y - zoomState.offset.y) / zoomState.scale
-
-                                     val pt = mapToBitmap(currX, currY)
-                                     if (pt != null) {
-                                         currentPath.lineTo(pt.first, pt.second)
-                                     }
-                                     change.consume()
-                                }
-                            }
-                        }
-
-                    } while (event.changes.any { it.pressed })
-
-                    if (!isZooming) {
-                        // Commit path
-                        val newPath = EraserPath(currentPath, uiState.brushSize, uiState.brushSoftness)
-                        val newPaths = uiState.paths + newPath
-                        viewModel.onPathsChanged(newPaths)
-                    }
-                    currentPath = Path() // Reset
-                }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
+            val width = constraints.maxWidth
+            val height = constraints.maxHeight
+            if (width > 0 && height > 0 && layoutSize.width == 0) {
+                layoutSize = androidx.compose.ui.unit.IntSize(width, height)
             }
-    ) {
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = zoomState.scale,
-                    scaleY = zoomState.scale,
-                    translationX = zoomState.offset.x,
-                    translationY = zoomState.offset.y
-                )
+                .pointerInput(uiState.brushSize, uiState.brushSoftness, zoomState, layoutSize) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var isZooming = false
+                        currentPath = Path()
+                        currentPath.moveTo(Float.NaN, Float.NaN)
+
+                        fun mapToBitmap(x: Float, y: Float): Pair<Float, Float>? {
+                             if (layoutSize.width <= 0 || layoutSize.height <= 0) return null
+                             val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
+                             val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
+                             var drawWidth = layoutSize.width.toFloat()
+                             var drawHeight = layoutSize.height.toFloat()
+                             var drawX = 0f
+                             var drawY = 0f
+                             if (imageAspectRatio > viewAspectRatio) {
+                                 drawHeight = drawWidth / imageAspectRatio
+                                 drawY = (layoutSize.height - drawHeight) / 2f
+                             } else {
+                                 drawWidth = drawHeight * imageAspectRatio
+                                 drawX = (layoutSize.width - drawWidth) / 2f
+                             }
+                             val localX = x - drawX
+                             val localY = y - drawY
+                             val bitmapX = (localX / drawWidth) * bitmapToShow.width
+                             val bitmapY = (localY / drawHeight) * bitmapToShow.height
+                             return Pair(bitmapX, bitmapY)
+                        }
+
+                        val downX = (down.position.x - zoomState.offset.x) / zoomState.scale
+                        val downY = (down.position.y - zoomState.offset.y) / zoomState.scale
+                        val startPt = mapToBitmap(downX, downY)
+                        if (startPt != null) {
+                            currentPath.moveTo(startPt.first, startPt.second)
+                        }
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointerCount = event.changes.size
+                            if (pointerCount >= 2) isZooming = true
+
+                            if (isZooming) {
+                                if (pointerCount >= 2) {
+                                     val zoomChange = event.calculateZoom()
+                                     val panChange = event.calculatePan()
+                                     val newScale = (zoomState.scale * zoomChange).coerceIn(1f, 10f)
+                                     zoomState.scale = newScale
+                                     zoomState.offset += panChange
+                                     event.changes.forEach { it.consume() }
+                                }
+                            } else {
+                                 event.changes.forEach { change ->
+                                    if (change.positionChanged()) {
+                                         val currX = (change.position.x - zoomState.offset.x) / zoomState.scale
+                                         val currY = (change.position.y - zoomState.offset.y) / zoomState.scale
+                                         val pt = mapToBitmap(currX, currY)
+                                         if (pt != null) {
+                                             currentPath.lineTo(pt.first, pt.second)
+                                         }
+                                         change.consume()
+                                    }
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+
+                        if (!isZooming) {
+                            val newPath = EraserPath(currentPath, uiState.brushSize, uiState.brushSoftness)
+                            val newPaths = uiState.paths + newPath
+                            viewModel.onPathsChanged(newPaths)
+                        }
+                        currentPath = Path()
+                    }
+                }
         ) {
-            Image(
-                bitmap = bitmapToShow.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = zoomState.scale,
+                        scaleY = zoomState.scale,
+                        translationX = zoomState.offset.x,
+                        translationY = zoomState.offset.y
+                    )
+            ) {
+                Image(
+                    bitmap = bitmapToShow.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val viewAspectRatio = size.width / size.height
-                val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val viewAspectRatio = size.width / size.height
+                    val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
 
-                var drawWidth = size.width
-                var drawHeight = size.height
-                var drawX = 0f
-                var drawY = 0f
+                    var drawWidth = size.width
+                    var drawHeight = size.height
+                    var drawX = 0f
+                    var drawY = 0f
 
-                if (imageAspectRatio > viewAspectRatio) {
-                    drawHeight = drawWidth / imageAspectRatio
-                    drawY = (size.height - drawHeight) / 2f
-                } else {
-                    drawWidth = drawHeight * imageAspectRatio
-                    drawX = (size.width - drawWidth) / 2f
-                }
-
-                // Scale factor
-                val scaleX = drawWidth / bitmapToShow.width
-                val scaleY = drawHeight / bitmapToShow.height
-
-                drawContext.canvas.save()
-                drawContext.canvas.translate(drawX, drawY)
-                drawContext.canvas.scale(scaleX, scaleY)
-
-                // Draw committed paths
-                uiState.paths.forEach { eraserPath ->
-                    val paint = androidx.compose.ui.graphics.Paint().asFrameworkPaint()
-                    paint.style = android.graphics.Paint.Style.STROKE
-                    paint.strokeWidth = eraserPath.strokeWidth
-                    paint.strokeCap = android.graphics.Paint.Cap.ROUND
-                    paint.strokeJoin = android.graphics.Paint.Join.ROUND
-                    paint.color = android.graphics.Color.RED
-                    paint.alpha = 128 // 0.5f
-
-                    // Live Softness Visualization!
-                    if (eraserPath.softness > 0) {
-                        paint.maskFilter = BlurMaskFilter(eraserPath.softness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                    if (imageAspectRatio > viewAspectRatio) {
+                        drawHeight = drawWidth / imageAspectRatio
+                        drawY = (size.height - drawHeight) / 2f
+                    } else {
+                        drawWidth = drawHeight * imageAspectRatio
+                        drawX = (size.width - drawWidth) / 2f
                     }
 
-                    drawContext.canvas.nativeCanvas.drawPath(eraserPath.path.asAndroidPath(), paint)
-                }
+                    val scaleX = drawWidth / bitmapToShow.width
+                    val scaleY = drawHeight / bitmapToShow.height
 
-                // Draw current dragging path
-                if (!currentPath.isEmpty) {
-                    val paint = androidx.compose.ui.graphics.Paint().asFrameworkPaint()
-                    paint.style = android.graphics.Paint.Style.STROKE
-                    paint.strokeWidth = uiState.brushSize
-                    paint.strokeCap = android.graphics.Paint.Cap.ROUND
-                    paint.strokeJoin = android.graphics.Paint.Join.ROUND
-                    paint.color = android.graphics.Color.RED
-                    paint.alpha = 128 // 0.5f
+                    drawContext.canvas.save()
+                    drawContext.canvas.translate(drawX, drawY)
+                    drawContext.canvas.scale(scaleX, scaleY)
 
-                    if (uiState.brushSoftness > 0) {
-                        paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                    // Draw committed paths
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint()
+                        paint.style = android.graphics.Paint.Style.STROKE
+                        paint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        paint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        paint.color = android.graphics.Color.RED
+                        paint.alpha = 180
+
+                        uiState.paths.forEach { eraserPath ->
+                            paint.strokeWidth = eraserPath.strokeWidth
+                            if (eraserPath.softness > 0) {
+                                paint.maskFilter = BlurMaskFilter(eraserPath.softness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                            } else {
+                                paint.maskFilter = null
+                            }
+                            canvas.nativeCanvas.drawPath(eraserPath.path.asAndroidPath(), paint)
+                        }
+
+                        // Draw current dragging path
+                        if (!currentPath.isEmpty) {
+                            paint.strokeWidth = uiState.brushSize
+                            if (uiState.brushSoftness > 0) {
+                                paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                            } else {
+                                paint.maskFilter = null
+                            }
+                            canvas.nativeCanvas.drawPath(currentPath.asAndroidPath(), paint)
+                        }
                     }
 
-                    drawContext.canvas.nativeCanvas.drawPath(currentPath.asAndroidPath(), paint)
+                    drawContext.canvas.restore()
                 }
-
-                drawContext.canvas.restore()
             }
         }
     }

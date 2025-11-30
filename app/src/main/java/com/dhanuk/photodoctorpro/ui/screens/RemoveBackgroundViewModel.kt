@@ -104,12 +104,9 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         val height = bitmap.height
         val totalPixels = width * height
 
-        // Threshold: 0.4
-        // If confidence > 0.4 -> 255 (Keep), else 0 (Remove)
-        // This ensures "Background Removed" means transparent, not semi-transparent ghost.
         val threshold = 0.4f
-
         val pixels = ByteArray(totalPixels)
+
         if (maskBuffer.hasArray()) {
              val floatArray = maskBuffer.array()
              for (i in 0 until totalPixels) {
@@ -137,19 +134,23 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             mask
         }
 
+        // --- NEW LOGIC: Draw Mask then SRC_IN Image ---
         val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
+
         val paint = Paint()
         paint.isAntiAlias = true
 
+        // 1. Draw the Mask (Alpha determines opacity)
+        // We draw the mask bitmap directly. ALPHA_8 -> ARGB_8888 canvas.
+        // Pixels with Alpha 255 become Opaque Black (or whatever color paint has, default black).
+        // Pixels with Alpha 0 become Transparent.
+        canvas.drawBitmap(scaledMask, 0f, 0f, paint)
+
+        // 2. Draw the Image with SRC_IN
+        // SRC_IN: Keeps Source (Image) where Dest (Mask/Canvas) is Opaque.
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
         canvas.drawBitmap(original, 0f, 0f, paint)
-
-        val alphaPaint = Paint().apply {
-            isAntiAlias = true
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        }
-
-        canvas.drawBitmap(scaledMask, 0f, 0f, alphaPaint)
 
         if (scaledMask != mask) {
             scaledMask.recycle()
@@ -194,9 +195,13 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             }
 
             if (isAdd) {
+                // To ADD to the mask (Keep area), we paint 255 (Opaque)
+                // SRC mode replaces correctly.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                color = Color.WHITE
+                color = Color.WHITE // Alpha 255
             } else {
+                // To REMOVE from mask (Erase area), we paint 0 (Transparent)
+                // CLEAR mode sets alpha to 0.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
                 color = Color.TRANSPARENT
             }
