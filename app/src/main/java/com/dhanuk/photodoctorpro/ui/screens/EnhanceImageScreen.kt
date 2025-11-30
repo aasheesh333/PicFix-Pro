@@ -7,25 +7,29 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
 import java.io.File
@@ -40,16 +44,16 @@ fun EnhanceImageScreen(navController: NavController) {
     val viewModel: EnhanceImageViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val globalState = LocalGlobalNavigationState.current
     val scope = rememberCoroutineScope()
+    val globalState = LocalGlobalNavigationState.current
 
-    // Hold to compare state
-    var isHolding by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    val hasUnsavedChanges = uiState.enhancedBitmap != null && uiState.savedFilePath == null
 
-    val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
+    // Hold to compare
+    var isHoldingOriginal by remember { mutableStateOf(false) }
 
-    // Sync with Global State for Bottom Nav interception
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
         if (hasUnsavedChanges) {
@@ -60,7 +64,6 @@ fun EnhanceImageScreen(navController: NavController) {
         }
     }
 
-    // System Back Handler
     BackHandler(enabled = hasUnsavedChanges) {
         showUnsavedDialog = true
     }
@@ -71,61 +74,14 @@ fun EnhanceImageScreen(navController: NavController) {
             title = { Text(stringResource(R.string.unsaved_changes)) },
             text = { Text(stringResource(R.string.you_have_unsaved_changes_discard)) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        // Save and exit
-                        // We can't use suspend functions in onClick directly, so we need a scope or LaunchedEffect
-                        // But here, we can just call viewModel.saveImage which launches internally
-                        // Wait, viewModel.saveImage updates state. We need to wait for completion to pop back?
-                        // The ViewModel logic doesn't return a "completed" event easily for navigation here.
-                        // Ideally we should use the GlobalState pattern or a callback.
-                        // Let's launch a coroutine scope here.
-                    }
-                ) {
-                    // Simpler: Trigger Save, then observe savedFilePath change to exit?
-                    // But we want to exit.
-                    // Let's use the Global State logic manually or duplicate it locally.
-                    // Since viewModel.saveImage is async, let's just trigger it and let the user click Back again? No.
-                    // Proper way:
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        // Discard
-                        showUnsavedDialog = false
-                        viewModel.reset()
-                        navController.popBackStack()
-                    }) {
-                        Text(stringResource(R.string.discard))
-                    }
-                    TextButton(onClick = { showUnsavedDialog = false }) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                }
-            }
-        )
-        // Fix for Save button logic inside Dialog:
-        // Since we can't easily launch suspend from onClick inside Dialog content comfortably without scope:
-        // We will implement the Save action in the Confirm Button onClick using a separate LaunchedEffect trigger or scope.
-    }
-
-    // Better Dialog Handling for Save
-    if (showUnsavedDialog) {
-        AlertDialog(
-            onDismissRequest = { showUnsavedDialog = false },
-            title = { Text("Unsaved Changes") },
-            text = { Text("You have unsaved changes. What would you like to do?") },
-            confirmButton = {
                 Button(onClick = {
-                     scope.launch {
-                         val success = viewModel.saveImage(activity)
-                         if (success) {
-                             showUnsavedDialog = false
-                             navController.popBackStack()
-                         }
-                     }
+                    scope.launch {
+                        val success = viewModel.saveImage(activity)
+                        if (success) {
+                            showUnsavedDialog = false
+                            navController.popBackStack()
+                        }
+                    }
                 }) { Text("Save") }
             },
             dismissButton = {
@@ -141,50 +97,65 @@ fun EnhanceImageScreen(navController: NavController) {
         )
     }
 
+    showSaveSuccessDialog?.let { path ->
+        SaveSuccessDialog(
+            filePath = path,
+            onDismiss = { showSaveSuccessDialog = null },
+            onShare = {
+                 val file = File(path)
+                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                 val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Image"))
+            },
+            onOpen = {
+                val file = File(path)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { context.startActivity(intent) } catch (e: Exception) {}
+            }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { viewModel.onImageSelected(it, context) }
     }
 
-    // Effect for handling errors
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar("Error: $it")
             viewModel.onErrorShown()
         }
     }
 
-    // Effect for handling save success
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
-            val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
-            val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, displayName),
-                actionLabel = context.getString(R.string.open),
-                duration = SnackbarDuration.Long
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                val uri = if (path.startsWith("content://")) {
-                    Uri.parse(path)
-                } else {
-                    val file = File(path)
-                    FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                }
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "image/*")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                try {
-                    context.startActivity(intent)
-                } catch (e: Exception) { }
-            }
+            showSaveSuccessDialog = path
             viewModel.onSavedMessageShown()
         }
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.enhance_image)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.enhance_image)) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (hasUnsavedChanges) showUnsavedDialog = true else navController.popBackStack()
+                    }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
@@ -198,98 +169,90 @@ fun EnhanceImageScreen(navController: NavController) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                isHolding = true
-                                tryAwaitRelease()
-                                isHolding = false
-                            }
-                        )
-                    },
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                 if (uiState.isEnhancing) {
+                if (uiState.isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    val bitmapToShow = if (isHolding || uiState.processedBitmap == null) {
-                        uiState.originalBitmap
-                    } else {
-                        uiState.processedBitmap
-                    }
+                    if (uiState.enhancedBitmap != null) {
+                        // Show Enhanced (or Original if holding)
+                        val bitmapToShow = if (isHoldingOriginal) uiState.originalBitmap else uiState.enhancedBitmap
 
-                    if (bitmapToShow != null) {
-                        Image(
-                            bitmap = bitmapToShow.asImageBitmap(),
-                            contentDescription = if (isHolding) "Original" else "Enhanced",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        if (uiState.processedBitmap != null) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                Text(
-                                    text = if (isHolding) stringResource(R.string.original) else stringResource(R.string.enhanced),
-                                    modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .background(Color.Black.copy(alpha = 0.5f))
-                                        .padding(8.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = Color.White
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            isHoldingOriginal = true
+                                            tryAwaitRelease()
+                                            isHoldingOriginal = false
+                                        }
+                                    )
+                                }
+                        ) {
+                            ZoomableBox(enableZoom = !isHoldingOriginal) {
+                                Image(
+                                    bitmap = bitmapToShow!!.asImageBitmap(),
+                                    contentDescription = "Enhanced",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
                                 )
                             }
+                            // Overlay hint
+                            if (!isHoldingOriginal) {
+                                Surface(
+                                    modifier = Modifier.align(Alignment.TopCenter).padding(8.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha=0.6f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("Hold to compare", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    } else if (uiState.selectedImageUri != null) {
+                         ZoomableBox {
+                             Image(
+                                painter = rememberAsyncImagePainter(uiState.selectedImageUri),
+                                contentDescription = "Selected",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
                         }
                     } else {
-                         Text(stringResource(R.string.select_an_image_to_enhance))
+                        Text(stringResource(R.string.select_an_image_to_start))
                     }
                 }
             }
 
+            // Controls
             if (uiState.originalBitmap == null) {
                 Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.select_image))
                 }
-            } else if (uiState.processedBitmap == null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    // Limit chips based on resolution warning logic in VM, or show all and let VM handle error
+            } else if (uiState.enhancedBitmap == null) {
+                Text("Select Upscale Factor:")
+                Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                     listOf(2, 4, 6, 8).forEach { scale ->
-                        FilterChip(
-                            selected = uiState.scaleFactor == scale,
-                            onClick = { viewModel.onScaleChanged(scale) },
-                            label = { Text("${scale}x") }
-                        )
+                        OutlinedButton(
+                            onClick = { viewModel.enhanceImage(context, scale) },
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text("${scale}x")
+                        }
                     }
-                }
-
-                Button(
-                    onClick = { viewModel.enhanceImage(activity) },
-                    enabled = !uiState.isEnhancing,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.one_tap_enhance))
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                     OutlinedButton(
-                        onClick = { viewModel.reset() },
-                        enabled = !uiState.isEnhancing
-                    ) {
+                    Button(onClick = { scope.launch { viewModel.saveImage(activity) } }, modifier = Modifier.weight(1f)) {
+                        Text("Save")
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.reset))
                     }
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                viewModel.saveImage(activity)
-                            }
-                        },
-                        enabled = !uiState.isEnhancing
-                    ) {
-                        Text(stringResource(R.string.save_enhanced_image))
-                    }
                 }
-                Text("Long press image to see Original", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
@@ -27,6 +28,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import java.io.File
 
@@ -40,6 +42,8 @@ fun ImageToPdfScreen(navController: NavController) {
     val viewModel: ImageToPdfViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -56,35 +60,48 @@ fun ImageToPdfScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
-             val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
-            val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, displayName),
-                actionLabel = context.getString(R.string.open),
-                duration = SnackbarDuration.Long
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                val uri = if (path.startsWith("content://")) {
-                    Uri.parse(path)
-                } else {
-                     val file = File(path)
-                     FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                }
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/pdf")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                try {
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                }
-            }
-            viewModel.onSavedMessageShown()
-             // Do not pop back stack automatically, let user decide or see the result
+             showSaveSuccessDialog = path
+             viewModel.onSavedMessageShown()
         }
     }
 
+    showSaveSuccessDialog?.let { path ->
+        SaveSuccessDialog(
+            filePath = path,
+            onDismiss = { showSaveSuccessDialog = null },
+            onShare = {
+                 val file = File(path)
+                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                 val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share PDF"))
+            },
+            onOpen = {
+                val file = File(path)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { context.startActivity(intent) } catch (e: Exception) {}
+            }
+        )
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.image_to_pdf)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.image_to_pdf)) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(

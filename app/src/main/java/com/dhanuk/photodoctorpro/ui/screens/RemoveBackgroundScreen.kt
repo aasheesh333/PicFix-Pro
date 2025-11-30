@@ -7,18 +7,21 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,13 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -43,6 +46,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
+import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
 import java.io.File
@@ -61,9 +67,9 @@ fun RemoveBackgroundScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) } // holds file path
     val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
 
-    // Sync Global State
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
         if (hasUnsavedChanges) {
@@ -74,10 +80,9 @@ fun RemoveBackgroundScreen(navController: NavController) {
         }
     }
 
-    // Local Back Handler
     BackHandler(enabled = hasUnsavedChanges || uiState.isRefining) {
         if (uiState.isRefining) {
-            showUnsavedDialog = true
+             viewModel.applyRefinement(0f)
         } else {
             showUnsavedDialog = true
         }
@@ -91,9 +96,6 @@ fun RemoveBackgroundScreen(navController: NavController) {
             confirmButton = {
                 Button(onClick = {
                      scope.launch {
-                         if (uiState.isRefining) {
-                             viewModel.applyRefinement(0f)
-                         }
                          val success = viewModel.saveImage(activity)
                          if (success) {
                              showUnsavedDialog = false
@@ -115,6 +117,32 @@ fun RemoveBackgroundScreen(navController: NavController) {
         )
     }
 
+    showSaveSuccessDialog?.let { path ->
+        SaveSuccessDialog(
+            filePath = path,
+            onDismiss = { showSaveSuccessDialog = null },
+            onShare = {
+                 val file = File(path)
+                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                 val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Image"))
+            },
+            onOpen = {
+                val file = File(path)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { context.startActivity(intent) } catch (e: Exception) {}
+            }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -130,27 +158,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
-            val displayName = if (path.startsWith("content://")) "Gallery/Selected Folder" else File(path).name
-            val result = snackbarHostState.showSnackbar(
-                message = context.getString(R.string.saved_to, displayName),
-                actionLabel = context.getString(R.string.open),
-                duration = SnackbarDuration.Long
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                val uri = if (path.startsWith("content://")) {
-                    Uri.parse(path)
-                } else {
-                     val file = File(path)
-                     FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                }
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "image/*")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                try {
-                    context.startActivity(intent)
-                } catch (e: Exception) { }
-            }
+            showSaveSuccessDialog = path
             viewModel.onSavedMessageShown()
         }
     }
@@ -162,7 +170,13 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 navigationIcon = {
                     if (uiState.isRefining) {
                         IconButton(onClick = {
-                            showUnsavedDialog = true
+                            viewModel.applyRefinement(0f)
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    } else {
+                         IconButton(onClick = {
+                            if (hasUnsavedChanges) showUnsavedDialog = true else navController.popBackStack()
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -197,17 +211,16 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator()
                 } else if (uiState.isRefining) {
-                    // Refine Mode
                     RefineEditor(
                         viewModel = viewModel,
                         original = uiState.originalBitmap!!,
-                        mask = uiState.maskBitmap!!
+                        mask = uiState.maskBitmap!!,
+                        maskVersion = viewModel.maskVersion.value
                     )
                 } else {
-                    // Result Mode or Start
                     if (uiState.processedBitmap != null) {
-                        // Show Checkerboard background for transparency
-                        Box(modifier = Modifier.fillMaxSize().background(Color.LightGray)) {
+                        ZoomableBox {
+                            Box(modifier = Modifier.matchParentSize().background(Color.LightGray))
                             Image(
                                 bitmap = uiState.processedBitmap!!.asImageBitmap(),
                                 contentDescription = "Processed",
@@ -216,19 +229,20 @@ fun RemoveBackgroundScreen(navController: NavController) {
                             )
                         }
                     } else if (uiState.selectedImageUri != null) {
-                        Image(
-                            painter = rememberAsyncImagePainter(uiState.selectedImageUri),
-                            contentDescription = "Selected",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
+                         ZoomableBox {
+                            Image(
+                                painter = rememberAsyncImagePainter(uiState.selectedImageUri),
+                                contentDescription = "Selected",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     } else {
                         Text(stringResource(R.string.select_an_image_to_start))
                     }
                 }
             }
 
-            // Bottom Controls
             if (!uiState.isRefining) {
                 if (uiState.originalBitmap == null) {
                     Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
@@ -243,7 +257,6 @@ fun RemoveBackgroundScreen(navController: NavController) {
                         Text(stringResource(R.string.remove_background))
                     }
                 } else {
-                    // Result Actions
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         OutlinedButton(onClick = { viewModel.startRefining() }) {
                             Text("Refine Edges")
@@ -265,74 +278,176 @@ fun RemoveBackgroundScreen(navController: NavController) {
 fun RefineEditor(
     viewModel: RemoveBackgroundViewModel,
     original: Bitmap,
-    mask: Bitmap
+    mask: Bitmap,
+    maskVersion: Int
 ) {
     var brushSize by remember { mutableStateOf(40f) }
     var feather by remember { mutableStateOf(0f) }
     var isAddMode by remember { mutableStateOf(false) }
 
     var currentPath by remember { mutableStateOf(android.graphics.Path()) }
-
-    val aspectRatio = original.width.toFloat() / original.height.toFloat()
+    val zoomState = rememberZoomableBoxState()
+    var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
-             modifier = Modifier
-                 .weight(1f)
-                 .fillMaxWidth()
-                 .aspectRatio(aspectRatio)
-                 .pointerInput(isAddMode, brushSize) {
-                     detectDragGestures(
-                         onDragStart = { offset ->
-                             currentPath.reset()
-                             currentPath.moveTo(offset.x, offset.y)
-                         },
-                         onDrag = { change, _ ->
-                             currentPath.lineTo(change.position.x, change.position.y)
-                         },
-                         onDragEnd = {
-                             // Map coords
-                             val scaleX = original.width.toFloat() / size.width
-                             val scaleY = original.height.toFloat() / size.height
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onSizeChanged { layoutSize = it }
+                .pointerInput(isAddMode, brushSize, zoomState, layoutSize) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
 
-                             val matrix = android.graphics.Matrix()
-                             matrix.setScale(scaleX, scaleY)
-                             val mappedPath = android.graphics.Path(currentPath)
-                             mappedPath.transform(matrix)
+                        // Heuristic: If 2 pointers -> Zoom/Pan. If 1 -> Draw.
+                        // But pointers can be added.
+                        // Initial check:
 
-                             viewModel.updateMask(mappedPath, isAddMode, brushSize * scaleX)
-                             currentPath.reset()
-                         }
-                     )
-                 }
+                        // We wait a tiny bit to see if a second finger comes down?
+                        // Or just start drawing and cancel if second finger appears?
+                        // "Start drawing and cancel" is standard behavior.
+
+                        var isZooming = false
+
+                        // Start Drawing Logic
+                        viewModel.saveMaskStateForUndo()
+                        currentPath.reset()
+
+                        // Initial Point
+                        val downX = (down.position.x - zoomState.offset.x) / zoomState.scale
+                        val downY = (down.position.y - zoomState.offset.y) / zoomState.scale
+
+                        // Helper to map
+                        fun mapToBitmap(x: Float, y: Float): Pair<Float, Float>? {
+                             if (layoutSize.width <= 0 || layoutSize.height <= 0) return null
+                             val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
+                             val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+                             var drawWidth = layoutSize.width.toFloat()
+                             var drawHeight = layoutSize.height.toFloat()
+                             var drawX = 0f
+                             var drawY = 0f
+                             if (imageAspectRatio > viewAspectRatio) {
+                                 drawHeight = drawWidth / imageAspectRatio
+                                 drawY = (layoutSize.height - drawHeight) / 2f
+                             } else {
+                                 drawWidth = drawHeight * imageAspectRatio
+                                 drawX = (layoutSize.width - drawWidth) / 2f
+                             }
+                             val localX = x - drawX
+                             val localY = y - drawY
+                             val bitmapX = (localX / drawWidth) * original.width
+                             val bitmapY = (localY / drawHeight) * original.height
+                             return Pair(bitmapX, bitmapY)
+                        }
+
+                        val startPt = mapToBitmap(downX, downY)
+                        if (startPt != null) {
+                            currentPath.moveTo(startPt.first, startPt.second)
+                        }
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointerCount = event.changes.size
+
+                            if (pointerCount >= 2) {
+                                isZooming = true
+                            }
+
+                            if (isZooming) {
+                                // Zoom Logic
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
+                                val centroid = event.calculateCentroid(useCurrent = false)
+
+                                if (pointerCount >= 2) {
+                                     val newScale = (zoomState.scale * zoomChange).coerceIn(1f, 10f)
+                                     zoomState.scale = newScale
+                                     zoomState.offset += panChange
+
+                                     event.changes.forEach { it.consume() }
+                                }
+                            } else {
+                                // Draw Logic
+                                event.changes.forEach { change ->
+                                    if (change.positionChanged()) {
+                                         val currX = (change.position.x - zoomState.offset.x) / zoomState.scale
+                                         val currY = (change.position.y - zoomState.offset.y) / zoomState.scale
+
+                                         val pt = mapToBitmap(currX, currY)
+                                         if (pt != null) {
+                                             currentPath.lineTo(pt.first, pt.second)
+
+                                             // Live Update
+                                             val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
+                                             val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+                                             var drawWidth = layoutSize.width.toFloat()
+                                             var drawHeight = layoutSize.height.toFloat()
+                                             if (imageAspectRatio > viewAspectRatio) {
+                                                 drawHeight = drawWidth / imageAspectRatio
+                                             } else {
+                                                 drawWidth = drawHeight * imageAspectRatio
+                                             }
+                                             val scaleFactor = original.width.toFloat() / drawWidth
+
+                                             viewModel.updateMask(currentPath, isAddMode, brushSize * scaleFactor)
+                                         }
+                                         change.consume()
+                                    }
+                                }
+                            }
+
+                        } while (event.changes.any { it.pressed })
+
+                        currentPath.reset()
+                    }
+                }
         ) {
-            Image(
-                bitmap = original.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds
-            )
-
-            val maskImage = mask.asImageBitmap()
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                // Draw mask tinted Red
-                drawImage(
-                    image = maskImage,
-                    dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()),
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Red.copy(alpha = 0.5f), BlendMode.SrcIn)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = zoomState.scale,
+                        scaleY = zoomState.scale,
+                        translationX = zoomState.offset.x,
+                        translationY = zoomState.offset.y
+                    )
+            ) {
+                Image(
+                    bitmap = original.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
 
-                if (!currentPath.isEmpty) {
-                    drawPath(
-                        path = currentPath.asComposePath(),
-                        color = if (isAddMode) Color.Red.copy(alpha = 0.8f) else Color.Blue.copy(alpha=0.5f),
-                        style = Stroke(width = brushSize, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                val maskImage = remember(maskVersion) { mask.asImageBitmap() }
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val viewAspectRatio = size.width / size.height
+                    val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+
+                    var drawWidth = size.width
+                    var drawHeight = size.height
+                    var drawX = 0f
+                    var drawY = 0f
+
+                    if (imageAspectRatio > viewAspectRatio) {
+                         drawHeight = drawWidth / imageAspectRatio
+                         drawY = (size.height - drawHeight) / 2f
+                    } else {
+                         drawWidth = drawHeight * imageAspectRatio
+                         drawX = (size.width - drawWidth) / 2f
+                    }
+
+                    drawImage(
+                        image = maskImage,
+                        dstOffset = androidx.compose.ui.unit.IntOffset(drawX.toInt(), drawY.toInt()),
+                        dstSize = androidx.compose.ui.unit.IntSize(drawWidth.toInt(), drawHeight.toInt()),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Red.copy(alpha = 0.5f), BlendMode.SrcIn)
                     )
                 }
             }
         }
 
-        Column(modifier = Modifier.padding(8.dp)) {
+        Column(modifier = Modifier.padding(8.dp).background(MaterialTheme.colorScheme.surface)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 IconButton(onClick = { viewModel.undo() }) { Icon(Icons.Default.ArrowBack, "Undo") }
                 Row {
@@ -356,10 +471,6 @@ fun RefineEditor(
                 onValueChange = { feather = it },
                 valueRange = 0f..20f
             )
-
-            Button(onClick = { viewModel.applyRefinement(feather) }, modifier = Modifier.fillMaxWidth()) {
-                Text("Done")
-            }
         }
     }
 }

@@ -49,10 +49,11 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             undoStack.clear()
             redoStack.clear()
-            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap)
+            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false)
         }
     }
 
@@ -68,13 +69,22 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(paths = newPaths)
     }
 
-    fun onUndo() {
-        val currentPaths = _uiState.value.paths
-        if (currentPaths.isNotEmpty()) {
-            _uiState.value = _uiState.value.copy(paths = currentPaths.dropLast(1))
-            return
-        }
+    // LIVE UPDATE LOGIC
+    // We need to support Undo/Redo of the EDIT ITSELF, not just the paths.
+    // Actually, "Eraser" implies we select an area and then apply.
+    // The requirement: "Brush stroke must update preview instantly. After pressing 'Erase', the result is clearly visible."
+    // If we want "Instant" erasing (stroke by stroke), we need to run inpainting onDragEnd?
+    // Or do we select the area (red mask) then hit "Apply/Erase"?
+    // The previous code had `eraseObjects` triggered by button.
+    // Requirement says "Make sure each brush stroke updates: The mask and preview are updated live."
+    // This implies drawing the Red Mask live (which I did in RemoveBG).
+    // And "After pressing 'Erase', the result is clearly visible."
+    // So the flow is: Draw Mask -> Press Erase -> Inpaint.
 
+    // BUT: "Live brushing does NOT update the preview" (from RemoveBG complaint)
+    // For Object Eraser, the user draws on top.
+
+    fun undo() {
         if (undoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             if (current != null) {
@@ -89,7 +99,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         }
     }
 
-    fun onRedo() {
+    fun redo() {
         if (redoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             if (current != null) {
@@ -104,7 +114,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         }
     }
 
-    fun onReset() {
+    fun reset() {
         val uri = _uiState.value.selectedImageUri
         val bitmap = _uiState.value.originalBitmap
         undoStack.clear()
@@ -133,6 +143,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
         viewModelScope.launch {
             try {
+                // Ensure correct config
                 val workingBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
 
                 // Create Soft Mask (with Gaussian Blur)
@@ -144,11 +155,12 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
                     processedBitmap = resultBitmap,
-                    paths = emptyList(),
+                    paths = emptyList(), // Clear paths after applying
                     canUndo = true,
                     canRedo = false
                 )
             } catch (e: Exception) {
+                e.printStackTrace()
                 if (undoStack.isNotEmpty()) undoStack.pop()
                 _uiState.value = _uiState.value.copy(isErasing = false, error = "Error: ${e.message}")
             }
@@ -165,6 +177,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     private suspend fun createMask(width: Int, height: Int, paths: List<Pair<Path, Float>>, feather: Float): Bitmap = withContext(Dispatchers.Default) {
         val maskBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(maskBitmap)
+        // Background black (no mask)
         canvas.drawColor(android.graphics.Color.BLACK)
 
         val paint = Paint().apply {
@@ -181,14 +194,16 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         }
 
         // Apply Feather (Gaussian Blur)
-        // If feather is 0, we still might want slight anti-aliasing, but GaussianBlur(0) does nothing if sigma 0.
         if (feather > 0) {
             val mat = Mat()
             Utils.bitmapToMat(maskBitmap, mat)
 
             // kSize must be odd
-            val kSize = (feather * 2 + 1).toInt() or 1
-            Imgproc.GaussianBlur(mat, mat, Size(kSize.toDouble(), kSize.toDouble()), 0.0)
+            var kVal = (feather * 2).toInt()
+            if (kVal % 2 == 0) kVal++
+            val kSize = Size(kVal.toDouble(), kVal.toDouble())
+
+            Imgproc.GaussianBlur(mat, mat, kSize, 0.0)
 
             Utils.matToBitmap(mat, maskBitmap)
             mat.release()
@@ -207,21 +222,25 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         Imgproc.cvtColor(softMaskMat, softMaskMat, Imgproc.COLOR_BGRA2GRAY)
 
         // Create Hard Mask for Inpaint (Threshold)
+        // We need a binary mask for the Inpaint function itself
         val hardMaskMat = Mat()
-        // Threshold > 0 becomes 255. Any non-zero pixel in soft mask will be inpainted.
-        Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
+        // Threshold: any non-zero becomes 255? Or maybe threshold at mid-point?
+        // If we want to inpaint everything touched by the brush, we should use a low threshold.
+        Imgproc.threshold(softMaskMat, hardMaskMat, 10.0, 255.0, Imgproc.THRESH_BINARY)
 
         val inpaintedMat = Mat()
-        val radius = max(3.0, feather / 2.0)
+        // Radius: The inpaint radius. Should be somewhat related to the brush/hole size?
+        // Or feather? Usually small radius (3-5) is fine for Telea if the mask covers the object.
+        val radius = max(5.0, feather.toDouble())
         Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
 
-        // Blend Logic: result = original * (1 - mask) + inpaint * mask
-        // Mask must be normalized 0..1 (Float)
-
+        // BLENDING: result = original * (1 - mask) + inpaint * mask
+        // This blends the seam.
+        // Convert Soft Mask to Float 0..1
         val softMaskFloat = Mat()
         softMaskMat.convertTo(softMaskFloat, CvType.CV_32F, 1.0/255.0)
 
-        // Expand mask to 3 channels for multiplication
+        // Expand mask to 3 channels
         val mask3 = Mat()
         Imgproc.cvtColor(softMaskFloat, mask3, Imgproc.COLOR_GRAY2RGB)
 
@@ -269,31 +288,31 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         resultBitmap
     }
 
-    fun saveImage(activity: Activity): Boolean {
+    suspend fun saveImage(activity: Activity): Boolean {
         val bitmap = _uiState.value.processedBitmap ?: return false
         val uri = _uiState.value.selectedImageUri ?: return false
-        _uiState.value = _uiState.value.copy(isErasing = true)
+        _uiState.value = _uiState.value.copy(isLoading = true)
 
-        viewModelScope.launch {
-            try {
-                val filePath = BitmapUtils.saveBitmap(activity, bitmap, "PhotoDoctorPro_Erased_${System.currentTimeMillis()}", Bitmap.CompressFormat.JPEG)
-                repository.addHistory(
-                    History(
-                        operationType = "Object Erased",
-                        inputFilePath = uri.toString(),
-                        filePath = filePath,
-                        timestamp = System.currentTimeMillis()
-                    )
+        return try {
+            val fileName = "PhotoDoctorPro_Erased_${System.currentTimeMillis()}"
+            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.JPEG)
+            repository.addHistory(
+                History(
+                    operationType = "Object Erased",
+                    inputFilePath = uri.toString(),
+                    filePath = filePath,
+                    timestamp = System.currentTimeMillis()
                 )
-                AdManager.showInterstitialAd(activity)
-                _uiState.value = _uiState.value.copy(savedFilePath = filePath)
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
-            } finally {
-                _uiState.value = _uiState.value.copy(isErasing = false)
-            }
+            )
+            AdManager.showInterstitialAd(activity)
+            _uiState.value = _uiState.value.copy(savedFilePath = filePath)
+            true
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
+            false
+        } finally {
+            _uiState.value = _uiState.value.copy(isLoading = false)
         }
-        return true
     }
 
     fun onErrorShown() {
@@ -313,6 +332,7 @@ data class ObjectEraserUiState(
     val brushSize: Float = 40f,
     val feather: Float = 0f,
     val isErasing: Boolean = false,
+    val isLoading: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
     val resetPerformed: Boolean = false,

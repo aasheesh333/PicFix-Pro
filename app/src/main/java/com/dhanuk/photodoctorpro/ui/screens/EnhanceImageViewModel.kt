@@ -11,106 +11,62 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.ImageEnhancer
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.lang.Integer.max
 
 class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EnhanceImageUiState())
     val uiState = _uiState.asStateFlow()
 
-    // Safety limit for output resolution (approx 35MP)
-    private val MAX_OUTPUT_PIXELS = 35_000_000L
-
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
-            // Load safely with subsampling (max 3000px dimension)
-            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 3000)
+            _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
+            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
             if (bitmap != null) {
-                val pixelCount = bitmap.width.toLong() * bitmap.height.toLong()
-                val isLarge = pixelCount > 12_000_000 // >12MP
-
-                _uiState.value = EnhanceImageUiState(
-                    selectedImageUri = uri,
+                _uiState.value = _uiState.value.copy(
                     originalBitmap = bitmap,
-                    isLargeImage = isLarge
+                    isLoading = false
                 )
             } else {
-                _uiState.value = _uiState.value.copy(error = "Failed to load image. It might be corrupted or too large.")
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
             }
         }
     }
 
-    fun enhanceImage(activity: Activity) {
-        val bitmap = _uiState.value.originalBitmap ?: return
-        val scale = _uiState.value.scaleFactor
-
-        // Final Safety Check
-        val pixelCount = bitmap.width.toLong() * bitmap.height.toLong()
-        val outputPixels = pixelCount * scale * scale
-
-        if (outputPixels > MAX_OUTPUT_PIXELS) {
-            _uiState.value = _uiState.value.copy(error = "Resulting image is too large (${outputPixels/1_000_000}MP). Please reduce enhancement level.")
-            return
-        }
-
-        _uiState.value = _uiState.value.copy(isEnhancing = true, error = null)
+    fun enhanceImage(context: Context, scaleFactor: Int) {
+        val original = _uiState.value.originalBitmap ?: return
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
         viewModelScope.launch {
             try {
-                val enhancedBitmap = withContext(Dispatchers.Default) {
-                    ImageEnhancer.enhance(bitmap, scale)
-                }
+                val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor)
                 _uiState.value = _uiState.value.copy(
-                    isEnhancing = false,
-                    processedBitmap = enhancedBitmap,
-                    showingOriginal = false
+                    enhancedBitmap = enhanced,
+                    isLoading = false,
+                    scaleFactor = scaleFactor
                 )
             } catch (e: Exception) {
-                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
-                    isEnhancing = false,
-                    error = "Enhancement failed: ${e.message}" // OOM might be caught here too
+                    isLoading = false,
+                    error = e.message ?: "Enhancement failed"
                 )
             }
         }
-    }
-
-    fun onScaleChanged(scale: Int) {
-        val bitmap = _uiState.value.originalBitmap
-        if (bitmap != null) {
-            val pixelCount = bitmap.width.toLong() * bitmap.height.toLong()
-            val outputPixels = pixelCount * scale * scale
-
-            if (outputPixels > MAX_OUTPUT_PIXELS) {
-                 _uiState.value = _uiState.value.copy(error = "Resulting image would be too large (${outputPixels/1_000_000}MP). Please choose a lower scale.")
-                 return
-            }
-        }
-        _uiState.value = _uiState.value.copy(scaleFactor = scale)
-    }
-
-    fun setShowingOriginal(show: Boolean) {
-        _uiState.value = _uiState.value.copy(showingOriginal = show)
     }
 
     suspend fun saveImage(activity: Activity): Boolean {
-        val bitmap = _uiState.value.processedBitmap ?: return false
+        val bitmap = _uiState.value.enhancedBitmap ?: return false
         val uri = _uiState.value.selectedImageUri ?: return false
-
-        _uiState.value = _uiState.value.copy(isEnhancing = true)
+        _uiState.value = _uiState.value.copy(isLoading = true)
 
         return try {
-            val fileName = "PhotoDoctor_Enhance_${System.currentTimeMillis()}"
-            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.JPEG)
-
+            val fileName = "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}"
+            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
             repository.addHistory(
                 History(
-                    operationType = "Image Enhanced",
+                    operationType = "Enhance x${_uiState.value.scaleFactor}",
                     inputFilePath = uri.toString(),
                     filePath = filePath,
                     timestamp = System.currentTimeMillis()
@@ -120,11 +76,15 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
         } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
+            _uiState.value = _uiState.value.copy(error = "Failed to save: ${e.message}")
             false
         } finally {
-            _uiState.value = _uiState.value.copy(isEnhancing = false)
+            _uiState.value = _uiState.value.copy(isLoading = false)
         }
+    }
+
+    fun reset() {
+        _uiState.value = EnhanceImageUiState()
     }
 
     fun onErrorShown() {
@@ -134,20 +94,14 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
     fun onSavedMessageShown() {
          _uiState.value = _uiState.value.copy(savedFilePath = null)
     }
-
-    fun reset() {
-        _uiState.value = EnhanceImageUiState()
-    }
 }
 
 data class EnhanceImageUiState(
     val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
-    val processedBitmap: Bitmap? = null,
-    val isEnhancing: Boolean = false,
-    val isLargeImage: Boolean = false,
-    val error: String? = null,
-    val savedFilePath: String? = null,
+    val enhancedBitmap: Bitmap? = null,
     val scaleFactor: Int = 2,
-    val showingOriginal: Boolean = false
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val savedFilePath: String? = null
 )
