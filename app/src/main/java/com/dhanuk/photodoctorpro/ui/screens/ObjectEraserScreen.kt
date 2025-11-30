@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
@@ -27,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -355,9 +357,17 @@ fun EraserEditor(
                                 if (pointerCount >= 2) {
                                      val zoomChange = event.calculateZoom()
                                      val panChange = event.calculatePan()
-                                     val newScale = (zoomState.scale * zoomChange).coerceIn(1f, 10f)
+                                     val centroid = event.calculateCentroid(useCurrent = false)
+
+                                     val oldScale = zoomState.scale
+                                     val newScale = (oldScale * zoomChange).coerceIn(1f, 10f)
+
+                                     // Zoom around Centroid with TopLeft Pivot
+                                     val zoomOffset = centroid - (centroid - zoomState.offset) * (newScale / oldScale)
+
                                      zoomState.scale = newScale
-                                     zoomState.offset += panChange
+                                     zoomState.offset = zoomOffset + panChange
+
                                      event.changes.forEach { it.consume() }
                                 }
                             } else {
@@ -407,7 +417,8 @@ fun EraserEditor(
                         scaleX = zoomState.scale,
                         scaleY = zoomState.scale,
                         translationX = zoomState.offset.x,
-                        translationY = zoomState.offset.y
+                        translationY = zoomState.offset.y,
+                        transformOrigin = TransformOrigin(0f, 0f)
                     )
             ) {
                 Image(

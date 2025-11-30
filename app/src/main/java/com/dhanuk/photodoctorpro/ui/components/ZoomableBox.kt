@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -89,11 +90,13 @@ fun ZoomableBox(
                                          // Apply Zoom
                                          val oldScale = state.scale
                                          val newScale = (state.scale * effectiveZoom).coerceIn(minScale, maxScale)
-                                         state.scale = newScale
 
-                                         // Apply Pan (adjusted for zoom to keep centroid stable-ish)
-                                         // Simple pan:
-                                         state.offset += effectivePan
+                                         // Apply Zoom around Centroid (Pivot TopLeft)
+                                         // NewOffset = Centroid - (Centroid - OldOffset) * (NewScale / OldScale)
+                                         val zoomOffset = centroid - (centroid - state.offset) * (newScale / oldScale)
+
+                                         state.scale = newScale
+                                         state.offset = zoomOffset + effectivePan
 
                                          event.changes.forEach {
                                              if (it.positionChanged()) {
@@ -115,7 +118,8 @@ fun ZoomableBox(
                     scaleX = state.scale,
                     scaleY = state.scale,
                     translationX = state.offset.x,
-                    translationY = state.offset.y
+                    translationY = state.offset.y,
+                    transformOrigin = TransformOrigin(0f, 0f)
                 ),
             content = content
         )
