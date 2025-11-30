@@ -411,7 +411,7 @@ fun RefineEditor(
     }
 }
 
-fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, original: Bitmap): Pair<Float, Float>? {
+private fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, original: Bitmap): Pair<Float, Float>? {
      if (layoutW <= 0 || layoutH <= 0) return null
      val viewAspectRatio = layoutW / layoutH
      val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
@@ -433,7 +433,7 @@ fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, original: Bi
      return Pair(bitmapX, bitmapY)
 }
 
-fun calculateScaleFactor(layoutW: Float, layoutH: Float, original: Bitmap): Float {
+private fun calculateScaleFactor(layoutW: Float, layoutH: Float, original: Bitmap): Float {
      if (layoutW <= 0 || layoutH <= 0) return 1f
      val viewAspectRatio = layoutW / layoutH
      val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
