@@ -3,6 +3,8 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -33,9 +35,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
@@ -302,7 +307,10 @@ fun EraserEditor(
 ) {
     val zoomState = rememberZoomableBoxState()
 
-    var currentPath by remember { mutableStateOf(Path()) }
+    // Live Path in SCREEN Coordinates
+    var livePath by remember { mutableStateOf(Path()) }
+    var pathVersion by remember { mutableStateOf(0) }
+
     var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
     val bitmapToShow = uiState.processedBitmap ?: uiState.originalBitmap!!
@@ -323,37 +331,11 @@ fun EraserEditor(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var isZooming = false
-                        currentPath = Path()
-                        currentPath.moveTo(Float.NaN, Float.NaN)
 
-                        fun mapToBitmap(x: Float, y: Float): Pair<Float, Float>? {
-                             if (layoutSize.width <= 0 || layoutSize.height <= 0) return null
-                             val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
-                             val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
-                             var drawWidth = layoutSize.width.toFloat()
-                             var drawHeight = layoutSize.height.toFloat()
-                             var drawX = 0f
-                             var drawY = 0f
-                             if (imageAspectRatio > viewAspectRatio) {
-                                 drawHeight = drawWidth / imageAspectRatio
-                                 drawY = (layoutSize.height - drawHeight) / 2f
-                             } else {
-                                 drawWidth = drawHeight * imageAspectRatio
-                                 drawX = (layoutSize.width - drawWidth) / 2f
-                             }
-                             val localX = x - drawX
-                             val localY = y - drawY
-                             val bitmapX = (localX / drawWidth) * bitmapToShow.width
-                             val bitmapY = (localY / drawHeight) * bitmapToShow.height
-                             return Pair(bitmapX, bitmapY)
-                        }
-
-                        val downX = (down.position.x - zoomState.offset.x) / zoomState.scale
-                        val downY = (down.position.y - zoomState.offset.y) / zoomState.scale
-                        val startPt = mapToBitmap(downX, downY)
-                        if (startPt != null) {
-                            currentPath.moveTo(startPt.first, startPt.second)
-                        }
+                        // New stroke
+                        livePath = Path()
+                        livePath.moveTo(down.position.x, down.position.y)
+                        pathVersion++
 
                         do {
                             val event = awaitPointerEvent()
@@ -372,12 +354,8 @@ fun EraserEditor(
                             } else {
                                  event.changes.forEach { change ->
                                     if (change.positionChanged()) {
-                                         val currX = (change.position.x - zoomState.offset.x) / zoomState.scale
-                                         val currY = (change.position.y - zoomState.offset.y) / zoomState.scale
-                                         val pt = mapToBitmap(currX, currY)
-                                         if (pt != null) {
-                                             currentPath.lineTo(pt.first, pt.second)
-                                         }
+                                         livePath.lineTo(change.position.x, change.position.y)
+                                         pathVersion++ // Force recompose
                                          change.consume()
                                     }
                                 }
@@ -385,11 +363,63 @@ fun EraserEditor(
                         } while (event.changes.any { it.pressed })
 
                         if (!isZooming) {
-                            val newPath = EraserPath(currentPath, uiState.brushSize, uiState.brushSoftness)
-                            val newPaths = uiState.paths + newPath
-                            viewModel.onPathsChanged(newPaths)
+                            // Transform livePath (Screen) -> Bitmap Coords
+                            if (layoutSize.width > 0 && layoutSize.height > 0) {
+                                val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
+                                val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
+
+                                var drawWidth = layoutSize.width.toFloat()
+                                var drawHeight = layoutSize.height.toFloat()
+                                if (imageAspectRatio > viewAspectRatio) {
+                                    drawHeight = drawWidth / imageAspectRatio
+                                } else {
+                                    drawWidth = drawHeight * imageAspectRatio
+                                }
+
+                                // Calculation logic:
+                                // Screen = (Bitmap * Scale + Offset)
+                                // Bitmap = (Screen - Offset) / Scale
+                                // Where Scale is composite: ZoomScale * (DrawWidth / BitmapWidth)
+
+                                val fitScale = drawWidth / bitmapToShow.width
+                                val totalScale = zoomState.scale * fitScale
+                                val totalOffsetX = zoomState.offset.x + (layoutSize.width - drawWidth*zoomState.scale)/2f
+                                // Wait, simple offset logic?
+                                // ZoomableBox centers content?
+                                // Standard transform:
+                                // contentPoint = (screenPoint - zoomOffset) / zoomScale
+                                // bitmapPoint = (contentPoint - contentDrawOffset) / fitScale
+
+                                // Let's use Matrix for robustness
+                                val matrix = Matrix()
+                                // Inverse of drawing transform
+                                // Drawing: translate(drawX, drawY), scale(fitScale), translate(zoomOffset), scale(zoomScale)
+                                // ZoomableBox applies Zoom to CONTENT. Content is centered in box?
+                                // My ZoomableBox implementation: graphicsLayer translationX = offset.x
+                                // Box (content) fills max size. Image (inside) fills max size (Fit).
+                                // So Content Draw Rect is centered.
+
+                                val drawX = (layoutSize.width - drawWidth) / 2f
+                                val drawY = (layoutSize.height - drawHeight) / 2f
+
+                                // Step 1: Undo Zoom/Pan
+                                matrix.postTranslate(-zoomState.offset.x, -zoomState.offset.y)
+                                matrix.postScale(1f/zoomState.scale, 1f/zoomState.scale)
+
+                                // Step 2: Undo Fit Center
+                                matrix.postTranslate(-drawX, -drawY)
+                                matrix.postScale(1f/fitScale, 1f/fitScale)
+
+                                val bitmapPath = android.graphics.Path()
+                                livePath.asAndroidPath().transform(matrix, bitmapPath)
+
+                                val newPath = EraserPath(bitmapPath.asComposePath(), uiState.brushSize, uiState.brushSoftness)
+                                val newPaths = uiState.paths + newPath
+                                viewModel.onPathsChanged(newPaths)
+                            }
                         }
-                        currentPath = Path()
+                        livePath = Path() // Clear
+                        pathVersion++
                     }
                 }
         ) {
@@ -434,7 +464,7 @@ fun EraserEditor(
                     drawContext.canvas.translate(drawX, drawY)
                     drawContext.canvas.scale(scaleX, scaleY)
 
-                    // Draw committed paths (Standard Draw for Visibility)
+                    // Draw History (Bitmap Coords)
                     uiState.paths.forEach { eraserPath ->
                         drawPath(
                             path = eraserPath.path,
@@ -443,16 +473,19 @@ fun EraserEditor(
                         )
                     }
 
-                    // Draw current dragging path
-                    if (!currentPath.isEmpty) {
-                        drawPath(
-                            path = currentPath,
-                            color = Color.Red.copy(alpha = 0.5f),
-                            style = Stroke(width = uiState.brushSize, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-                    }
-
                     drawContext.canvas.restore()
+                }
+            }
+
+            // Draw Live Path (Screen Coords) - Overlay on top of ZoomableBox
+            // This ensures it is ALWAYS visible and exactly under finger
+            if (pathVersion > 0 && !livePath.isEmpty) { // Read pathVersion to trigger redraw
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawPath(
+                        path = livePath,
+                        color = Color.Red, // Opaque for visibility
+                        style = Stroke(width = uiState.brushSize, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
                 }
             }
         }
