@@ -329,6 +329,8 @@ fun EraserEditor(
 
                         livePath = Path()
                         livePath.moveTo(down.position.x, down.position.y)
+                        // Ensure a dot is drawn if it's just a tap
+                        livePath.lineTo(down.position.x, down.position.y)
 
                         liveBitmapPath = Path()
                         val startX = (down.position.x - zoomState.offset.x) / zoomState.scale
@@ -337,6 +339,7 @@ fun EraserEditor(
                         val startPt = mapToBitmap(startX, startY, layoutSize.width.toFloat(), layoutSize.height.toFloat(), bitmapToShow)
                         if (startPt != null) {
                             liveBitmapPath.moveTo(startPt.first, startPt.second)
+                            liveBitmapPath.lineTo(startPt.first, startPt.second)
                         } else {
                             liveBitmapPath.moveTo(0f, 0f) // Safety
                         }
@@ -456,13 +459,21 @@ fun EraserEditor(
             }
 
             // Draw Live Path (Screen Coords) - Overlay
-            if (pathVersion > 0 && !livePath.isEmpty) {
+            if (pathVersion > 0 && !livePath.isEmpty) { // Read pathVersion to trigger redraw
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawPath(
-                        path = livePath,
-                        color = Color.Red,
-                        style = Stroke(width = uiState.brushSize, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint()
+                        paint.style = android.graphics.Paint.Style.STROKE
+                        paint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        paint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        paint.color = android.graphics.Color.RED
+                        paint.strokeWidth = uiState.brushSize
+                        // Apply softness to live preview so user sees exactly what will happen
+                        if (uiState.brushSoftness > 0) {
+                            paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawPath(livePath.asAndroidPath(), paint)
+                    }
                 }
             }
         }

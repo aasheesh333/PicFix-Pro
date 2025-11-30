@@ -145,8 +145,15 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 // Create Mask with per-path softness
                 val softMask = createMask(workingBitmap.width, workingBitmap.height, paths)
 
+                // Calculate dynamic inpaint radius
+                // Telea inpainting works best with a radius that covers the neighborhood structure.
+                // We bump it up if we have large strokes or high softness.
+                val maxStroke = paths.maxOfOrNull { it.strokeWidth } ?: 20f
+                val maxSoftness = paths.maxOfOrNull { it.softness } ?: 0f
+                val dynamicRadius = max(15.0, maxStroke / 3.0) + (maxSoftness / 2.0)
+
                 // Inpaint and Blend
-                val resultBitmap = applyInpainting(workingBitmap, softMask)
+                val resultBitmap = applyInpainting(workingBitmap, softMask, dynamicRadius)
 
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
@@ -201,7 +208,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         return@withContext maskBitmap
     }
 
-    private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+    private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap, radius: Double): Bitmap = withContext(Dispatchers.Default) {
         val src = Mat()
         Utils.bitmapToMat(original, src)
         Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
@@ -218,10 +225,6 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
 
         val inpaintedMat = Mat()
-        // Radius for Inpaint algorithm (Telea).
-        // Since we feather the mask, we might want a slightly larger radius to cover the soft area.
-        // A fixed radius of 5.0 is usually sufficient if the mask covers the object.
-        val radius = 5.0
         Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
 
         // BLENDING
