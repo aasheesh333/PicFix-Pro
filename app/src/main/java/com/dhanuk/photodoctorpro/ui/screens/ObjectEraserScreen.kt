@@ -382,7 +382,15 @@ fun EraserEditor(
 
                         if (!isZooming) {
                             // Commit the parallel tracked Bitmap Path
-                            val newPath = EraserPath(liveBitmapPath, uiState.brushSize, uiState.brushSoftness)
+                            // Create a copy of the path to ensure persistence
+                            val savedPath = Path()
+                            savedPath.addPath(liveBitmapPath)
+
+                            val scaleFactor = calculateScaleFactor(layoutSize.width.toFloat(), layoutSize.height.toFloat(), bitmapToShow)
+                            val bitmapBrushSize = uiState.brushSize / scaleFactor
+                            val bitmapSoftness = uiState.brushSoftness / scaleFactor
+
+                            val newPath = EraserPath(savedPath, bitmapBrushSize, bitmapSoftness)
                             val newPaths = uiState.paths + newPath
                             viewModel.onPathsChanged(newPaths)
                         }
@@ -478,18 +486,6 @@ fun EraserEditor(
             }
         }
 
-        // Controls
-        Column(modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp).background(MaterialTheme.colorScheme.surface)) {
-            Text("Brush Size: ${uiState.brushSize.toInt()}")
-            Slider(value = uiState.brushSize, onValueChange = { viewModel.onBrushSizeChanged(it) }, valueRange = 10f..100f)
-
-            Text("Brush Softness: ${uiState.brushSoftness.toInt()}")
-            Slider(
-                value = uiState.brushSoftness,
-                onValueChange = { viewModel.onBrushSoftnessChanged(it) },
-                valueRange = 0f..50f
-            )
-        }
     }
 }
 
@@ -513,4 +509,15 @@ private fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, orig
      val bitmapX = (localX / drawWidth) * original.width
      val bitmapY = (localY / drawHeight) * original.height
      return Pair(bitmapX, bitmapY)
+}
+
+private fun calculateScaleFactor(layoutW: Float, layoutH: Float, original: Bitmap): Float {
+     if (layoutW <= 0 || layoutH <= 0) return 1f
+     val viewAspectRatio = layoutW / layoutH
+     val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+     var drawWidth = layoutW
+     if (imageAspectRatio <= viewAspectRatio) {
+         drawWidth = layoutH * imageAspectRatio
+     }
+     return drawWidth / original.width
 }
