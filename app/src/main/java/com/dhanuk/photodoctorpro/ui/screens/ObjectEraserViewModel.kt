@@ -3,6 +3,7 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.net.Uri
@@ -31,6 +32,13 @@ import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import java.util.Stack
 import kotlin.math.max
+
+// Data class for a stroke
+data class EraserPath(
+    val path: Path,
+    val strokeWidth: Float,
+    val softness: Float
+)
 
 class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
 
@@ -61,11 +69,11 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(brushSize = newSize)
     }
 
-    fun onFeatherChanged(newFeather: Float) {
-        _uiState.value = _uiState.value.copy(feather = newFeather)
+    fun onBrushSoftnessChanged(newSoftness: Float) {
+        _uiState.value = _uiState.value.copy(brushSoftness = newSoftness)
     }
 
-    fun onPathsChanged(newPaths: List<Pair<Path, Float>>) {
+    fun onPathsChanged(newPaths: List<EraserPath>) {
         _uiState.value = _uiState.value.copy(paths = newPaths)
     }
 
@@ -119,7 +127,6 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         val sourceBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap ?: return
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
-        val feather = _uiState.value.feather
 
         _uiState.value = _uiState.value.copy(isErasing = true, error = null)
 
@@ -135,11 +142,11 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                     sourceBitmap
                 }
 
-                // Create Soft Mask (with Gaussian Blur)
-                val softMask = createMask(workingBitmap.width, workingBitmap.height, paths, feather)
+                // Create Mask with per-path softness
+                val softMask = createMask(workingBitmap.width, workingBitmap.height, paths)
 
                 // Inpaint and Blend
-                val resultBitmap = applyInpainting(workingBitmap, softMask, feather)
+                val resultBitmap = applyInpainting(workingBitmap, softMask)
 
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
@@ -163,7 +170,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         stack.push(bitmap)
     }
 
-    private suspend fun createMask(width: Int, height: Int, paths: List<Pair<Path, Float>>, feather: Float): Bitmap = withContext(Dispatchers.Default) {
+    private suspend fun createMask(width: Int, height: Int, paths: List<EraserPath>): Bitmap = withContext(Dispatchers.Default) {
         val maskBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(maskBitmap)
         // Background black (no mask)
@@ -177,31 +184,24 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
             isAntiAlias = true
         }
 
-        paths.forEach { (path, strokeWidth) ->
-            paint.strokeWidth = strokeWidth
-            canvas.drawPath(path.asAndroidPath(), paint)
-        }
+        paths.forEach { eraserPath ->
+            paint.strokeWidth = eraserPath.strokeWidth
 
-        // Apply Feather (Gaussian Blur)
-        if (feather > 0) {
-            val mat = Mat()
-            Utils.bitmapToMat(maskBitmap, mat)
+            // Apply Softness per stroke
+            if (eraserPath.softness > 0) {
+                val radius = eraserPath.softness + 0.1f
+                paint.maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
+            } else {
+                paint.maskFilter = null
+            }
 
-            // kSize must be odd
-            var kVal = (feather * 2).toInt()
-            if (kVal % 2 == 0) kVal++
-            val kSize = Size(kVal.toDouble(), kVal.toDouble())
-
-            Imgproc.GaussianBlur(mat, mat, kSize, 0.0)
-
-            Utils.matToBitmap(mat, maskBitmap)
-            mat.release()
+            canvas.drawPath(eraserPath.path.asAndroidPath(), paint)
         }
 
         return@withContext maskBitmap
     }
 
-    private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap, feather: Float): Bitmap = withContext(Dispatchers.Default) {
+    private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         val src = Mat()
         Utils.bitmapToMat(original, src)
         Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
@@ -218,8 +218,10 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
 
         val inpaintedMat = Mat()
-        // Radius: Standard 3-5 is usually good. Larger if feather is large?
-        val radius = max(3.0, feather / 2.0)
+        // Radius for Inpaint algorithm (Telea).
+        // Since we feather the mask, we might want a slightly larger radius to cover the soft area.
+        // A fixed radius of 5.0 is usually sufficient if the mask covers the object.
+        val radius = 5.0
         Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
 
         // BLENDING
@@ -315,9 +317,9 @@ data class ObjectEraserUiState(
     val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
-    val paths: List<Pair<Path, Float>> = emptyList(),
+    val paths: List<EraserPath> = emptyList(), // Updated to EraserPath
     val brushSize: Float = 40f,
-    val feather: Float = 0f,
+    val brushSoftness: Float = 0f, // Added Softness
     val isErasing: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,

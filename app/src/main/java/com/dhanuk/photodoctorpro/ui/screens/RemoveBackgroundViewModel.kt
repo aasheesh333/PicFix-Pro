@@ -50,7 +50,6 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             if (bitmap != null) {
-                // Ensure strictly ARGB_8888 and Mutable
                 val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                 _uiState.value = _uiState.value.copy(
                     originalBitmap = argbBitmap,
@@ -68,13 +67,8 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
         viewModelScope.launch {
             try {
-                // 1. Convert to ARGB_8888
                 val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
-
-                // 2. Process to get Mask
                 val mask = processToGetMask(inputBitmap)
-
-                // 3. Apply Mask (Scale -> Compose)
                 val result = applyMaskToOriginal(inputBitmap, mask)
 
                 undoStack.clear()
@@ -104,25 +98,29 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         val result = segmenter.process(inputImage).await()
 
         val maskBuffer = result.foregroundConfidenceMask
-            ?: throw Exception("Could not generate mask (buffer is null).")
+            ?: throw Exception("Could not generate mask.")
 
         val width = bitmap.width
         val height = bitmap.height
-
-        maskBuffer.rewind()
         val totalPixels = width * height
-        val pixels = ByteArray(totalPixels)
 
+        // Threshold: 0.4
+        // If confidence > 0.4 -> 255 (Keep), else 0 (Remove)
+        // This ensures "Background Removed" means transparent, not semi-transparent ghost.
+        val threshold = 0.4f
+
+        val pixels = ByteArray(totalPixels)
         if (maskBuffer.hasArray()) {
              val floatArray = maskBuffer.array()
              for (i in 0 until totalPixels) {
-                pixels[i] = (floatArray[i] * 255).toInt().toByte()
+                pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
              }
         } else {
              val floatArray = FloatArray(totalPixels)
+             maskBuffer.rewind()
              maskBuffer.get(floatArray)
              for (i in 0 until totalPixels) {
-                 pixels[i] = (floatArray[i] * 255).toInt().toByte()
+                 pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
              }
         }
 
@@ -133,23 +131,19 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     }
 
     private suspend fun applyMaskToOriginal(original: Bitmap, mask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
-        // 1. Scale mask if needed (Crucial)
         val scaledMask = if (mask.width != original.width || mask.height != original.height) {
             Bitmap.createScaledBitmap(mask, original.width, original.height, true)
         } else {
             mask
         }
 
-        // 2. Merge (Alpha Blending)
         val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val paint = Paint()
         paint.isAntiAlias = true
 
-        // Draw Original
         canvas.drawBitmap(original, 0f, 0f, paint)
 
-        // Draw Mask with DST_IN
         val alphaPaint = Paint().apply {
             isAntiAlias = true
             xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
@@ -183,7 +177,6 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         }
     }
 
-    // Live update of the mask during Refine
     fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float, brushSoftness: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
 
@@ -195,11 +188,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
 
-            // Brush Softness (Feather)
             if (brushSoftness > 0) {
-                // radius must be > 0
-                // Map 0..20 slider to sane radius, e.g. 1..50?
-                // Or just use value directly.
                 val radius = brushSoftness + 0.1f
                 maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
             }

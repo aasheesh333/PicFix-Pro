@@ -3,6 +3,7 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,9 +31,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
@@ -234,11 +237,11 @@ fun ObjectEraserScreen(navController: NavController) {
                         valueRange = 10f..100f
                     )
 
-                    Text("Feather (Blur): ${uiState.feather.toInt()}")
+                    Text("Brush Softness: ${uiState.brushSoftness.toInt()}")
                     Slider(
-                        value = uiState.feather,
-                        onValueChange = { viewModel.onFeatherChanged(it) },
-                        valueRange = 0f..20f
+                        value = uiState.brushSoftness,
+                        onValueChange = { viewModel.onBrushSoftnessChanged(it) },
+                        valueRange = 0f..50f
                     )
 
                     Row(
@@ -292,7 +295,7 @@ fun EraserEditor(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { layoutSize = it }
-            .pointerInput(uiState.brushSize, zoomState, layoutSize) {
+            .pointerInput(uiState.brushSize, uiState.brushSoftness, zoomState, layoutSize) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
 
@@ -370,7 +373,9 @@ fun EraserEditor(
                     } while (event.changes.any { it.pressed })
 
                     if (!isZooming) {
-                        val newPaths = uiState.paths + (currentPath to uiState.brushSize)
+                        // Commit path
+                        val newPath = EraserPath(currentPath, uiState.brushSize, uiState.brushSoftness)
+                        val newPaths = uiState.paths + newPath
                         viewModel.onPathsChanged(newPaths)
                     }
                     currentPath = Path() // Reset
@@ -420,21 +425,38 @@ fun EraserEditor(
                 drawContext.canvas.scale(scaleX, scaleY)
 
                 // Draw committed paths
-                uiState.paths.forEach { (path, strokeWidth) ->
-                    drawPath(
-                        path = path,
-                        color = Color.Red.copy(alpha = 0.5f),
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                uiState.paths.forEach { eraserPath ->
+                    val paint = androidx.compose.ui.graphics.Paint().asFrameworkPaint()
+                    paint.style = android.graphics.Paint.Style.STROKE
+                    paint.strokeWidth = eraserPath.strokeWidth
+                    paint.strokeCap = android.graphics.Paint.Cap.ROUND
+                    paint.strokeJoin = android.graphics.Paint.Join.ROUND
+                    paint.color = android.graphics.Color.RED
+                    paint.alpha = 128 // 0.5f
+
+                    // Live Softness Visualization!
+                    if (eraserPath.softness > 0) {
+                        paint.maskFilter = BlurMaskFilter(eraserPath.softness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                    }
+
+                    drawContext.canvas.nativeCanvas.drawPath(eraserPath.path.asAndroidPath(), paint)
                 }
 
                 // Draw current dragging path
                 if (!currentPath.isEmpty) {
-                    drawPath(
-                        path = currentPath,
-                        color = Color.Red.copy(alpha = 0.5f),
-                        style = Stroke(width = uiState.brushSize, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                    val paint = androidx.compose.ui.graphics.Paint().asFrameworkPaint()
+                    paint.style = android.graphics.Paint.Style.STROKE
+                    paint.strokeWidth = uiState.brushSize
+                    paint.strokeCap = android.graphics.Paint.Cap.ROUND
+                    paint.strokeJoin = android.graphics.Paint.Join.ROUND
+                    paint.color = android.graphics.Color.RED
+                    paint.alpha = 128 // 0.5f
+
+                    if (uiState.brushSoftness > 0) {
+                        paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
+                    }
+
+                    drawContext.canvas.nativeCanvas.drawPath(currentPath.asAndroidPath(), paint)
                 }
 
                 drawContext.canvas.restore()

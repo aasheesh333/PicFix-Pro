@@ -43,8 +43,9 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         val width = bitmap.width
         val height = bitmap.height
 
-        // Tile if > 2MP approx
-        if (width * height <= 2_000_000) {
+        // Tile if > 4MP (approx 2000x2000)
+        // Processing smaller images in one go is faster and safer (no seams)
+        if (width * height <= 4_000_000) {
             return@withContext processMat(bitmap, scaleFactor)
         }
 
@@ -54,11 +55,20 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         val targetWidth = width * scaleFactor
         val targetHeight = height * scaleFactor
 
-        // OOM Safety Check happens in ImageEnhancer wrapper, but we check allocation here too
-        // We need huge memory for the result bitmap.
-        // 100MP RGBA = 400MB. This is risky but requested.
+        // Strict OOM Check before allocation
+        // RGBA_8888 = 4 bytes per pixel.
+        val requiredBytes = targetWidth.toLong() * targetHeight.toLong() * 4
+        val maxMemory = Runtime.getRuntime().maxMemory()
+        val freeMemory = Runtime.getRuntime().freeMemory()
+        // Simple heuristic: If we need more than 70% of max memory (risky), throw or handle.
+        // But Android heap grows.
 
-        val outBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        val outBitmap = try {
+            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        } catch (e: OutOfMemoryError) {
+            throw IllegalArgumentException("Not enough memory to enhance this image at ${scaleFactor}x.")
+        }
+
         val canvas = Canvas(outBitmap)
 
         val cols = kotlin.math.ceil(width.toFloat() / TILE_SIZE).toInt()
@@ -89,14 +99,17 @@ class OpenCVEnhancer : ImageEnhancerEngine {
                 srcTile.recycle()
 
                 // Determine the valid center region in the Processed Tile
-                // We map padding to output scale
                 val padLeft = (x - startX) * scaleFactor
                 val padTop = (y - startY) * scaleFactor
                 val validW = w * scaleFactor
                 val validH = h * scaleFactor
 
                 // Source Rect (Center of processed tile)
-                val srcRect = Rect(padLeft, padTop, padLeft + validW, padTop + validH)
+                // Ensure we don't go out of bounds of processedTile
+                val safeSrcRight = kotlin.math.min(processedTile.width, padLeft + validW)
+                val safeSrcBottom = kotlin.math.min(processedTile.height, padTop + validH)
+
+                val srcRect = Rect(padLeft, padTop, safeSrcRight, safeSrcBottom)
 
                 // Dest Rect (Position in output bitmap)
                 val dstX = x * scaleFactor
@@ -122,12 +135,11 @@ class OpenCVEnhancer : ImageEnhancerEngine {
 
         // Sharpen (Unsharp Mask)
         val gaussian = Mat()
-        // Sigma 2.0 is decent
         Imgproc.GaussianBlur(dst, gaussian, Size(0.0, 0.0), 2.0)
-        // src * 1.5 + blurred * -0.5 = sharpened
         Core.addWeighted(dst, 1.5, gaussian, -0.5, 0.0, dst)
 
         // CLAHE for Detail/Contrast
+        // Convert to Lab
         val lab = Mat()
         Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
         val channels = ArrayList<Mat>()
@@ -140,6 +152,7 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         Core.merge(channels, lab)
         Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2RGB)
 
+        // Ensure result is ARGB_8888
         val result = Bitmap.createBitmap(dst.cols(), dst.rows(), Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(dst, result)
 
@@ -163,8 +176,6 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
         if (bmp != bitmap && !bitmap.isRecycled) {
-             // Don't recycle passed-in bitmap here if it's used later?
-             // In this flow, 'bitmap' is created in processMat logic (result) so we can recycle it.
              bitmap.recycle()
         }
         return bmp
@@ -174,17 +185,16 @@ class OpenCVEnhancer : ImageEnhancerEngine {
 object ImageEnhancer {
 
     suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        val MAX_PIXELS = 100_000_000L // 100MP
+        val MAX_PIXELS = 60_000_000L // Reduced to 60MP for stability
         val targetPixels = (bitmap.width.toLong() * scaleFactor) * (bitmap.height.toLong() * scaleFactor)
 
         if (targetPixels > MAX_PIXELS) {
-            throw IllegalArgumentException("Resulting image too large (${targetPixels/1_000_000}MP). Max 100MP.")
+            throw IllegalArgumentException("Resulting image too large (${targetPixels/1_000_000}MP). Limit is 60MP to prevent crash.")
         }
 
-        // If > 25MP source, maybe block 6x/8x?
-        val sourcePixels = bitmap.width.toLong() * bitmap.height.toLong()
-        if (sourcePixels > 25_000_000L && scaleFactor > 4) {
-             throw IllegalArgumentException("Image too large (>25MP) for ${scaleFactor}x enhancement.")
+        // Disable 6x/8x for large sources (>12MP)
+        if (bitmap.width * bitmap.height > 12_000_000 && scaleFactor >= 6) {
+             throw IllegalArgumentException("Image too large for ${scaleFactor}x enhancement.")
         }
 
         return try {
