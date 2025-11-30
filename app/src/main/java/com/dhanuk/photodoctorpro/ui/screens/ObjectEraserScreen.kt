@@ -3,7 +3,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,9 +19,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,9 +35,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
@@ -437,35 +434,22 @@ fun EraserEditor(
                     drawContext.canvas.translate(drawX, drawY)
                     drawContext.canvas.scale(scaleX, scaleY)
 
-                    // Draw committed paths
-                    drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint()
-                        paint.style = android.graphics.Paint.Style.STROKE
-                        paint.strokeCap = android.graphics.Paint.Cap.ROUND
-                        paint.strokeJoin = android.graphics.Paint.Join.ROUND
-                        paint.color = android.graphics.Color.RED
-                        paint.alpha = 180
+                    // Draw committed paths (Standard Draw for Visibility)
+                    uiState.paths.forEach { eraserPath ->
+                        drawPath(
+                            path = eraserPath.path,
+                            color = Color.Red.copy(alpha = 0.5f),
+                            style = Stroke(width = eraserPath.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+                    }
 
-                        uiState.paths.forEach { eraserPath ->
-                            paint.strokeWidth = eraserPath.strokeWidth
-                            if (eraserPath.softness > 0) {
-                                paint.maskFilter = BlurMaskFilter(eraserPath.softness + 0.1f, BlurMaskFilter.Blur.NORMAL)
-                            } else {
-                                paint.maskFilter = null
-                            }
-                            canvas.nativeCanvas.drawPath(eraserPath.path.asAndroidPath(), paint)
-                        }
-
-                        // Draw current dragging path
-                        if (!currentPath.isEmpty) {
-                            paint.strokeWidth = uiState.brushSize
-                            if (uiState.brushSoftness > 0) {
-                                paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
-                            } else {
-                                paint.maskFilter = null
-                            }
-                            canvas.nativeCanvas.drawPath(currentPath.asAndroidPath(), paint)
-                        }
+                    // Draw current dragging path
+                    if (!currentPath.isEmpty) {
+                        drawPath(
+                            path = currentPath,
+                            color = Color.Red.copy(alpha = 0.5f),
+                            style = Stroke(width = uiState.brushSize, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
                     }
 
                     drawContext.canvas.restore()
