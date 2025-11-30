@@ -3,6 +3,7 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -49,12 +50,8 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             if (bitmap != null) {
-                // Ensure strictly ARGB_8888
-                val argbBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888 || !bitmap.isMutable) {
-                    bitmap.copy(Bitmap.Config.ARGB_8888, true)
-                } else {
-                    bitmap
-                }
+                // Ensure strictly ARGB_8888 and Mutable
+                val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                 _uiState.value = _uiState.value.copy(
                     originalBitmap = argbBitmap,
                     isLoading = false
@@ -71,18 +68,14 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
         viewModelScope.launch {
             try {
-                // Double check ARGB_8888
-                val inputBitmap = if (rawBitmap.config != Bitmap.Config.ARGB_8888) {
-                     rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                } else {
-                    rawBitmap
-                }
+                // 1. Convert to ARGB_8888
+                val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
 
-                // Process to get Mask
+                // 2. Process to get Mask
                 val mask = processToGetMask(inputBitmap)
 
-                // Create initial processed bitmap (Feather 0)
-                val result = applyMaskToOriginal(inputBitmap, mask, 0f)
+                // 3. Apply Mask (Scale -> Compose)
+                val result = applyMaskToOriginal(inputBitmap, mask)
 
                 undoStack.clear()
                 redoStack.clear()
@@ -109,83 +102,64 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
         val inputImage = InputImage.fromBitmap(bitmap, 0)
         val result = segmenter.process(inputImage).await()
+
         val maskBuffer = result.foregroundConfidenceMask
+            ?: throw Exception("Could not generate mask (buffer is null).")
 
-        if (maskBuffer != null) {
-            val width = result.foregroundBitmap?.width ?: bitmap.width
-            val height = result.foregroundBitmap?.height ?: bitmap.height
+        val width = bitmap.width
+        val height = bitmap.height
 
-            maskBuffer.rewind()
-            val pixels = ByteArray(width * height)
+        maskBuffer.rewind()
+        val totalPixels = width * height
+        val pixels = ByteArray(totalPixels)
 
-            // Convert Float (0.0 - 1.0) to Byte (0 - 255)
-            // High confidence (1.0) -> 255 (Keep)
-            // Low confidence (0.0) -> 0 (Remove)
-            if (maskBuffer.hasArray()) {
-                 val floatArray = maskBuffer.array()
-                 for (i in 0 until width * height) {
-                    pixels[i] = (floatArray[i] * 255).toInt().toByte()
-                 }
-            } else {
-                 for (i in 0 until width * height) {
-                     pixels[i] = (maskBuffer.get() * 255).toInt().toByte()
-                 }
-            }
-
-            val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
-            val tempBuffer = ByteBuffer.wrap(pixels)
-            safeMask.copyPixelsFromBuffer(tempBuffer)
-
-            return@withContext safeMask
+        if (maskBuffer.hasArray()) {
+             val floatArray = maskBuffer.array()
+             for (i in 0 until totalPixels) {
+                pixels[i] = (floatArray[i] * 255).toInt().toByte()
+             }
         } else {
-             throw Exception("Could not generate mask.")
+             val floatArray = FloatArray(totalPixels)
+             maskBuffer.get(floatArray)
+             for (i in 0 until totalPixels) {
+                 pixels[i] = (floatArray[i] * 255).toInt().toByte()
+             }
         }
+
+        val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+        safeMask.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
+
+        return@withContext safeMask
     }
 
-    // Apply Mask + Feather
-    private suspend fun applyMaskToOriginal(original: Bitmap, mask: Bitmap, feather: Float): Bitmap = withContext(Dispatchers.Default) {
-        val smoothMask: Bitmap
-        // Apply Gaussian Blur if feather > 0
-        if (feather > 0) {
-            val src = Mat()
-            Utils.bitmapToMat(mask, src)
-
-            val blurred = Mat()
-            var kVal = (feather * 2).toInt()
-            if (kVal % 2 == 0) kVal++
-            if (kVal < 1) kVal = 1
-
-            val kSize = Size(kVal.toDouble(), kVal.toDouble())
-            Imgproc.GaussianBlur(src, blurred, kSize, 0.0)
-
-            smoothMask = Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ALPHA_8)
-            Utils.matToBitmap(blurred, smoothMask)
-
-            src.release()
-            blurred.release()
+    private suspend fun applyMaskToOriginal(original: Bitmap, mask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+        // 1. Scale mask if needed (Crucial)
+        val scaledMask = if (mask.width != original.width || mask.height != original.height) {
+            Bitmap.createScaledBitmap(mask, original.width, original.height, true)
         } else {
-            smoothMask = mask
+            mask
         }
 
-        // Result Bitmap
+        // 2. Merge (Alpha Blending)
         val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val paint = Paint()
         paint.isAntiAlias = true
 
-        // 1. Draw Original
+        // Draw Original
         canvas.drawBitmap(original, 0f, 0f, paint)
 
-        // 2. Apply Mask using DST_IN
-        // DST_IN: Keeps Source where Dest (Mask) is Opaque.
-        // Wait. DST_IN: "The source pixels are combined with the destination pixels. The alpha of the source determines the alpha of the result."
-        // Source = Mask (The one we are drawing second). Dest = Original (Already on canvas).
-        // Mask Alpha=255 -> Result Alpha=255 (Keep).
-        // Mask Alpha=0 -> Result Alpha=0 (Transparent).
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        canvas.drawBitmap(smoothMask, 0f, 0f, paint)
+        // Draw Mask with DST_IN
+        val alphaPaint = Paint().apply {
+            isAntiAlias = true
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+        }
 
-        if (smoothMask != mask) smoothMask.recycle()
+        canvas.drawBitmap(scaledMask, 0f, 0f, alphaPaint)
+
+        if (scaledMask != mask) {
+            scaledMask.recycle()
+        }
 
         return@withContext result
     }
@@ -194,23 +168,23 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         _uiState.value = _uiState.value.copy(isRefining = true)
     }
 
-    fun applyRefinement(feather: Float) {
+    fun applyRefinement() {
         val original = _uiState.value.originalBitmap ?: return
         val mask = _uiState.value.maskBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true)
 
         viewModelScope.launch {
-             // Create final result with current mask and feather
-             val result = applyMaskToOriginal(original, mask, feather)
+             val result = applyMaskToOriginal(original, mask)
              _uiState.value = _uiState.value.copy(
                  processedBitmap = result,
-                 isRefining = false, // Exit refine mode
+                 isRefining = false,
                  isLoading = false
              )
         }
     }
 
-    fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float) {
+    // Live update of the mask during Refine
+    fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float, brushSoftness: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
 
         val canvas = Canvas(currentMask)
@@ -221,19 +195,24 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
 
+            // Brush Softness (Feather)
+            if (brushSoftness > 0) {
+                // radius must be > 0
+                // Map 0..20 slider to sane radius, e.g. 1..50?
+                // Or just use value directly.
+                val radius = brushSoftness + 0.1f
+                maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
+            }
+
             if (isAdd) {
-                // Add = Make Opaque = 255
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                color = Color.WHITE // Alpha 255
+                color = Color.WHITE
             } else {
-                // Remove = Make Transparent = 0
-                // For ALPHA_8, Color doesn't matter much if we use CLEAR, but safety first.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
                 color = Color.TRANSPARENT
             }
         }
         canvas.drawPath(path, paint)
-
         maskVersion.value += 1
     }
 

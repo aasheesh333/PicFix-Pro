@@ -82,7 +82,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     BackHandler(enabled = hasUnsavedChanges || uiState.isRefining) {
         if (uiState.isRefining) {
-             viewModel.applyRefinement(0f)
+             viewModel.applyRefinement()
         } else {
             showUnsavedDialog = true
         }
@@ -170,7 +170,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 navigationIcon = {
                     if (uiState.isRefining) {
                         IconButton(onClick = {
-                            viewModel.applyRefinement(0f)
+                            viewModel.applyRefinement()
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                         }
@@ -184,7 +184,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 },
                 actions = {
                     if (uiState.isRefining) {
-                        IconButton(onClick = { viewModel.applyRefinement(0f) }) {
+                        IconButton(onClick = { viewModel.applyRefinement() }) {
                             Icon(Icons.Default.Check, contentDescription = "Apply")
                         }
                     }
@@ -295,17 +295,9 @@ fun RefineEditor(
                 .weight(1f)
                 .fillMaxWidth()
                 .onSizeChanged { layoutSize = it }
-                .pointerInput(isAddMode, brushSize, zoomState, layoutSize) {
+                .pointerInput(isAddMode, brushSize, feather, zoomState, layoutSize) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-
-                        // Heuristic: If 2 pointers -> Zoom/Pan. If 1 -> Draw.
-                        // But pointers can be added.
-                        // Initial check:
-
-                        // We wait a tiny bit to see if a second finger comes down?
-                        // Or just start drawing and cancel if second finger appears?
-                        // "Start drawing and cancel" is standard behavior.
 
                         var isZooming = false
 
@@ -313,11 +305,9 @@ fun RefineEditor(
                         viewModel.saveMaskStateForUndo()
                         currentPath.reset()
 
-                        // Initial Point
                         val downX = (down.position.x - zoomState.offset.x) / zoomState.scale
                         val downY = (down.position.y - zoomState.offset.y) / zoomState.scale
 
-                        // Helper to map
                         fun mapToBitmap(x: Float, y: Float): Pair<Float, Float>? {
                              if (layoutSize.width <= 0 || layoutSize.height <= 0) return null
                              val viewAspectRatio = layoutSize.width.toFloat() / layoutSize.height.toFloat()
@@ -354,12 +344,10 @@ fun RefineEditor(
                             }
 
                             if (isZooming) {
-                                // Zoom Logic
-                                val zoomChange = event.calculateZoom()
-                                val panChange = event.calculatePan()
-                                val centroid = event.calculateCentroid(useCurrent = false)
-
                                 if (pointerCount >= 2) {
+                                     val zoomChange = event.calculateZoom()
+                                     val panChange = event.calculatePan()
+
                                      val newScale = (zoomState.scale * zoomChange).coerceIn(1f, 10f)
                                      zoomState.scale = newScale
                                      zoomState.offset += panChange
@@ -389,7 +377,7 @@ fun RefineEditor(
                                              }
                                              val scaleFactor = original.width.toFloat() / drawWidth
 
-                                             viewModel.updateMask(currentPath, isAddMode, brushSize * scaleFactor)
+                                             viewModel.updateMask(currentPath, isAddMode, brushSize * scaleFactor, feather)
                                          }
                                          change.consume()
                                     }
@@ -465,11 +453,11 @@ fun RefineEditor(
             Text("Brush Size")
             Slider(value = brushSize, onValueChange = { brushSize = it }, valueRange = 10f..100f)
 
-            Text("Feather Edges: ${feather.toInt()}")
+            Text("Brush Softness: ${feather.toInt()}")
             Slider(
                 value = feather,
                 onValueChange = { feather = it },
-                valueRange = 0f..20f
+                valueRange = 0f..50f // Increase range for better softness control
             )
         }
     }
