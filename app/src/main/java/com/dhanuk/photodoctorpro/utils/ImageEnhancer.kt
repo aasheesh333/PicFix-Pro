@@ -39,72 +39,71 @@ class TFLiteEnhancer(private val context: Context) : ImageEnhancerEngine {
 
 class OpenCVEnhancer : ImageEnhancerEngine {
 
-    // Process Full Image if small enough, else Tile
     override suspend fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
         val width = bitmap.width
         val height = bitmap.height
 
-        // Threshold for Tiling: if output > 12MP roughly (3000*4000), tile it.
-        // Actually, large bitmaps in OpenCV can be heavy. Let's tile if side > 1024 or so?
-        // Or if total pixels > 4MP?
-        // Let's be safe. If total pixels > 2_000_000 (2MP), tile.
-        val TILE_SIZE = 512
-        val PADDING = 32
-
+        // Tile if > 2MP approx
         if (width * height <= 2_000_000) {
             return@withContext processMat(bitmap, scaleFactor)
         }
 
-        // TILING LOGIC
+        val TILE_SIZE = 512
+        val PADDING = 32
+
         val targetWidth = width * scaleFactor
         val targetHeight = height * scaleFactor
+
+        // OOM Safety Check happens in ImageEnhancer wrapper, but we check allocation here too
+        // We need huge memory for the result bitmap.
+        // 100MP RGBA = 400MB. This is risky but requested.
+
         val outBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(outBitmap)
 
-        // Number of tiles
         val cols = kotlin.math.ceil(width.toFloat() / TILE_SIZE).toInt()
         val rows = kotlin.math.ceil(height.toFloat() / TILE_SIZE).toInt()
 
         for (r in 0 until rows) {
             for (c in 0 until cols) {
-                // Calculate Source Rect with Padding
+                // Base Tile coordinates in Input Image
                 val x = c * TILE_SIZE
                 val y = r * TILE_SIZE
+                val w = kotlin.math.min(TILE_SIZE, width - x)
+                val h = kotlin.math.min(TILE_SIZE, height - y)
 
-                // Actual Tile Rect (without padding)
-                val tileW = kotlin.math.min(TILE_SIZE, width - x)
-                val tileH = kotlin.math.min(TILE_SIZE, height - y)
+                // Coordinates with Padding (Overlap)
+                val startX = kotlin.math.max(0, x - PADDING)
+                val startY = kotlin.math.max(0, y - PADDING)
+                val endX = kotlin.math.min(width, x + w + PADDING)
+                val endY = kotlin.math.min(height, y + h + PADDING)
 
-                // Padded Rect
-                val padLeft = if (x > 0) PADDING else 0
-                val padTop = if (y > 0) PADDING else 0
-                val padRight = if (x + tileW < width) PADDING else 0
-                val padBottom = if (y + tileH < height) PADDING else 0
+                val srcW = endX - startX
+                val srcH = endY - startY
 
-                val srcX = x - padLeft
-                val srcY = y - padTop
-                val srcW = tileW + padLeft + padRight
-                val srcH = tileH + padTop + padBottom
+                // Crop Source
+                val srcTile = Bitmap.createBitmap(bitmap, startX, startY, srcW, srcH)
 
-                // Crop Source Tile
-                val srcTile = Bitmap.createBitmap(bitmap, srcX, srcY, srcW, srcH)
-
-                // Process Tile
+                // Process
                 val processedTile = processMat(srcTile, scaleFactor)
-
-                // Calculate Dest Rect (where to draw without padding)
-                // We need to crop the padding out of the processed tile
-                val outPadLeft = padLeft * scaleFactor
-                val outPadTop = padTop * scaleFactor
-                val outW = tileW * scaleFactor
-                val outH = tileH * scaleFactor
-
-                val cropRect = Rect(outPadLeft, outPadTop, outPadLeft + outW, outPadTop + outH)
-                val destRect = Rect(x * scaleFactor, y * scaleFactor, (x * scaleFactor) + outW, (y * scaleFactor) + outH)
-
-                canvas.drawBitmap(processedTile, cropRect, destRect, null)
-
                 srcTile.recycle()
+
+                // Determine the valid center region in the Processed Tile
+                // We map padding to output scale
+                val padLeft = (x - startX) * scaleFactor
+                val padTop = (y - startY) * scaleFactor
+                val validW = w * scaleFactor
+                val validH = h * scaleFactor
+
+                // Source Rect (Center of processed tile)
+                val srcRect = Rect(padLeft, padTop, padLeft + validW, padTop + validH)
+
+                // Dest Rect (Position in output bitmap)
+                val dstX = x * scaleFactor
+                val dstY = y * scaleFactor
+                val dstRect = Rect(dstX, dstY, dstX + validW, dstY + validH)
+
+                canvas.drawBitmap(processedTile, srcRect, dstRect, null)
                 processedTile.recycle()
             }
         }
@@ -121,12 +120,14 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         val newHeight = (src.rows() * scaleFactor).toDouble()
         Imgproc.resize(src, dst, Size(newWidth, newHeight), 0.0, 0.0, Imgproc.INTER_CUBIC)
 
-        // Sharpen
+        // Sharpen (Unsharp Mask)
         val gaussian = Mat()
+        // Sigma 2.0 is decent
         Imgproc.GaussianBlur(dst, gaussian, Size(0.0, 0.0), 2.0)
+        // src * 1.5 + blurred * -0.5 = sharpened
         Core.addWeighted(dst, 1.5, gaussian, -0.5, 0.0, dst)
 
-        // CLAHE (L channel)
+        // CLAHE for Detail/Contrast
         val lab = Mat()
         Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
         val channels = ArrayList<Mat>()
@@ -161,7 +162,11 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         paint.colorFilter = filter
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
-        if (bmp != bitmap) bitmap.recycle()
+        if (bmp != bitmap && !bitmap.isRecycled) {
+             // Don't recycle passed-in bitmap here if it's used later?
+             // In this flow, 'bitmap' is created in processMat logic (result) so we can recycle it.
+             bitmap.recycle()
+        }
         return bmp
     }
 }
@@ -169,13 +174,17 @@ class OpenCVEnhancer : ImageEnhancerEngine {
 object ImageEnhancer {
 
     suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        // Increase Max Limit to 100MP (approx 10000x10000)
-        // 12MP * 4 = 48MP. 12MP * 8 = 96MP.
-        val MAX_PIXELS = 100_000_000
+        val MAX_PIXELS = 100_000_000L // 100MP
         val targetPixels = (bitmap.width.toLong() * scaleFactor) * (bitmap.height.toLong() * scaleFactor)
 
         if (targetPixels > MAX_PIXELS) {
-            throw IllegalArgumentException("Resulting image too large (${targetPixels/1_000_000}MP). Limit is 100MP.")
+            throw IllegalArgumentException("Resulting image too large (${targetPixels/1_000_000}MP). Max 100MP.")
+        }
+
+        // If > 25MP source, maybe block 6x/8x?
+        val sourcePixels = bitmap.width.toLong() * bitmap.height.toLong()
+        if (sourcePixels > 25_000_000L && scaleFactor > 4) {
+             throw IllegalArgumentException("Image too large (>25MP) for ${scaleFactor}x enhancement.")
         }
 
         return try {

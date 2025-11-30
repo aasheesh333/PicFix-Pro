@@ -38,9 +38,6 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     private val _uiState = MutableStateFlow(RemoveBackgroundUiState())
     val uiState = _uiState.asStateFlow()
 
-    // We use a separate trigger for recomposition of the mask because simple Bitmap mutation
-    // doesn't trigger Compose state updates unless the object reference changes or we force it.
-    // We will use a version counter.
     val maskVersion = mutableStateOf(0)
 
     private val undoStack = ArrayDeque<Bitmap>()
@@ -50,11 +47,16 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
-            // Load safely with subsampling
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             if (bitmap != null) {
+                // Ensure strictly ARGB_8888
+                val argbBitmap = if (bitmap.config != Bitmap.Config.ARGB_8888 || !bitmap.isMutable) {
+                    bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                } else {
+                    bitmap
+                }
                 _uiState.value = _uiState.value.copy(
-                    originalBitmap = bitmap,
+                    originalBitmap = argbBitmap,
                     isLoading = false
                 )
             } else {
@@ -69,27 +71,21 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
         viewModelScope.launch {
             try {
-                // FORCE ARGB_8888 and Mutable
-                val inputBitmap = if (rawBitmap.config != Bitmap.Config.ARGB_8888 || !rawBitmap.isMutable) {
+                // Double check ARGB_8888
+                val inputBitmap = if (rawBitmap.config != Bitmap.Config.ARGB_8888) {
                      rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
                 } else {
                     rawBitmap
                 }
 
-                // Keep the ARGB_8888 original for processing
-                val finalOriginal = if (inputBitmap != rawBitmap) inputBitmap else rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
-
-                _uiState.value = _uiState.value.copy(originalBitmap = finalOriginal)
-
                 // Process to get Mask
-                val mask = processToGetMask(finalOriginal)
+                val mask = processToGetMask(inputBitmap)
 
-                // Create initial processed bitmap
-                val result = applyMaskToOriginal(finalOriginal, mask, 0f)
+                // Create initial processed bitmap (Feather 0)
+                val result = applyMaskToOriginal(inputBitmap, mask, 0f)
 
                 undoStack.clear()
                 redoStack.clear()
-                // Store initial mask state for Undo
                 pushToUndo(mask.copy(mask.config, true))
 
                 _uiState.value = _uiState.value.copy(
@@ -111,9 +107,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             .build()
         val segmenter = SubjectSegmentation.getClient(options)
 
-        // Ensure InputImage is created from ARGB_8888 bitmap
         val inputImage = InputImage.fromBitmap(bitmap, 0)
-
         val result = segmenter.process(inputImage).await()
         val maskBuffer = result.foregroundConfidenceMask
 
@@ -123,9 +117,10 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
             maskBuffer.rewind()
             val pixels = ByteArray(width * height)
-            // maskBuffer contains floats 0.0-1.0
-            // We map this to 0-255 for ALPHA_8 bitmap
-            // To ensure compatibility, we iterate and convert
+
+            // Convert Float (0.0 - 1.0) to Byte (0 - 255)
+            // High confidence (1.0) -> 255 (Keep)
+            // Low confidence (0.0) -> 0 (Remove)
             if (maskBuffer.hasArray()) {
                  val floatArray = maskBuffer.array()
                  for (i in 0 until width * height) {
@@ -147,18 +142,20 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         }
     }
 
+    // Apply Mask + Feather
     private suspend fun applyMaskToOriginal(original: Bitmap, mask: Bitmap, feather: Float): Bitmap = withContext(Dispatchers.Default) {
         val smoothMask: Bitmap
+        // Apply Gaussian Blur if feather > 0
         if (feather > 0) {
             val src = Mat()
             Utils.bitmapToMat(mask, src)
 
             val blurred = Mat()
-            // Ensure kSize is odd
             var kVal = (feather * 2).toInt()
             if (kVal % 2 == 0) kVal++
-            val kSize = Size(kVal.toDouble(), kVal.toDouble())
+            if (kVal < 1) kVal = 1
 
+            val kSize = Size(kVal.toDouble(), kVal.toDouble())
             Imgproc.GaussianBlur(src, blurred, kSize, 0.0)
 
             smoothMask = Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ALPHA_8)
@@ -170,16 +167,24 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             smoothMask = mask
         }
 
+        // Result Bitmap
         val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val paint = Paint()
+        paint.isAntiAlias = true
 
+        // 1. Draw Original
         canvas.drawBitmap(original, 0f, 0f, paint)
 
+        // 2. Apply Mask using DST_IN
+        // DST_IN: Keeps Source where Dest (Mask) is Opaque.
+        // Wait. DST_IN: "The source pixels are combined with the destination pixels. The alpha of the source determines the alpha of the result."
+        // Source = Mask (The one we are drawing second). Dest = Original (Already on canvas).
+        // Mask Alpha=255 -> Result Alpha=255 (Keep).
+        // Mask Alpha=0 -> Result Alpha=0 (Transparent).
         paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
         canvas.drawBitmap(smoothMask, 0f, 0f, paint)
 
-        // Don't recycle smoothMask if it's the same object as mask
         if (smoothMask != mask) smoothMask.recycle()
 
         return@withContext result
@@ -195,20 +200,19 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         _uiState.value = _uiState.value.copy(isLoading = true)
 
         viewModelScope.launch {
+             // Create final result with current mask and feather
              val result = applyMaskToOriginal(original, mask, feather)
              _uiState.value = _uiState.value.copy(
                  processedBitmap = result,
-                 isRefining = false,
+                 isRefining = false, // Exit refine mode
                  isLoading = false
              )
         }
     }
 
-    // Called on every drag to update the mask bitmap live
     fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
 
-        // We draw directly onto the mutable bitmap
         val canvas = Canvas(currentMask)
         val paint = Paint().apply {
             style = Paint.Style.STROKE
@@ -216,27 +220,20 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
-            // In ALPHA_8:
-            // 255 (Opaque) keeps the image -> "Add" (Keep)
-            // 0 (Transparent) removes the image -> "Erase" (Remove)
-            color = if (isAdd) Color.WHITE else Color.BLACK
-            // NOTE: For ALPHA_8, Color.BLACK usually maps to alpha 0 (Transparent) in some contexts or opaque black in others.
-            // But PorterDuff Mode matters.
-            // To ERASE (make transparent): Mode.CLEAR or Mode.SRC with color 0?
-            // To ADD (make opaque): Mode.SRC with alpha 255.
 
             if (isAdd) {
-                // Paint white (255) to keep
+                // Add = Make Opaque = 255
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                color = Color.WHITE
+                color = Color.WHITE // Alpha 255
             } else {
-                // Paint transparent (0) to remove
+                // Remove = Make Transparent = 0
+                // For ALPHA_8, Color doesn't matter much if we use CLEAR, but safety first.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                color = Color.TRANSPARENT
             }
         }
         canvas.drawPath(path, paint)
 
-        // Trigger recomposition
         maskVersion.value += 1
     }
 
@@ -248,8 +245,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
     private fun pushToUndo(bitmap: Bitmap) {
         if (undoStack.size >= MAX_STACK_SIZE) {
-            val old = undoStack.removeFirst()
-            // old.recycle() // Be careful recycling if used elsewhere
+            undoStack.removeFirst()
         }
         undoStack.addLast(bitmap)
     }
@@ -257,17 +253,8 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     fun undo() {
         if (undoStack.isNotEmpty()) {
             val current = _uiState.value.maskBitmap
-            if (current != null) redoStack.addLast(current) // Don't copy, just move ref? Or copy?
-            // Ideally we copy current state to redo stack before restoring
-
-            // To be safe against mutation:
-            // If we restore 'prev', and then draw on it, we mutate the object in undoStack?
-            // Yes, so we must copy when pushing to undo, and copy when restoring?
-
-            val prev = undoStack.removeLast() // This should be a snapshot
-
-            // Restore by replacing the maskBitmap in uiState?
-            // But we need to keep the object mutable and same config
+            if (current != null) redoStack.addLast(current)
+            val prev = undoStack.removeLast()
              _uiState.value = _uiState.value.copy(maskBitmap = prev.copy(prev.config, true))
              maskVersion.value += 1
         }

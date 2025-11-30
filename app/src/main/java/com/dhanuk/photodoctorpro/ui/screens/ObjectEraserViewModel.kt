@@ -69,21 +69,6 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         _uiState.value = _uiState.value.copy(paths = newPaths)
     }
 
-    // LIVE UPDATE LOGIC
-    // We need to support Undo/Redo of the EDIT ITSELF, not just the paths.
-    // Actually, "Eraser" implies we select an area and then apply.
-    // The requirement: "Brush stroke must update preview instantly. After pressing 'Erase', the result is clearly visible."
-    // If we want "Instant" erasing (stroke by stroke), we need to run inpainting onDragEnd?
-    // Or do we select the area (red mask) then hit "Apply/Erase"?
-    // The previous code had `eraseObjects` triggered by button.
-    // Requirement says "Make sure each brush stroke updates: The mask and preview are updated live."
-    // This implies drawing the Red Mask live (which I did in RemoveBG).
-    // And "After pressing 'Erase', the result is clearly visible."
-    // So the flow is: Draw Mask -> Press Erase -> Inpaint.
-
-    // BUT: "Live brushing does NOT update the preview" (from RemoveBG complaint)
-    // For Object Eraser, the user draws on top.
-
     fun undo() {
         if (undoStack.isNotEmpty()) {
             val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
@@ -144,7 +129,11 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         viewModelScope.launch {
             try {
                 // Ensure correct config
-                val workingBitmap = sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val workingBitmap = if (sourceBitmap.config != Bitmap.Config.ARGB_8888 || !sourceBitmap.isMutable) {
+                    sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                } else {
+                    sourceBitmap
+                }
 
                 // Create Soft Mask (with Gaussian Blur)
                 val softMask = createMask(workingBitmap.width, workingBitmap.height, paths, feather)
@@ -224,18 +213,16 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         // Create Hard Mask for Inpaint (Threshold)
         // We need a binary mask for the Inpaint function itself
         val hardMaskMat = Mat()
-        // Threshold: any non-zero becomes 255? Or maybe threshold at mid-point?
-        // If we want to inpaint everything touched by the brush, we should use a low threshold.
-        Imgproc.threshold(softMaskMat, hardMaskMat, 10.0, 255.0, Imgproc.THRESH_BINARY)
+        // Threshold: any non-zero pixel in the soft mask (even 1/255) becomes opaque for the INPAINT step.
+        // This ensures we have data for the blend everywhere.
+        Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
 
         val inpaintedMat = Mat()
-        // Radius: The inpaint radius. Should be somewhat related to the brush/hole size?
-        // Or feather? Usually small radius (3-5) is fine for Telea if the mask covers the object.
-        val radius = max(5.0, feather.toDouble())
+        // Radius: Standard 3-5 is usually good. Larger if feather is large?
+        val radius = max(3.0, feather / 2.0)
         Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
 
-        // BLENDING: result = original * (1 - mask) + inpaint * mask
-        // This blends the seam.
+        // BLENDING
         // Convert Soft Mask to Float 0..1
         val softMaskFloat = Mat()
         softMaskMat.convertTo(softMaskFloat, CvType.CV_32F, 1.0/255.0)
@@ -256,10 +243,10 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
         // Multiply
         val part1 = Mat()
-        Core.multiply(srcFloat, invMask3, part1)
+        Core.multiply(srcFloat, invMask3, part1) // original * (1 - mask)
 
         val part2 = Mat()
-        Core.multiply(inpaintedFloat, mask3, part2)
+        Core.multiply(inpaintedFloat, mask3, part2) // inpainted * mask
 
         val resultFloat = Mat()
         Core.add(part1, part2, resultFloat)
@@ -270,7 +257,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(finalMat, resultBitmap)
 
-        // Release
+        // Release resources
         src.release()
         softMaskMat.release()
         hardMaskMat.release()
