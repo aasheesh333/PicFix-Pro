@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
+import com.dhanuk.photodoctorpro.ui.components.BannerAd
 import com.dhanuk.photodoctorpro.ui.components.DebugInfoDialog
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import com.dhanuk.photodoctorpro.utils.UserPreferences
@@ -90,11 +91,12 @@ fun SettingsScreen(navController: NavController) {
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "General",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "General",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             Spacer(modifier = Modifier.height(8.dp))
 
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
@@ -152,17 +154,19 @@ fun SettingsScreen(navController: NavController) {
                     try { context.startActivity(intent) } catch (e: Exception) {}
                 }
             )
-             ListItem(
-                headlineContent = { Text("App Version") },
-                supportingContent = { Text("1.0.0") },
-                modifier = Modifier.clickable {
-                    versionClickCount++
-                    if (versionClickCount >= 5) {
-                        showDebugDialog = true
-                        versionClickCount = 0
+                ListItem(
+                    headlineContent = { Text("App Version") },
+                    supportingContent = { Text("1.0.0") },
+                    modifier = Modifier.clickable {
+                        versionClickCount++
+                        if (versionClickCount >= 5) {
+                            showDebugDialog = true
+                            versionClickCount = 0
+                        }
                     }
-                }
-            )
+                )
+            }
+            BannerAd()
         }
     }
 }

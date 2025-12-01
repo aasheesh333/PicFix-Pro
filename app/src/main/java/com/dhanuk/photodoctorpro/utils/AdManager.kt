@@ -16,7 +16,6 @@ object AdManager {
     private var interstitialAd: InterstitialAd? = null
     private var lastAdShowTime = 0L
     private var majorActionCount = 0
-    private var isFirstAction = true
 
     // Debug properties
     var lastLoadError: String = "None"
@@ -58,11 +57,12 @@ object AdManager {
     }
 
     fun showInterstitialAd(activity: Activity) {
-        if (isFirstAction) {
-            Log.d(TAG, "Skipping ad for first action")
-            isFirstAction = false
-            return
+        // Retry loading if ad is missing
+        if (interstitialAd == null) {
+            Log.d(TAG, "Ad is null, attempting to reload")
+            loadInterstitialAd(activity)
         }
+
         majorActionCount++
         val currentTime = System.currentTimeMillis()
         if (interstitialAd != null &&

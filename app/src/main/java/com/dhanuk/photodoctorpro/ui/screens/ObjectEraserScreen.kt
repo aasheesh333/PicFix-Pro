@@ -51,6 +51,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.BannerAd
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
@@ -213,6 +214,8 @@ fun ObjectEraserScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            BannerAd()
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
