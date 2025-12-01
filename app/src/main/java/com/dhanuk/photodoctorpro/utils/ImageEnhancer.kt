@@ -10,23 +10,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
 import org.opencv.core.Core
-import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import org.opencv.photo.Photo
 import java.io.IOException
 
 object ImageEnhancer {
 
+    private const val MAX_PIXELS = 50_000_000L
+
     suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
-        val MAX_PIXELS = 60_000_000L
-        // Check input size to prevent OOM early
-        if (bitmap.width * bitmap.height > 25_000_000 && scaleFactor > 4) {
-             // Fallback or throw?
-             // UI should have prevented this, but let's cap it or throw.
-             // We'll throw to be safe, UI handles it.
-             throw IllegalArgumentException("Image too large for high scaling factors.")
+        // Strict Size Check
+        val targetW = bitmap.width.toLong() * scaleFactor
+        val targetH = bitmap.height.toLong() * scaleFactor
+        val targetPixels = targetW * targetH
+
+        if (targetPixels > MAX_PIXELS) {
+            throw IllegalArgumentException("Result too large (${targetPixels/1_000_000}MP). Max allowed is ${MAX_PIXELS/1_000_000}MP.")
         }
 
         try {
@@ -43,15 +43,17 @@ object ImageEnhancer {
 
             return@withContext finalResult
 
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
-            // Fallback to pure OpenCV Bicubic if generic error
+            // Fallback to pure OpenCV Bicubic if generic error or OOM
+            // Ensure fallback handles size check too (redundant but safe)
             return@withContext OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
         }
     }
 
     private fun runSuperResolution(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
         // Models
+        // Instantiating helpers might throw native errors
         val esrganX2 = ESRGANHelper(context, "esrgan_x2.tflite")
         val esrganX4 = ESRGANHelper(context, "esrgan_x4.tflite")
 
@@ -73,10 +75,10 @@ object ImageEnhancer {
             6 -> {
                 // 2x + 3x interpolation
                  val step1 = if (esrganX2.isReady()) esrganX2.enhance(bitmap) else OpenCVEnhancerFallback.enhance(bitmap, 2)
-                 // Resize 3x using OpenCV/Bicubic
                  val w = step1.width * 3
                  val h = step1.height * 3
-                 val step2 = Bitmap.createScaledBitmap(step1, w, h, true) // Filter=true is bilinear/bicubic
+                 // Use OpenCV fallback logic for resizing to ensure consistency
+                 val step2 = Bitmap.createScaledBitmap(step1, w, h, true)
                  if (step1 != bitmap) step1.recycle()
                  step2
             }
@@ -91,11 +93,7 @@ object ImageEnhancer {
                             } else OpenCVEnhancerFallback.enhance(bitmap, 4)
 
                 val step2 = if (esrganX2.isReady()) esrganX2.enhance(step1)
-                            else OpenCVEnhancerFallback.enhance(step1, 2) // Should imply resizing
-
-                // If fallback returns, it scales from input.
-                // Wait, fallback takes "scaleFactor". OpenCVEnhancerFallback scales from Input.
-                // If I call fallback(step1, 2), it scales step1 by 2x. Correct.
+                            else OpenCVEnhancerFallback.enhance(step1, 2)
 
                 if (step1 != bitmap) step1.recycle()
                 step2
@@ -110,12 +108,12 @@ object ImageEnhancer {
         val dst = Mat()
         src.copyTo(dst)
 
-        // 1. Unsharp Mask (Sharpening)
+        // 1. Unsharp Mask
         val blurred = Mat()
         Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 3.0)
         Core.addWeighted(src, 1.5, blurred, -0.5, 0.0, dst)
 
-        // 2. Detail Enhancement (Simple CLAHE on L channel)
+        // 2. Detail Enhancement (CLAHE)
         val lab = Mat()
         Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
         val channels = ArrayList<Mat>()
@@ -126,10 +124,9 @@ object ImageEnhancer {
         Core.merge(channels, lab)
         Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2RGB)
 
-        // 3. Denoise (Bilateral Filter for smoothness)
+        // 3. Denoise (Bilateral Filter)
         val denoised = Mat()
         Imgproc.bilateralFilter(dst, denoised, 5, 50.0, 50.0)
-        // Release intermediate
         dst.release()
 
         val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
@@ -137,14 +134,13 @@ object ImageEnhancer {
         denoised.release()
 
         src.release()
-        dst.release()
         blurred.release()
         lab.release()
         channels.forEach { it.release() }
         clahe.collectGarbage()
 
-        // 4. Vibrance (using ColorMatrix)
-        return adjustVibrance(result, 1.1f) // Slight boost
+        // 4. Vibrance
+        return adjustVibrance(result, 1.1f)
     }
 
     private fun adjustVibrance(bitmap: Bitmap, value: Float): Bitmap {
@@ -158,8 +154,6 @@ object ImageEnhancer {
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
         if (bmp != bitmap && !bitmap.isRecycled) {
-             // Don't recycle input here as it might be needed by caller?
-             // Actually input was 'result' from Mat, safe to recycle.
              bitmap.recycle()
         }
         return bmp
@@ -173,13 +167,15 @@ object OpenCVEnhancerFallback {
         val targetWidth = width * scaleFactor
         val targetHeight = height * scaleFactor
 
-        // Bicubic Resize
+        if (targetWidth.toLong() * targetHeight.toLong() > 50_000_000L) {
+             throw IllegalArgumentException("Fallback: Result too large.")
+        }
+
         val scaled = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(scaled)
         val paint = Paint()
         paint.isFilterBitmap = true
         paint.isAntiAlias = true
-        // Matrix scale?
         val matrix = android.graphics.Matrix()
         matrix.postScale(scaleFactor.toFloat(), scaleFactor.toFloat())
         canvas.drawBitmap(bitmap, matrix, paint)

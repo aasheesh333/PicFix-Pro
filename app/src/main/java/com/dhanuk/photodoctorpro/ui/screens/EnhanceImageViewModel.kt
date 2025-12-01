@@ -54,10 +54,11 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                     isLoading = false,
                     scaleFactor = scaleFactor
                 )
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Enhancement failed"
+                    error = "Error: ${e.localizedMessage ?: "Unknown error"}"
                 )
             }
         }

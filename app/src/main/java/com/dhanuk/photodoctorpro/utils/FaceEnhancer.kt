@@ -51,10 +51,10 @@ class FaceEnhancer(private val context: Context) {
             try {
                 val modelFile = loadModelFile("gfpgan.tflite")
                 interpreter = Interpreter(modelFile, options)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                  // Ignore
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }

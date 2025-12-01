@@ -36,7 +36,7 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
             inputShape = interpreter?.getInputTensor(0)?.shape()
 
             detectScaleFactor()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
             interpreter = null
         }
