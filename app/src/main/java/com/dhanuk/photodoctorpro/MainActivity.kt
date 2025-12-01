@@ -5,9 +5,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PhotoDoctorProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
+import com.dhanuk.photodoctorpro.utils.ThemeController
 
 class MainActivity : ComponentActivity() {
 
@@ -34,7 +37,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            PhotoDoctorProTheme {
+            val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
+            PhotoDoctorProTheme(darkTheme = isDarkTheme) {
                 AppScaffold()
             }
         }

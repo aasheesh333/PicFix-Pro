@@ -14,3 +14,8 @@ val LightBackground = Color(0xFFF7F7F7)
 val CardBackground = Color(0xFFFFFFFF)
 val PrimaryText = Color(0xFF121212)
 val AccentColor = Color(0xFF6C63FF)
+
+// Dark Theme Colors
+val DarkBackground = Color(0xFF121212)
+val DarkSurface = Color(0xFF1E1E1E)
+val DarkText = Color(0xFFE0E0E0)

@@ -8,10 +8,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
+import com.dhanuk.photodoctorpro.utils.ThemeController
 
 class PhotoDoctorApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        ThemeController.init(this)
 
         if (OpenCVLoader.initDebug()) {
             Log.d("PhotoDoctor", "OpenCV loaded successfully")
