@@ -18,6 +18,7 @@ import kotlin.math.max
 class ESRGANHelper(private val context: Context, private val modelFilename: String) {
 
     private var interpreter: Interpreter? = null
+    private var gpuDelegate: GpuDelegate? = null
     private var inputShape: IntArray? = null
     private var scaleFactor: Int = -1
 
@@ -26,7 +27,9 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
             val options = Interpreter.Options()
             val compatList = CompatibilityList()
             if (compatList.isDelegateSupportedOnThisDevice) {
-                options.addDelegate(GpuDelegate())
+                val delegate = GpuDelegate()
+                gpuDelegate = delegate
+                options.addDelegate(delegate)
             } else {
                 options.setNumThreads(4)
             }
@@ -52,6 +55,13 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     }
 
     fun isReady(): Boolean = interpreter != null
+
+    fun close() {
+        interpreter?.close()
+        gpuDelegate?.close()
+        interpreter = null
+        gpuDelegate = null
+    }
 
     private fun detectScaleFactor() {
         val interp = interpreter ?: return

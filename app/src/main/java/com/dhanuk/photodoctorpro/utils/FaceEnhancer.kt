@@ -36,6 +36,7 @@ class FaceEnhancer(private val context: Context) {
     }
 
     private var interpreter: Interpreter? = null
+    private var gpuDelegate: GpuDelegate? = null
     private val MODEL_SIZE = 512
 
     init {
@@ -43,7 +44,9 @@ class FaceEnhancer(private val context: Context) {
             val options = Interpreter.Options()
             val compatList = CompatibilityList()
             if (compatList.isDelegateSupportedOnThisDevice) {
-                options.addDelegate(GpuDelegate())
+                val delegate = GpuDelegate()
+                gpuDelegate = delegate
+                options.addDelegate(delegate)
             } else {
                 options.setNumThreads(4)
             }
@@ -57,6 +60,12 @@ class FaceEnhancer(private val context: Context) {
         } catch (e: Throwable) {
             e.printStackTrace()
         }
+    }
+
+    fun close() {
+        interpreter?.close()
+        gpuDelegate?.close()
+        faceDetector.close()
     }
 
     private fun loadModelFile(path: String): java.nio.MappedByteBuffer {

@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -49,7 +50,9 @@ fun HomeScreen(navController: NavController) {
             Image(
                 painter = painterResource(id = R.drawable.app_logo),
                 contentDescription = stringResource(R.string.app_logo),
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(RoundedCornerShape(32.dp))
             )
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
             Text(stringResource(R.string.smart_tools_for_your_photos), style = MaterialTheme.typography.bodyMedium)
