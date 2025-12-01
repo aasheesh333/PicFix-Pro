@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
-import android.graphics.Rect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
@@ -15,126 +14,137 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import org.opencv.photo.Photo
+import java.io.IOException
 
-interface ImageEnhancerEngine {
-    suspend fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap
-}
+object ImageEnhancer {
 
-class TFLiteEnhancer(private val context: Context) : ImageEnhancerEngine {
-    private val modelName = "ESRGAN.tflite"
+    suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
+        val MAX_PIXELS = 60_000_000L
+        // Check input size to prevent OOM early
+        if (bitmap.width * bitmap.height > 25_000_000 && scaleFactor > 4) {
+             // Fallback or throw?
+             // UI should have prevented this, but let's cap it or throw.
+             // We'll throw to be safe, UI handles it.
+             throw IllegalArgumentException("Image too large for high scaling factors.")
+        }
 
-    override suspend fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        val assetManager = context.assets
         try {
-            assetManager.open(modelName).close()
-             throw NotImplementedError("TFLite model not yet integrated fully.")
+            // 1. Super Resolution (ESRGAN)
+            val upscaled = runSuperResolution(context, bitmap, scaleFactor)
+
+            // 2. Face Enhancement (GFPGAN)
+            val faceEnhanced = FaceEnhancer(context).enhanceFaces(bitmap, upscaled, scaleFactor)
+            if (upscaled != faceEnhanced && upscaled != bitmap) upscaled.recycle()
+
+            // 3. Post Processing (OpenCV)
+            val finalResult = applyPostProcessing(faceEnhanced)
+            if (faceEnhanced != finalResult && faceEnhanced != bitmap) faceEnhanced.recycle()
+
+            return@withContext finalResult
+
         } catch (e: Exception) {
-            throw e
+            e.printStackTrace()
+            // Fallback to pure OpenCV Bicubic if generic error
+            return@withContext OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
         }
     }
-}
 
-class OpenCVEnhancer : ImageEnhancerEngine {
+    private fun runSuperResolution(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
+        // Models
+        val esrganX2 = ESRGANHelper(context, "esrgan_x2.tflite")
+        val esrganX4 = ESRGANHelper(context, "esrgan_x4.tflite")
 
-    override suspend fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        // Use tiling for images larger than 4MP
-        if (width * height <= 4_000_000) {
-            return@withContext processMat(bitmap, scaleFactor)
-        }
-
-        val TILE_SIZE = 512
-        val targetWidth = width * scaleFactor
-        val targetHeight = height * scaleFactor
-
-        // Try allocation
-        val outBitmap = try {
-            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-        } catch (e: OutOfMemoryError) {
-            throw IllegalArgumentException("Not enough memory for ${scaleFactor}x enhancement.")
-        }
-
-        val canvas = Canvas(outBitmap)
-        // Ensure opaque background to avoid "Black Spots" if transparency issues arise
-        canvas.drawColor(android.graphics.Color.BLACK)
-
-        val cols = kotlin.math.ceil(width.toFloat() / TILE_SIZE).toInt()
-        val rows = kotlin.math.ceil(height.toFloat() / TILE_SIZE).toInt()
-
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                // Exact Tiling (No Overlap for stability)
-                val x = c * TILE_SIZE
-                val y = r * TILE_SIZE
-                val w = kotlin.math.min(TILE_SIZE, width - x)
-                val h = kotlin.math.min(TILE_SIZE, height - y)
-
-                // Crop Source
-                val srcTile = Bitmap.createBitmap(bitmap, x, y, w, h)
-
-                // Process
-                val processedTile = processMat(srcTile, scaleFactor)
-                srcTile.recycle()
-
-                // Draw to Dest
-                val dstX = x * scaleFactor
-                val dstY = y * scaleFactor
-                // Use exact size of processed tile (should be w*scale, h*scale)
-                val destRect = Rect(dstX, dstY, dstX + processedTile.width, dstY + processedTile.height)
-
-                canvas.drawBitmap(processedTile, null, destRect, null)
-                processedTile.recycle()
+        return when (scaleFactor) {
+            2 -> {
+                if (esrganX2.isReady()) esrganX2.enhance(bitmap)
+                else OpenCVEnhancerFallback.enhance(bitmap, 2)
             }
-        }
+            4 -> {
+                if (esrganX4.isReady()) esrganX4.enhance(bitmap)
+                else if (esrganX2.isReady()) {
+                    val step1 = esrganX2.enhance(bitmap)
+                    val step2 = esrganX2.enhance(step1)
+                    step1.recycle()
+                    step2
+                }
+                else OpenCVEnhancerFallback.enhance(bitmap, 4)
+            }
+            6 -> {
+                // 2x + 3x interpolation
+                 val step1 = if (esrganX2.isReady()) esrganX2.enhance(bitmap) else OpenCVEnhancerFallback.enhance(bitmap, 2)
+                 // Resize 3x using OpenCV/Bicubic
+                 val w = step1.width * 3
+                 val h = step1.height * 3
+                 val step2 = Bitmap.createScaledBitmap(step1, w, h, true) // Filter=true is bilinear/bicubic
+                 if (step1 != bitmap) step1.recycle()
+                 step2
+            }
+            8 -> {
+                // 4x + 2x
+                val step1 = if (esrganX4.isReady()) esrganX4.enhance(bitmap)
+                            else if (esrganX2.isReady()) {
+                                val s1 = esrganX2.enhance(bitmap)
+                                val s2 = esrganX2.enhance(s1)
+                                s1.recycle()
+                                s2
+                            } else OpenCVEnhancerFallback.enhance(bitmap, 4)
 
-        return@withContext outBitmap
+                val step2 = if (esrganX2.isReady()) esrganX2.enhance(step1)
+                            else OpenCVEnhancerFallback.enhance(step1, 2) // Should imply resizing
+
+                // If fallback returns, it scales from input.
+                // Wait, fallback takes "scaleFactor". OpenCVEnhancerFallback scales from Input.
+                // If I call fallback(step1, 2), it scales step1 by 2x. Correct.
+
+                if (step1 != bitmap) step1.recycle()
+                step2
+            }
+            else -> OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
+        }
     }
 
-    private fun processMat(bitmap: Bitmap, scaleFactor: Int): Bitmap {
+    private fun applyPostProcessing(bitmap: Bitmap): Bitmap {
         val src = Mat()
         Utils.bitmapToMat(bitmap, src)
-
         val dst = Mat()
-        val newWidth = (src.cols() * scaleFactor).toDouble()
-        val newHeight = (src.rows() * scaleFactor).toDouble()
+        src.copyTo(dst)
 
-        // Bicubic Upscale
-        Imgproc.resize(src, dst, Size(newWidth, newHeight), 0.0, 0.0, Imgproc.INTER_CUBIC)
+        // 1. Unsharp Mask (Sharpening)
+        val blurred = Mat()
+        Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 3.0)
+        Core.addWeighted(src, 1.5, blurred, -0.5, 0.0, dst)
 
-        // Sharpen (Stronger for "Real AI" look)
-        val gaussian = Mat()
-        Imgproc.GaussianBlur(dst, gaussian, Size(0.0, 0.0), 3.0)
-        Core.addWeighted(dst, 2.0, gaussian, -1.0, 0.0, dst) // Stronger sharpening
-
-        // CLAHE
+        // 2. Detail Enhancement (Simple CLAHE on L channel)
         val lab = Mat()
         Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
         val channels = ArrayList<Mat>()
         Core.split(lab, channels)
-
         val clahe = Imgproc.createCLAHE()
-        clahe.clipLimit = 3.0 // Stronger contrast
+        clahe.clipLimit = 2.0
         clahe.apply(channels[0], channels[0])
-
         Core.merge(channels, lab)
         Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2RGB)
 
-        val result = Bitmap.createBitmap(dst.cols(), dst.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(dst, result)
+        // 3. Denoise (Bilateral Filter for smoothness)
+        val denoised = Mat()
+        Imgproc.bilateralFilter(dst, denoised, 5, 50.0, 50.0)
+        // Release intermediate
+        dst.release()
+
+        val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(denoised, result)
+        denoised.release()
 
         src.release()
         dst.release()
-        gaussian.release()
+        blurred.release()
         lab.release()
         channels.forEach { it.release() }
+        clahe.collectGarbage()
 
-        // Boost Vibrance
-        return adjustVibrance(result, 1.2f)
+        // 4. Vibrance (using ColorMatrix)
+        return adjustVibrance(result, 1.1f) // Slight boost
     }
 
     private fun adjustVibrance(bitmap: Bitmap, value: Float): Bitmap {
@@ -148,26 +158,32 @@ class OpenCVEnhancer : ImageEnhancerEngine {
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
         if (bmp != bitmap && !bitmap.isRecycled) {
+             // Don't recycle input here as it might be needed by caller?
+             // Actually input was 'result' from Mat, safe to recycle.
              bitmap.recycle()
         }
         return bmp
     }
 }
 
-object ImageEnhancer {
+object OpenCVEnhancerFallback {
+    fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val targetWidth = width * scaleFactor
+        val targetHeight = height * scaleFactor
 
-    suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        val MAX_PIXELS = 60_000_000L
-        val targetPixels = (bitmap.width.toLong() * scaleFactor) * (bitmap.height.toLong() * scaleFactor)
+        // Bicubic Resize
+        val scaled = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(scaled)
+        val paint = Paint()
+        paint.isFilterBitmap = true
+        paint.isAntiAlias = true
+        // Matrix scale?
+        val matrix = android.graphics.Matrix()
+        matrix.postScale(scaleFactor.toFloat(), scaleFactor.toFloat())
+        canvas.drawBitmap(bitmap, matrix, paint)
 
-        if (targetPixels > MAX_PIXELS) {
-            throw IllegalArgumentException("Resulting image too large. Max 60MP.")
-        }
-
-        return try {
-             TFLiteEnhancer(context).enhance(bitmap, scaleFactor)
-        } catch (e: Exception) {
-             OpenCVEnhancer().enhance(bitmap, scaleFactor)
-        }
+        return scaled
     }
 }

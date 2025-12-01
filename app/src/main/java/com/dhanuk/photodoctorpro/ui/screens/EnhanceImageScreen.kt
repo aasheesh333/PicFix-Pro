@@ -235,9 +235,10 @@ fun EnhanceImageScreen(navController: NavController) {
                 Text("Select Upscale Factor:")
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                     listOf(2, 4, 6, 8).forEach { scale ->
+                        val isEnabled = !uiState.isLoading && !(uiState.isLargeImage && scale > 4)
                         OutlinedButton(
                             onClick = { viewModel.enhanceImage(context, scale) },
-                            enabled = !uiState.isLoading
+                            enabled = isEnabled
                         ) {
                             Text("${scale}x")
                         }

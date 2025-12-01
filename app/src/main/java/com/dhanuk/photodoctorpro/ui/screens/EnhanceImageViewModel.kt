@@ -25,9 +25,11 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
             _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
             if (bitmap != null) {
+                val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
                 _uiState.value = _uiState.value.copy(
                     originalBitmap = bitmap,
-                    isLoading = false
+                    isLoading = false,
+                    isLargeImage = isLarge
                 )
             } else {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
@@ -36,6 +38,11 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
     }
 
     fun enhanceImage(context: Context, scaleFactor: Int) {
+        if (_uiState.value.isLargeImage && scaleFactor > 4) {
+            _uiState.value = _uiState.value.copy(error = "Higher scales disabled for very large images.")
+            return
+        }
+
         val original = _uiState.value.originalBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
@@ -103,5 +110,6 @@ data class EnhanceImageUiState(
     val scaleFactor: Int = 2,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val savedFilePath: String? = null
+    val savedFilePath: String? = null,
+    val isLargeImage: Boolean = false
 )
