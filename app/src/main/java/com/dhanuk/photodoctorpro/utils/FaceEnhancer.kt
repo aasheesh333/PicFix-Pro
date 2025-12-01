@@ -18,6 +18,7 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.FileInputStream
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
@@ -55,21 +56,30 @@ class FaceEnhancer(private val context: Context) {
                 val modelFile = loadModelFile("gfpgan.tflite")
                 interpreter = Interpreter(modelFile, options)
             } catch (e: Throwable) {
-                 // Ignore
+                 // Ignore, fallback will skip face enhancement
+                 close()
             }
         } catch (e: Throwable) {
             e.printStackTrace()
+            close()
         }
     }
 
     fun close() {
         interpreter?.close()
         gpuDelegate?.close()
-        faceDetector.close()
+        try {
+             faceDetector.close()
+        } catch (e: Exception) {}
+        interpreter = null
+        gpuDelegate = null
     }
 
     private fun loadModelFile(path: String): java.nio.MappedByteBuffer {
         val fileDescriptor = context.assets.openFd("models/$path")
+        if (fileDescriptor.declaredLength <= 0) {
+            throw IOException("Model file $path is empty")
+        }
         val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
         val fileChannel = inputStream.channel
         val startOffset = fileDescriptor.startOffset
