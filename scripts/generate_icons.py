@@ -2,7 +2,7 @@ import os
 import sys
 from PIL import Image, ImageDraw, ImageOps
 
-INPUT_DIR = "app/src/main/res/app_logo_input"
+INPUT_DIR = "app/src/main/assets/app_logo_input"
 RES_DIR = "app/src/main/res"
 
 def find_logo():
