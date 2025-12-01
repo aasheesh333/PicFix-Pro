@@ -30,6 +30,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
+import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
 import java.io.File
@@ -178,6 +179,7 @@ fun EnhanceImageScreen(navController: NavController) {
                     if (uiState.enhancedBitmap != null) {
                         // Show Enhanced (or Original if holding)
                         val bitmapToShow = if (isHoldingOriginal) uiState.originalBitmap else uiState.enhancedBitmap
+                        val zoomState = rememberZoomableBoxState()
 
                         Box(
                             modifier = Modifier
@@ -192,7 +194,7 @@ fun EnhanceImageScreen(navController: NavController) {
                                     )
                                 }
                         ) {
-                            ZoomableBox(enableZoom = !isHoldingOriginal) {
+                            ZoomableBox(state = zoomState, enableZoom = !isHoldingOriginal) {
                                 Image(
                                     bitmap = bitmapToShow!!.asImageBitmap(),
                                     contentDescription = "Enhanced",
