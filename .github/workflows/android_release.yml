@@ -68,8 +68,8 @@ jobs:
         PACKAGE_NAME: ${{ secrets.PACKAGE_NAME || secrets.APP_PACKAGE_NAME }}
 
         # Version code/name might be vars or secrets
-        VERSION_CODE: ${{ vars.VERSION_CODE || secrets.APP_VERSION_CODE || '1' }}
-        VERSION_NAME: ${{ vars.VERSION_NAME || secrets.APP_VERSION_NAME || '1.0' }}
+        VERSION_CODE: ${{ vars.VERSION_CODE || secrets.VERSION_CODE || secrets.APP_VERSION_CODE || '1' }}
+        VERSION_NAME: ${{ vars.VERSION_NAME || secrets.VERSION_NAME || secrets.APP_VERSION_NAME || '1.0' }}
       run: ./gradlew assembleRelease bundleRelease
 
     - name: Upload APK

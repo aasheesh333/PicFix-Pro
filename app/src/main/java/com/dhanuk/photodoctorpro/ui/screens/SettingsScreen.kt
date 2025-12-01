@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
+import com.dhanuk.photodoctorpro.ui.components.DebugInfoDialog
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import com.dhanuk.photodoctorpro.utils.UserPreferences
 
@@ -56,6 +57,13 @@ class SettingsViewModel : ViewModel() {
 fun SettingsScreen(navController: NavController) {
     val context = LocalContext.current
     val viewModel: SettingsViewModel = viewModel()
+
+    var showDebugDialog by remember { mutableStateOf(false) }
+    var versionClickCount by remember { mutableStateOf(0) }
+
+    if (showDebugDialog) {
+        DebugInfoDialog(onDismiss = { showDebugDialog = false })
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadSettings(context)
@@ -140,7 +148,14 @@ fun SettingsScreen(navController: NavController) {
             )
              ListItem(
                 headlineContent = { Text("App Version") },
-                supportingContent = { Text("1.0.0") }
+                supportingContent = { Text("1.0.0") },
+                modifier = Modifier.clickable {
+                    versionClickCount++
+                    if (versionClickCount >= 5) {
+                        showDebugDialog = true
+                        versionClickCount = 0
+                    }
+                }
             )
         }
     }

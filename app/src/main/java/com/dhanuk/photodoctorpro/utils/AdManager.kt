@@ -18,6 +18,12 @@ object AdManager {
     private var majorActionCount = 0
     private var isFirstAction = true
 
+    // Debug properties
+    var lastLoadError: String = "None"
+        private set
+    var isAdLoaded: Boolean = false
+        private set
+
     private const val AD_FREQUENCY_CAP_MS = 3 * 60 * 1000 // 3 minutes
     private const val MAJOR_ACTION_COUNT_CAP = 2
 
@@ -37,11 +43,15 @@ object AdManager {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     Log.d(TAG, "Interstitial Ad Loaded")
                     interstitialAd = ad
+                    isAdLoaded = true
+                    lastLoadError = "Success"
                 }
 
                 override fun onAdFailedToLoad(adError: LoadAdError) {
                     Log.e(TAG, "Interstitial Ad Failed to Load: ${adError.message}")
                     interstitialAd = null
+                    isAdLoaded = false
+                    lastLoadError = "Code: ${adError.code}, Message: ${adError.message}"
                 }
             }
         )
