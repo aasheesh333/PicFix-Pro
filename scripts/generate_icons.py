@@ -68,11 +68,8 @@ def process_icons(logo_path):
 
     fg_img.paste(logo_resized, (offset, offset), logo_resized)
 
-    # Save to mipmap-xxxhdpi (as master foreground)
-    # Also save to other densities?
-    # Usually one high-res foreground in -nodpi or -xxxhdpi is enough if referenced by XML.
-    # But for correctness, let's put it in xxxhdpi and let XML reference @mipmap/ic_launcher_foreground
-    fg_dir = os.path.join(RES_DIR, "mipmap-xxxhdpi")
+    # Save to drawable (as master foreground)
+    fg_dir = os.path.join(RES_DIR, "drawable")
     os.makedirs(fg_dir, exist_ok=True)
     fg_img.save(os.path.join(fg_dir, "ic_launcher_foreground.png"))
     print("Generated Adaptive Foreground")
@@ -97,7 +94,7 @@ def process_icons(logo_path):
     xml_content = '''<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>'''
 
     with open(os.path.join(anydpi_dir, "ic_launcher.xml"), "w") as f:
