@@ -56,6 +56,7 @@ android {
 
         val admobAppId = getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
         manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
+        buildConfigField("String", "ADMOB_APP_ID", "\"$admobAppId\"")
 
         val oneSignalAppId = getProperty("ONESIGNAL_APP_ID", "")
         buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalAppId\"")
