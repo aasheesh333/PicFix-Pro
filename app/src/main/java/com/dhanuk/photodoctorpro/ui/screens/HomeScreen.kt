@@ -28,7 +28,6 @@ import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.dhanuk.photodoctorpro.ui.components.BannerAd
 
 // To change the app logo, replace app/src/main/res/drawable/app_logo.png with a new PNG using the SAME name.
 
@@ -41,36 +40,31 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf")
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo),
-                    contentDescription = stringResource(R.string.app_logo),
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(RoundedCornerShape(32.dp))
-                )
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-                Text(stringResource(R.string.smart_tools_for_your_photos), style = MaterialTheme.typography.bodyMedium)
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-            itemsIndexed(features) { index, feature ->
-                FeatureCard(
-                    feature = feature,
-                    navController = navController,
-                    animationDelay = index * 100
-                )
-            }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(32.dp))
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = stringResource(R.string.app_logo),
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(RoundedCornerShape(32.dp))
+            )
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
+            Text(stringResource(R.string.smart_tools_for_your_photos), style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(32.dp))
         }
-        BannerAd()
+        itemsIndexed(features) { index, feature ->
+            FeatureCard(
+                feature = feature,
+                navController = navController,
+                animationDelay = index * 100
+            )
+        }
     }
 }
 

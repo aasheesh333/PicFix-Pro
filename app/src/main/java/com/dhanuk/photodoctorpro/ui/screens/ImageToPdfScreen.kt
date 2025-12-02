@@ -28,7 +28,6 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
-import com.dhanuk.photodoctorpro.ui.components.BannerAd
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import java.io.File
@@ -112,8 +111,6 @@ fun ImageToPdfScreen(navController: NavController) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            BannerAd()
-
             Button(onClick = { imagePickerLauncher.launch("image/*") }) {
                 Text(stringResource(R.string.select_images))
             }

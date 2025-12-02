@@ -19,7 +19,6 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
-import com.dhanuk.photodoctorpro.ui.components.BannerAd
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -115,42 +114,39 @@ fun HistoryScreen(navController: NavController) {
         },
          snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (historyItems.isEmpty()) {
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(stringResource(R.string.no_history))
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp)
-                ) {
-                    items(historyItems) { item ->
-                        val displayName = if (item.filePath.startsWith("content://")) "Gallery/Selected Folder" else File(item.filePath).name
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .clickable { selectedItem = item }
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(item.operationType, style = MaterialTheme.typography.titleMedium)
-                                Text(displayName, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.timestamp)),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
+        if (historyItems.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(stringResource(R.string.no_history))
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                items(historyItems) { item ->
+                    val displayName = if (item.filePath.startsWith("content://")) "Gallery/Selected Folder" else File(item.filePath).name
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable { selectedItem = item }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(item.operationType, style = MaterialTheme.typography.titleMedium)
+                            Text(displayName, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.timestamp)),
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                     }
                 }
             }
-            BannerAd()
         }
     }
 }
