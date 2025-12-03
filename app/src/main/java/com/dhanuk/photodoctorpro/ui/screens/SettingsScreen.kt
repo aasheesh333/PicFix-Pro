@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.dhanuk.photodoctorpro.BuildConfig
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import com.dhanuk.photodoctorpro.utils.UserPreferences
@@ -146,7 +147,7 @@ fun SettingsScreen(navController: NavController) {
             )
             ListItem(
                 headlineContent = { Text("App Version") },
-                supportingContent = { Text("1.0.0") }
+                supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") }
             )
         }
     }
