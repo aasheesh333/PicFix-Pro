@@ -35,3 +35,15 @@
 #    java.lang.Object writeReplace();
 #    java.lang.Object readResolve();
 #}
+
+# TensorFlow Lite
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.**
+
+# OpenCV (just in case)
+-keep class org.opencv.** { *; }
+-dontwarn org.opencv.**
+
+# Coil (Image loading)
+-keep class coil.** { *; }
+-dontwarn coil.**
