@@ -17,6 +17,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable("object_eraser") { ObjectEraserScreen(navController) }
         composable("enhance_image") { EnhanceImageScreen(navController) }
         composable("image_to_pdf") { ImageToPdfScreen(navController) }
+        composable("color_adjustments") { ColorAdjustmentsScreen(navController) }
+        composable("exif_stripper") { ExifStripperScreen(navController) }
+        composable("perspective_crop") { PerspectiveCropScreen(navController) }
+        composable("meme_maker") { MemeMakerScreen(navController) }
         composable("privacy_policy") { PrivacyPolicyScreen(navController) }
         composable("terms_and_conditions") { TermsAndConditionsScreen(navController) }
     }

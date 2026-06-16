@@ -31,8 +31,17 @@ fun HistoryScreen(navController: NavController) {
     val repository = HistoryRepository(db.historyDao())
     val viewModel: HistoryViewModel = viewModel(factory = ViewModelFactory(repository))
     val historyItems = viewModel.history.collectAsState().value
+    val isClearing by viewModel.isClearing.collectAsState()
+    val errorMessage by viewModel.error.collectAsState()
     var selectedItem by remember { mutableStateOf<History?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar("Error: $it")
+            viewModel.onErrorShown()
+        }
+    }
 
     if (selectedItem != null) {
         val item = selectedItem!!
@@ -105,7 +114,7 @@ fun HistoryScreen(navController: NavController) {
                 title = { Text(stringResource(R.string.history)) },
                 actions = {
                     if (historyItems.isNotEmpty()) {
-                        Button(onClick = { viewModel.clearHistory() }) {
+                        Button(onClick = { viewModel.clearHistory() }, enabled = !isClearing) {
                             Text(stringResource(R.string.clear))
                         }
                     }

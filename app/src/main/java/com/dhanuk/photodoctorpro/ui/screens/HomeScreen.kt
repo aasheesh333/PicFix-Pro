@@ -12,6 +12,10 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.DocumentScanner
+import androidx.compose.material.icons.rounded.Mood
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.animateFloatAsState
@@ -39,7 +43,11 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.remove_background), stringResource(R.string.one_tap_cutout), Icons.Rounded.CropFree, "remove_background"),
         Feature(stringResource(R.string.object_eraser), stringResource(R.string.remove_unwanted_objects), Icons.Rounded.Brush, "object_eraser"),
         Feature(stringResource(R.string.enhance_image), stringResource(R.string.upscale_clean), Icons.Rounded.AutoAwesome, "enhance_image"),
-        Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf")
+        Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf"),
+        Feature("Color Adjustments", "Brightness, contrast, saturation & warmth", Icons.Rounded.Tune, "color_adjustments"),
+        Feature("Privacy Doctor", "Strip hidden EXIF metadata", Icons.Rounded.Security, "exif_stripper"),
+        Feature("Document Scanner", "Auto-crop & perspective fix", Icons.Rounded.DocumentScanner, "perspective_crop"),
+        Feature("Meme Maker", "Add text & share memes", Icons.Rounded.Mood, "meme_maker")
     )
 
     LazyVerticalGrid(

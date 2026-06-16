@@ -66,8 +66,12 @@ class FaceEnhancer(private val context: Context) {
     }
 
     fun close() {
-        interpreter?.close()
-        gpuDelegate?.close()
+        try {
+            interpreter?.close()
+        } catch (e: Exception) { e.printStackTrace() }
+        try {
+            gpuDelegate?.close()
+        } catch (e: Exception) { e.printStackTrace() }
         try {
              faceDetector.close()
         } catch (e: Exception) {}

@@ -3,18 +3,47 @@ package com.dhanuk.photodoctorpro.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HistoryViewModel(private val repository: HistoryRepository) : ViewModel() {
 
-    val history = repository.getAllHistory()
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val history: StateFlow<List<com.dhanuk.photodoctorpro.data.local.History>> = repository.getAllHistory()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000L),
+            initialValue = emptyList()
+        )
+
+    private val _isClearing = MutableStateFlow(false)
+    val isClearing: StateFlow<Boolean> = _isClearing.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     fun clearHistory() {
+        if (_isClearing.value) return
         viewModelScope.launch {
-            repository.clearHistory()
+            _isClearing.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.clearHistory()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _isClearing.value = false
+            }
         }
+    }
+
+    fun onErrorShown() {
+        _error.value = null
     }
 }

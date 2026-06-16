@@ -141,6 +141,9 @@ dependencies {
     implementation(libs.play.services.mlkit.subject.segmentation)
     implementation(libs.play.services.mlkit.face.detection)
 
+    // EXIF
+    implementation(libs.androidx.exifinterface)
+
     // TFLite
     implementation(libs.tensorflow.lite)
     implementation(libs.tensorflow.lite.gpu)

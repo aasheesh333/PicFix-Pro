@@ -42,6 +42,7 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
         } catch (e: Throwable) {
             e.printStackTrace()
             interpreter = null
+            close()
         }
     }
 
@@ -57,8 +58,12 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     fun isReady(): Boolean = interpreter != null
 
     fun close() {
-        interpreter?.close()
-        gpuDelegate?.close()
+        try {
+            interpreter?.close()
+        } catch (e: Exception) { e.printStackTrace() }
+        try {
+            gpuDelegate?.close()
+        } catch (e: Exception) { e.printStackTrace() }
         interpreter = null
         gpuDelegate = null
     }
