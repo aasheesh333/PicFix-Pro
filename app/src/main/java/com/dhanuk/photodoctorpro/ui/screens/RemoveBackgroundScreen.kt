@@ -1,6 +1,7 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -114,7 +115,29 @@ fun RemoveBackgroundScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShare = {
+            onShareWhatsApp = {
+                 try {
+                     val uriString = path
+                     val uriToShare = if (uriString.startsWith("content://")) {
+                         Uri.parse(uriString)
+                     } else {
+                         val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
+                         val file = File(cleanPath!!)
+                         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                     }
+
+                     val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uriToShare)
+                        setPackage("com.whatsapp")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(intent)
+                 } catch (e: Exception) {
+                     Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                 }
+            },
+            onShareOther = {
                  try {
                      val uriString = path
                      val uriToShare = if (uriString.startsWith("content://")) {
@@ -234,16 +257,12 @@ fun RemoveBackgroundScreen(navController: NavController) {
                         maskVersion = viewModel.maskVersion.value
                     )
                 } else {
-                    if (uiState.processedBitmap != null) {
-                        ZoomableBox {
-                            Box(modifier = Modifier.matchParentSize().background(Color.LightGray))
-                            Image(
-                                bitmap = uiState.processedBitmap!!.asImageBitmap(),
-                                contentDescription = "Processed",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
+                    if (uiState.processedBitmap != null && uiState.originalBitmap != null) {
+                        BeforeAfterSlider(
+                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                            afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else if (uiState.selectedImageUri != null) {
                          ZoomableBox {
                             Image(

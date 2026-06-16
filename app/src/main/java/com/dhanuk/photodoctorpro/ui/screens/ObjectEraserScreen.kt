@@ -125,7 +125,26 @@ fun ObjectEraserScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShare = {
+            onShareWhatsApp = {
+                 try {
+                     val uriString = path
+                     val uriToShare = if (uriString.startsWith("content://")) {
+                         Uri.parse(uriString)
+                     } else {
+                         val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
+                         val file = File(cleanPath!!)
+                         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                     }
+                     val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uriToShare)
+                        setPackage("com.whatsapp")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(intent)
+                 } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+            },
+            onShareOther = {
                  try {
                      val uriString = path
                      val uriToShare = if (uriString.startsWith("content://")) {

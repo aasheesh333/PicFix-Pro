@@ -18,16 +18,19 @@ private val LightColorScheme = lightColorScheme(
     surface = CardBackground,
     onPrimary = Color.White,
     onBackground = PrimaryText,
-    onSurface = PrimaryText
+    onSurface = PrimaryText,
+    secondary = SecondaryText
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = AccentColor,
+    primary = DarkAccentColor,
     background = DarkBackground,
     surface = DarkSurface,
-    onPrimary = Color.White,
+    surfaceVariant = DarkCard,
+    onPrimary = Color.Black,
     onBackground = DarkText,
-    onSurface = DarkText
+    onSurface = DarkText,
+    secondary = DarkSecondaryText
 )
 
 @Composable
@@ -40,7 +43,7 @@ fun PhotoDoctorProTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            window.statusBarColor = colorScheme.background.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

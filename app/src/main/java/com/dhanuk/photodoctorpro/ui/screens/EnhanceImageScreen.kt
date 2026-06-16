@@ -1,6 +1,8 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
+import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -102,7 +104,18 @@ fun EnhanceImageScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShare = {
+            onShareWhatsApp = {
+                 val file = File(path)
+                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                 val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+            },
+            onShareOther = {
                  val file = File(path)
                  val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                  val intent = Intent(Intent.ACTION_SEND).apply {
@@ -176,43 +189,12 @@ fun EnhanceImageScreen(navController: NavController) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    if (uiState.enhancedBitmap != null) {
-                        // Show Enhanced (or Original if holding)
-                        val bitmapToShow = if (isHoldingOriginal) uiState.originalBitmap else uiState.enhancedBitmap
-                        val zoomState = rememberZoomableBoxState()
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onPress = {
-                                            isHoldingOriginal = true
-                                            tryAwaitRelease()
-                                            isHoldingOriginal = false
-                                        }
-                                    )
-                                }
-                        ) {
-                            ZoomableBox(state = zoomState, enableZoom = !isHoldingOriginal) {
-                                Image(
-                                    bitmap = bitmapToShow!!.asImageBitmap(),
-                                    contentDescription = "Enhanced",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-                            // Overlay hint
-                            if (!isHoldingOriginal) {
-                                Surface(
-                                    modifier = Modifier.align(Alignment.TopCenter).padding(8.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha=0.6f),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Text("Hold to compare", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
+                    if (uiState.enhancedBitmap != null && uiState.originalBitmap != null) {
+                        BeforeAfterSlider(
+                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                            afterImage = uiState.enhancedBitmap!!.asImageBitmap(),
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else if (uiState.selectedImageUri != null) {
                          ZoomableBox {
                              Image(

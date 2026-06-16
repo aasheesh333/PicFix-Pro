@@ -3,15 +3,18 @@ package com.dhanuk.photodoctorpro.ui.screens
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,13 +26,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.shape.RoundedCornerShape
-
-// To change the app logo, replace app/src/main/res/drawable/app_logo.png with a new PNG using the SAME name.
 
 @Composable
 fun HomeScreen(navController: NavController) {
@@ -40,23 +42,36 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf")
     )
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(16.dp)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
-            Image(
-                painter = painterResource(id = R.drawable.app_logo),
-                contentDescription = stringResource(R.string.app_logo),
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(32.dp))
-            )
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-            Text(stringResource(R.string.smart_tools_for_your_photos), style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(32.dp))
+        item(span = { GridItemSpan(2) }) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.app_logo),
+                    contentDescription = stringResource(R.string.app_logo),
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    stringResource(R.string.smart_tools_for_your_photos),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
         itemsIndexed(features) { index, feature ->
             FeatureCard(
@@ -83,25 +98,41 @@ fun FeatureCard(feature: Feature, navController: NavController, animationDelay: 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .aspectRatio(0.85f)
                 .scale(scale)
                 .clickable {
                     pressed = true
                     navController.navigate(feature.route)
                 },
             shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
-            Row(
-                modifier = Modifier.padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(16.dp).fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(feature.icon, contentDescription = null, modifier = Modifier.size(40.dp))
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(feature.title, style = MaterialTheme.typography.titleLarge)
-                    Text(feature.subtitle, style = MaterialTheme.typography.bodyMedium)
-                }
+                Icon(
+                    feature.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    feature.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    feature.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
     }

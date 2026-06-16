@@ -1,6 +1,7 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
+import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,7 +70,18 @@ fun ImageToPdfScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShare = {
+            onShareWhatsApp = {
+                 val file = File(path)
+                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                 val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+            },
+            onShareOther = {
                  val file = File(path)
                  val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                  val intent = Intent(Intent.ACTION_SEND).apply {
