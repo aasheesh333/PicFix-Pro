@@ -22,11 +22,17 @@ class PhotoDoctorApplication : Application() {
             Log.e("PhotoDoctor", "OpenCV initialization failed!")
         }
 
-        // Verbose Logging set to help debug issues, remove before releasing your app.
-        OneSignal.Debug.logLevel = LogLevel.VERBOSE
+        if (BuildConfig.DEBUG) {
+            OneSignal.Debug.logLevel = LogLevel.VERBOSE
+        } else {
+            OneSignal.Debug.logLevel = LogLevel.NONE
+        }
 
-        // OneSignal Initialization
-        OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
+        if (BuildConfig.ONESIGNAL_APP_ID.isNotEmpty()) {
+            OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
+        } else {
+            Log.w("PhotoDoctor", "OneSignal APP_ID is empty - push notifications disabled")
+        }
 
         // requestPermission will show the native Android notification permission prompt.
         // NOTE: It's recommended to call this from your UI layer instead.

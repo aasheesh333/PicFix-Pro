@@ -61,4 +61,17 @@
     <string name="you_have_unsaved_changes_discard">You have unsaved changes. Do you want to discard them?</string>
     <string name="discard">Discard</string>
     <string name="default_save_location">Default Save Location</string>
+    <string name="color_adjustments">Color Adjustments</string>
+    <string name="color_adjustments_subtitle">Brightness, contrast, saturation &amp; warmth</string>
+    <string name="privacy_doctor">Privacy Doctor</string>
+    <string name="privacy_doctor_subtitle">Strip hidden EXIF metadata</string>
+    <string name="document_scanner">Document Scanner</string>
+    <string name="document_scanner_subtitle">Auto-crop &amp; perspective fix</string>
+    <string name="meme_maker">Meme Maker</string>
+    <string name="meme_maker_subtitle">Add text &amp; share memes</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="about">About</string>
+    <string name="app_version">App Version</string>
+    <string name="general">General</string>
+    <string name="default_save_location_label">Default (DCIM/PhotoDoctorPro)</string>
 </resources>

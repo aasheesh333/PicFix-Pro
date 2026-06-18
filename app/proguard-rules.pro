@@ -47,3 +47,22 @@
 # Coil (Image loading)
 -keep class coil.** { *; }
 -dontwarn coil.**
+
+# OneSignal
+-keep class com.onesignal.** { *; }
+-dontwarn com.onesignal.**
+
+# ML Kit
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+
+# Google Play Services Ads
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
+
+# Room
+-keep class androidx.room.** { *; }
+-dontwarn androidx.room.**
+
+# FileProvider
+-keep class androidx.core.content.FileProvider { *; }

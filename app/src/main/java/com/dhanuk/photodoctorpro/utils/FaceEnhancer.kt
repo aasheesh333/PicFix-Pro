@@ -25,7 +25,18 @@ import java.nio.channels.FileChannel
 import kotlin.math.max
 import kotlin.math.min
 
-class FaceEnhancer(private val context: Context) {
+class FaceEnhancer private constructor(private val context: Context) {
+
+    companion object {
+        @Volatile
+        private var INSTANCE: FaceEnhancer? = null
+
+        fun getInstance(context: Context): FaceEnhancer {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: FaceEnhancer(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+    }
 
     private val faceDetector by lazy {
         val options = FaceDetectorOptions.Builder()

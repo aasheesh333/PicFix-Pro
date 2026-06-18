@@ -9,9 +9,6 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,7 +40,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
-import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
+import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,13 +67,12 @@ class ColorAdjustmentsViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ColorAdjustmentsUiState())
     val uiState: StateFlow<ColorAdjustmentsUiState> = _uiState.asStateFlow()
 
-    fun setOriginal(uri: Uri) {
+    fun setOriginal(uri: Uri, context: Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val cr = contextResolver ?: return@launch
                 val bitmap = withContext(Dispatchers.IO) {
-                    cr.openInputStream(uri)?.use { stream ->
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
                         android.graphics.BitmapFactory.decodeStream(stream)
                     }
                 }
@@ -91,11 +87,6 @@ class ColorAdjustmentsViewModel : ViewModel() {
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }
         }
-    }
-
-    private var contextResolver: android.content.ContentResolver? = null
-    fun setResolver(cr: android.content.ContentResolver) {
-        contextResolver = cr
     }
 
     fun updateBrightness(value: Float) {
@@ -149,29 +140,23 @@ class ColorAdjustmentsViewModel : ViewModel() {
         _uiState.update { it.copy(savedFilePath = null) }
     }
 
-    fun saveImage(activity: Activity, context: android.content.Context): Boolean {
+    fun saveImage(activity: Activity, context: Context) {
         val state = _uiState.value
-        val bitmap = state.processedBitmap ?: return false
+        val bitmap = state.processedBitmap ?: return
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             try {
                 val savedPath = withContext(Dispatchers.IO) {
-                    val file = File(
-                        context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                        "PDPro_${System.currentTimeMillis()}.png"
-                    )
-                    FileOutputStream(file).use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                    }
-                    file.absolutePath
+                    val fileName = "PhotoDoctorPro_Color_${System.currentTimeMillis()}"
+                    BitmapUtils.saveBitmap(context, bitmap, fileName, Bitmap.CompressFormat.PNG)
                 }
                 _uiState.update { it.copy(savedFilePath = savedPath) }
 
-                // Save to history
                 try {
                     val db = AppDatabase.getDatabase(context)
                     val historyEntry = com.dhanuk.photodoctorpro.data.local.History(
                         operationType = "Color Adjustments",
-                        inputFilePath = state.originalBitmap?.let { "memory" } ?: "",
+                        inputFilePath = "memory",
                         filePath = savedPath,
                         timestamp = System.currentTimeMillis()
                     )
@@ -179,9 +164,10 @@ class ColorAdjustmentsViewModel : ViewModel() {
                 } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
-        return true
     }
 
     companion object {
@@ -232,9 +218,6 @@ fun ColorAdjustmentsScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context as Activity
     val viewModel: ColorAdjustmentsViewModel = viewModel()
-    LaunchedEffect(Unit) {
-        viewModel.setResolver(context.contentResolver)
-    }
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
@@ -242,7 +225,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { viewModel.setOriginal(it) }
+        uri?.let { viewModel.setOriginal(it, context) }
     }
 
     LaunchedEffect(uiState.error) {
@@ -395,7 +378,12 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         ) { Text("New Image") }
                         Spacer(modifier = Modifier.width(16.dp))
                         Button(
-                            onClick = { viewModel.saveImage(activity, context) },
+                            onClick = {
+                                val state = viewModel.uiState.value
+                                if (state.processedBitmap != null) {
+                                    viewModel.saveImage(activity, context)
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Save, contentDescription = "Save")

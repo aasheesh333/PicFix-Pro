@@ -2,6 +2,7 @@ package com.dhanuk.photodoctorpro.utils
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -10,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -213,4 +215,65 @@ object MediaScannerConnectionWrapper {
             e.printStackTrace()
         }
     }
+}
+
+fun resolveFileUri(path: String, context: Context): Uri {
+    return if (path.startsWith("content://")) {
+        Uri.parse(path)
+    } else {
+        val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path else path
+        val file = File(cleanPath!!)
+        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    }
+}
+
+fun createShareIntent(path: String, context: Context, packageName: String? = null): Intent {
+    val uri = resolveFileUri(path, context)
+    return Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (packageName != null) setPackage(packageName)
+    }
+}
+
+fun createOpenIntent(path: String, context: Context): Intent {
+    val uri = resolveFileUri(path, context)
+    return Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "image/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+}
+
+fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, original: Bitmap): Pair<Float, Float>? {
+    if (layoutW <= 0 || layoutH <= 0) return null
+    val viewAspectRatio = layoutW / layoutH
+    val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+    var drawWidth = layoutW
+    var drawHeight = layoutH
+    var drawX = 0f
+    var drawY = 0f
+    if (imageAspectRatio > viewAspectRatio) {
+        drawHeight = drawWidth / imageAspectRatio
+        drawY = (layoutH - drawHeight) / 2f
+    } else {
+        drawWidth = drawHeight * imageAspectRatio
+        drawX = (layoutW - drawWidth) / 2f
+    }
+    val localX = x - drawX
+    val localY = y - drawY
+    val bitmapX = (localX / drawWidth) * original.width
+    val bitmapY = (localY / drawHeight) * original.height
+    return Pair(bitmapX, bitmapY)
+}
+
+fun calculateScaleFactor(layoutW: Float, layoutH: Float, original: Bitmap): Float {
+    if (layoutW <= 0 || layoutH <= 0) return 1f
+    val viewAspectRatio = layoutW / layoutH
+    val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
+    var drawWidth = layoutW
+    if (imageAspectRatio <= viewAspectRatio) {
+        drawWidth = layoutH * imageAspectRatio
+    }
+    return drawWidth / original.width
 }

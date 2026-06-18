@@ -44,10 +44,10 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.object_eraser), stringResource(R.string.remove_unwanted_objects), Icons.Rounded.Brush, "object_eraser"),
         Feature(stringResource(R.string.enhance_image), stringResource(R.string.upscale_clean), Icons.Rounded.AutoAwesome, "enhance_image"),
         Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf"),
-        Feature("Color Adjustments", "Brightness, contrast, saturation & warmth", Icons.Rounded.Tune, "color_adjustments"),
-        Feature("Privacy Doctor", "Strip hidden EXIF metadata", Icons.Rounded.Security, "exif_stripper"),
-        Feature("Document Scanner", "Auto-crop & perspective fix", Icons.Rounded.DocumentScanner, "perspective_crop"),
-        Feature("Meme Maker", "Add text & share memes", Icons.Rounded.Mood, "meme_maker")
+        Feature(stringResource(R.string.color_adjustments), stringResource(R.string.color_adjustments_subtitle), Icons.Rounded.Tune, "color_adjustments"),
+        Feature(stringResource(R.string.privacy_doctor), stringResource(R.string.privacy_doctor_subtitle), Icons.Rounded.Security, "exif_stripper"),
+        Feature(stringResource(R.string.document_scanner), stringResource(R.string.document_scanner_subtitle), Icons.Rounded.DocumentScanner, "perspective_crop"),
+        Feature(stringResource(R.string.meme_maker), stringResource(R.string.meme_maker_subtitle), Icons.Rounded.Mood, "meme_maker")
     )
 
     LazyVerticalGrid(

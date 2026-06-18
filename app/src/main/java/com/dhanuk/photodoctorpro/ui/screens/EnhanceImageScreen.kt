@@ -25,8 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
@@ -35,7 +33,6 @@ import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,34 +102,18 @@ fun EnhanceImageScreen(navController: NavController) {
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
-                 val file = File(path)
-                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    setPackage("com.whatsapp")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                 try { context.startActivity(com.dhanuk.photodoctorpro.utils.createShareIntent(path, context, "com.whatsapp")) }
+                 catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                 val file = File(path)
-                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(intent, "Share Image"))
+                try {
+                    context.startActivity(Intent.createChooser(
+                        com.dhanuk.photodoctorpro.utils.createShareIntent(path, context), "Share Image"))
+                } catch (e: Exception) { e.printStackTrace() }
             },
             onOpen = {
-                val file = File(path)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "image/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                try { context.startActivity(intent) } catch (e: Exception) {}
+                try { context.startActivity(com.dhanuk.photodoctorpro.utils.createOpenIntent(path, context)) }
+                catch (e: Exception) { e.printStackTrace() }
             }
         )
     }

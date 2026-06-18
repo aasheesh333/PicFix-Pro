@@ -1,11 +1,11 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
-import android.widget.Toast
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,8 +56,11 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
+import com.dhanuk.photodoctorpro.utils.createOpenIntent
+import com.dhanuk.photodoctorpro.utils.createShareIntent
+import com.dhanuk.photodoctorpro.utils.mapToBitmap
+import com.dhanuk.photodoctorpro.utils.calculateScaleFactor
 import kotlinx.coroutines.launch
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,56 +131,17 @@ fun ObjectEraserScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                  try {
-                     val uriString = path
-                     val uriToShare = if (uriString.startsWith("content://")) {
-                         Uri.parse(uriString)
-                     } else {
-                         val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
-                         val file = File(cleanPath!!)
-                         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                     }
-                     val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uriToShare)
-                        setPackage("com.whatsapp")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
+                     context.startActivity(createShareIntent(path, context, "com.whatsapp"))
                  } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
                  try {
-                     val uriString = path
-                     val uriToShare = if (uriString.startsWith("content://")) {
-                         Uri.parse(uriString)
-                     } else {
-                         val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
-                         val file = File(cleanPath!!)
-                         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                     }
-                     val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uriToShare)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share Image"))
+                     context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image"))
                  } catch (e: Exception) { e.printStackTrace() }
             },
             onOpen = {
                 try {
-                    val uriString = path
-                    val uriToOpen = if (uriString.startsWith("content://")) {
-                        Uri.parse(uriString)
-                    } else {
-                        val cleanPath = if (uriString.startsWith("file://")) Uri.parse(uriString).path else uriString
-                        val file = File(cleanPath!!)
-                        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    }
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uriToOpen, "image/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
+                    context.startActivity(createOpenIntent(path, context))
                 } catch (e: Exception) { e.printStackTrace() }
             }
         )
@@ -513,41 +477,8 @@ fun EraserEditor(
                         canvas.nativeCanvas.drawPath(livePath.asAndroidPath(), paint)
                     }
                 }
-            }
+}
+
         }
-
     }
-}
-
-private fun mapToBitmap(x: Float, y: Float, layoutW: Float, layoutH: Float, original: Bitmap): Pair<Float, Float>? {
-     if (layoutW <= 0 || layoutH <= 0) return null
-     val viewAspectRatio = layoutW / layoutH
-     val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
-     var drawWidth = layoutW
-     var drawHeight = layoutH
-     var drawX = 0f
-     var drawY = 0f
-     if (imageAspectRatio > viewAspectRatio) {
-         drawHeight = drawWidth / imageAspectRatio
-         drawY = (layoutH - drawHeight) / 2f
-     } else {
-         drawWidth = drawHeight * imageAspectRatio
-         drawX = (layoutW - drawWidth) / 2f
-     }
-     val localX = x - drawX
-     val localY = y - drawY
-     val bitmapX = (localX / drawWidth) * original.width
-     val bitmapY = (localY / drawHeight) * original.height
-     return Pair(bitmapX, bitmapY)
-}
-
-private fun calculateScaleFactor(layoutW: Float, layoutH: Float, original: Bitmap): Float {
-     if (layoutW <= 0 || layoutH <= 0) return 1f
-     val viewAspectRatio = layoutW / layoutH
-     val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
-     var drawWidth = layoutW
-     if (imageAspectRatio <= viewAspectRatio) {
-         drawWidth = layoutH * imageAspectRatio
-     }
-     return drawWidth / original.width
 }

@@ -19,6 +19,17 @@ object ImageEnhancer {
 
     private const val MAX_PIXELS = 50_000_000L
 
+    private val esrganCache = mutableMapOf<String, ESRGANHelper>()
+    private val esrganLock = Any()
+
+    private fun getEsrgan(context: Context, modelFile: String): ESRGANHelper {
+        synchronized(esrganLock) {
+            return esrganCache.getOrPut(modelFile) {
+                ESRGANHelper(context.applicationContext, modelFile)
+            }
+        }
+    }
+
     suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
         // Strict Size Check
         val targetW = bitmap.width.toLong() * scaleFactor
@@ -34,11 +45,11 @@ object ImageEnhancer {
             val upscaled = runSuperResolution(context, bitmap, scaleFactor)
 
             // 2. Face Enhancement (GFPGAN)
-            val faceEnhancer = FaceEnhancer(context)
+            val faceEnhancer = FaceEnhancer.getInstance(context)
             val faceEnhanced = try {
                 faceEnhancer.enhanceFaces(bitmap, upscaled, scaleFactor)
             } finally {
-                faceEnhancer.close()
+                // singleton - don't close
             }
             if (upscaled != faceEnhanced && upscaled != bitmap) upscaled.recycle()
 
@@ -57,10 +68,8 @@ object ImageEnhancer {
     }
 
     private fun runSuperResolution(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        // Models
-        // Instantiating helpers might throw native errors
-        val esrganX2 = ESRGANHelper(context, "esrgan_x2.tflite")
-        val esrganX4 = ESRGANHelper(context, "esrgan_x4.tflite")
+        val esrganX2 = getEsrgan(context, "esrgan_x2.tflite")
+        val esrganX4 = getEsrgan(context, "esrgan_x4.tflite")
 
         try {
             return when (scaleFactor) {
@@ -79,17 +88,14 @@ object ImageEnhancer {
                     else OpenCVEnhancerFallback.enhance(bitmap, 4)
                 }
                 6 -> {
-                    // 2x + 3x interpolation
                     val step1 = if (esrganX2.isReady()) esrganX2.enhance(bitmap) else OpenCVEnhancerFallback.enhance(bitmap, 2)
                     val w = step1.width * 3
                     val h = step1.height * 3
-                    // Use OpenCV fallback logic for resizing to ensure consistency
                     val step2 = Bitmap.createScaledBitmap(step1, w, h, true)
                     if (step1 != bitmap) step1.recycle()
                     step2
                 }
                 8 -> {
-                    // 4x + 2x
                     val step1 = if (esrganX4.isReady()) esrganX4.enhance(bitmap)
                                 else if (esrganX2.isReady()) {
                                     val s1 = esrganX2.enhance(bitmap)
@@ -106,9 +112,8 @@ object ImageEnhancer {
                 }
                 else -> OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
             }
-        } finally {
-            esrganX2.close()
-            esrganX4.close()
+        } catch (e: Throwable) {
+            throw e
         }
     }
 

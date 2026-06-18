@@ -92,7 +92,7 @@ fun SettingsScreen(navController: NavController) {
 
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
             ListItem(
-                headlineContent = { Text("Dark Mode") },
+                headlineContent = { Text(stringResource(R.string.dark_mode)) },
                 trailingContent = {
                     Switch(
                         checked = isDarkTheme,
@@ -109,7 +109,7 @@ fun SettingsScreen(navController: NavController) {
                             try {
                                 Uri.parse(it).path ?: it
                             } catch(e: Exception) { it }
-                        } ?: "Default (DCIM/PhotoDoctorPro)",
+                        } ?: stringResource(R.string.default_save_location_label),
                         style = MaterialTheme.typography.bodySmall
                     )
                 },
@@ -122,10 +122,10 @@ fun SettingsScreen(navController: NavController) {
                     }
             )
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
              Text(
-                text = "About",
+                text = stringResource(R.string.about),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -146,7 +146,7 @@ fun SettingsScreen(navController: NavController) {
                 }
             )
             ListItem(
-                headlineContent = { Text("App Version") },
+                headlineContent = { Text(stringResource(R.string.app_version)) },
                 supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") }
             )
         }
