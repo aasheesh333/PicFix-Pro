@@ -1,7 +1,7 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
-import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
