@@ -71,7 +71,7 @@ jobs:
         # Version code/name might be vars or secrets
         VERSION_CODE: ${{ vars.VERSION_CODE || secrets.VERSION_CODE || secrets.APP_VERSION_CODE || '1' }}
         VERSION_NAME: ${{ vars.VERSION_NAME || secrets.VERSION_NAME || secrets.APP_VERSION_NAME || '1.0' }}
-      run: ./gradlew assembleRelease bundleRelease
+      run: ./gradlew --no-daemon clean assembleRelease bundleRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
