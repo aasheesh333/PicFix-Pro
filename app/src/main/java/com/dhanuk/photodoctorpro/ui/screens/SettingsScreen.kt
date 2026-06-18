@@ -39,6 +39,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,9 +81,6 @@ class SettingsViewModel : ViewModel() {
         }
     }
 }
-
-private fun androidx.compose.runtime.mutableStateOf(value: String?): androidx.compose.runtime.MutableState<String?> =
-    androidx.compose.runtime.mutableStateOf(value)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
