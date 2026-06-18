@@ -79,7 +79,7 @@
     <string name="target_size">Target size</string>
     <string name="quality">Quality</string>
     <string name="save_compressed">Save optimized</string>
-    <string name="original">Original</string>
+    <string name="original_label">Original</string>
     <string name="optimized">Optimized</string>
     <string name="saved_pct">Saved: %1$s</string>
     <string name="brightness">Brightness</string>

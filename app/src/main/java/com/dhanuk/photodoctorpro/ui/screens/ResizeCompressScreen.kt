@@ -352,7 +352,7 @@ private fun SizeSummaryRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         StatBlock(
-            title = stringResource(R.string.original),
+            title = stringResource(R.string.original_label),
             dimensions = "$originalW x $originalH",
             size = formatBytes(originalBytes)
         )
