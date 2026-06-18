@@ -74,4 +74,18 @@
     <string name="app_version">App Version</string>
     <string name="general">General</string>
     <string name="default_save_location_label">Default (DCIM/PhotoDoctorPro)</string>
+    <string name="resize_compress">Resize &amp; Compress</string>
+    <string name="resize_compress_subtitle">Shrink photos &amp; save space</string>
+    <string name="target_size">Target size</string>
+    <string name="quality">Quality</string>
+    <string name="save_compressed">Save optimized</string>
+    <string name="original">Original</string>
+    <string name="optimized">Optimized</string>
+    <string name="saved_pct">Saved: %1$s</string>
+    <string name="brightness">Brightness</string>
+    <string name="contrast">Contrast</string>
+    <string name="saturation">Saturation</string>
+    <string name="warmth">Warmth</string>
+    <string name="new_image">New Image</string>
+    <string name="pick_image">Pick Image</string>
 </resources>

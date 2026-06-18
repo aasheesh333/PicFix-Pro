@@ -35,6 +35,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -112,17 +113,14 @@ class ExifStripperViewModel : ViewModel() {
         val bitmap = state.previewBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = withContext(Dispatchers.IO) {
-                    val file = File(
-                        context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                        "PDPro_Safe_${System.currentTimeMillis()}.jpg"
-                    )
-                    FileOutputStream(file).use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                    }
-                    // Strip EXIF by re-saving (already done by re-encoding to JPEG)
-                    file.absolutePath
-                }
+                val savedPath = BitmapSaver.save(
+                    context = context,
+                    bitmap = bitmap,
+                    baseName = "PDPro_Safe_${System.currentTimeMillis()}",
+                    subdir = "PhotoDoctorPro",
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 95
+                )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
 
                 try {

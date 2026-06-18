@@ -92,7 +92,9 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
             }
         }
 
-        val file = File(context.getExternalFilesDir(null), fileName)
+        val dir = com.dhanuk.photodoctorpro.utils.BitmapUtils.resolveWritableDir(context, "PhotoDoctorPro")
+        if (!dir.exists()) dir.mkdirs()
+        val file = File(dir, fileName)
         document.writeTo(FileOutputStream(file))
         file.absolutePath
     }

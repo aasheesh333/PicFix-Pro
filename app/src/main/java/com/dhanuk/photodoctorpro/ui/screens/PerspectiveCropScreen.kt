@@ -47,6 +47,7 @@ import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -186,16 +187,14 @@ class PerspectiveCropViewModel : ViewModel() {
         val bitmap = _uiState.value.processedBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = withContext(Dispatchers.IO) {
-                    val file = File(
-                        context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                        "PDPro_Scan_${System.currentTimeMillis()}.jpg"
-                    )
-                    FileOutputStream(file).use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                    }
-                    file.absolutePath
-                }
+                val savedPath = BitmapSaver.save(
+                    context = context,
+                    bitmap = bitmap,
+                    baseName = "PDPro_Scan_${System.currentTimeMillis()}",
+                    subdir = "PhotoDoctorPro",
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 95
+                )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
                 try {
                     val db = AppDatabase.getDatabase(context)

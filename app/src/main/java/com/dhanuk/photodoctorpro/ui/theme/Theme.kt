@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -20,12 +21,12 @@ private val LuminaLightColors = lightColorScheme(
     onBackground = LightOnSurface,
     surface = LightSurface,
     onSurface = LightOnSurface,
-    surfaceVariant = SurfaceVariant,
-    onSurfaceVariant = OnSurfaceVariant,
+    surfaceVariant = LightSurface,
+    onSurfaceVariant = LightSecondary,
     secondary = LightSecondary,
-    onSecondary = OnSurface,
-    outline = Outline,
-    outlineVariant = OutlineVariant,
+    onSecondary = LightOnSurface,
+    outline = Color(0xFFB0B8B0),
+    outlineVariant = Color(0xFFD9DDD9),
     error = ErrorColor,
     onError = OnErrorColor,
     errorContainer = ErrorContainerColor,
@@ -78,3 +79,4 @@ fun PhotoDoctorProTheme(
         content = content
     )
 }
+

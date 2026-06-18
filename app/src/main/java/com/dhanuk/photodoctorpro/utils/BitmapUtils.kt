@@ -10,8 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.documentfile.provider.DocumentFile
 import androidx.core.content.FileProvider
+import androidx.documentfile.provider.DocumentFile
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,6 +21,24 @@ import java.io.InputStream
 import java.io.OutputStream
 
 object BitmapUtils {
+
+    /**
+     * Resolves a writable directory that always exists. Falls back to internal
+     * app-specific storage if external storage is unavailable (emulator without
+     * SD card, scoped storage quirks on some OEMs). Returns the directory and
+     * the FileProvider authority already applied.
+     */
+    fun resolveWritableDir(context: Context, subdir: String = "PhotoDoctorPro"): File {
+        val external = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        if (external != null) {
+            val target = if (subdir.isBlank()) external else File(external, subdir)
+            if (target.exists() || target.mkdirs()) return target
+        }
+        val internalPictures = File(context.filesDir, "Pictures")
+        val target = if (subdir.isBlank()) internalPictures else File(internalPictures, subdir)
+        if (!target.exists()) target.mkdirs()
+        return target
+    }
 
     suspend fun loadBitmapFromUri(uri: Uri, context: Context, maxDimension: Int = 3000): Bitmap? = withContext(Dispatchers.IO) {
         var inputStream: InputStream? = null
@@ -180,7 +198,7 @@ object BitmapUtils {
         }
 
         // 3. Fallback for older Android versions (Direct File)
-        val imagesDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "PhotoDoctorPro")
+        val imagesDir = resolveWritableDir(context, "PhotoDoctorPro")
         if (!imagesDir.exists()) imagesDir.mkdirs()
 
         var finalName = "$baseName$extension"

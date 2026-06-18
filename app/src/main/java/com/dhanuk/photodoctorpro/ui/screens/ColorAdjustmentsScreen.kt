@@ -2,45 +2,18 @@ package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.net.Uri
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
-import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
-import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
-import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
-import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,10 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 
 data class ColorAdjustmentsUiState(
+    val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
     val brightness: Float = 0f,
@@ -68,16 +40,17 @@ class ColorAdjustmentsViewModel : ViewModel() {
     val uiState: StateFlow<ColorAdjustmentsUiState> = _uiState.asStateFlow()
 
     fun setOriginal(uri: Uri, context: Context) {
+        _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null)
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val bitmap = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { stream ->
-                        android.graphics.BitmapFactory.decodeStream(stream)
+                        BitmapFactory.decodeStream(stream)
                     }
                 }
                 _uiState.update {
                     it.copy(
+                        selectedImageUri = uri,
                         originalBitmap = bitmap,
                         processedBitmap = bitmap,
                         isLoading = false
@@ -125,47 +98,42 @@ class ColorAdjustmentsViewModel : ViewModel() {
         val state = _uiState.value
         val original = state.originalBitmap ?: return
         viewModelScope.launch(Dispatchers.Default) {
-            val output = withContext(Dispatchers.Default) {
-                applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
-            }
+            val output = applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
             _uiState.update { it.copy(processedBitmap = output) }
         }
     }
 
-    fun onErrorShown() {
-        _uiState.update { it.copy(error = null) }
-    }
+    fun onErrorShown() { _uiState.update { it.copy(error = null) } }
+    fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
 
-    fun onSavedMessageShown() {
-        _uiState.update { it.copy(savedFilePath = null) }
-    }
-
-    fun saveImage(activity: Activity, context: Context) {
+    fun saveImage(context: Context) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
             try {
-                val savedPath = withContext(Dispatchers.IO) {
-                    val fileName = "PhotoDoctorPro_Color_${System.currentTimeMillis()}"
-                    BitmapUtils.saveBitmap(context, bitmap, fileName, Bitmap.CompressFormat.PNG)
-                }
+                val savedPath = BitmapSaver.save(
+                    context = context,
+                    bitmap = bitmap,
+                    baseName = "PhotoDoctorPro_Color_${System.currentTimeMillis()}",
+                    subdir = "PhotoDoctorPro",
+                    format = Bitmap.CompressFormat.PNG,
+                    quality = 100
+                )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
 
                 try {
                     val db = AppDatabase.getDatabase(context)
-                    val historyEntry = com.dhanuk.photodoctorpro.data.local.History(
-                        operationType = "Color Adjustments",
-                        inputFilePath = "memory",
-                        filePath = savedPath,
-                        timestamp = System.currentTimeMillis()
+                    db.historyDao().insert(
+                        History(
+                            operationType = "Color Adjustments",
+                            inputFilePath = state.selectedImageUri?.toString() ?: "",
+                            filePath = savedPath,
+                            timestamp = System.currentTimeMillis()
+                        )
                     )
-                    db.historyDao().insert(historyEntry)
                 } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
-            } finally {
-                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
@@ -193,7 +161,6 @@ class ColorAdjustmentsViewModel : ViewModel() {
                     )
                 )
                 cm.postConcat(contrastMatrix)
-                // Warmth: shift R up, B down for warm; opposite for cool
                 val warmthValue = warmth * 30
                 val warmthMatrix = ColorMatrix(
                     floatArrayOf(
@@ -216,10 +183,10 @@ class ColorAdjustmentsViewModel : ViewModel() {
 @Composable
 fun ColorAdjustmentsScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
     val viewModel: ColorAdjustmentsViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -247,62 +214,44 @@ fun ColorAdjustmentsScreen(navController: NavController) {
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        setPackage("com.whatsapp")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
-                }
+                try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
+                catch (_: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share Image"))
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image")) }
+                catch (_: Exception) { }
             },
             onOpen = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "image/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) { e.printStackTrace() }
+                try { context.startActivity(createOpenIntent(path, context)) }
+                catch (_: Exception) { }
             }
         )
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Color Adjustments") },
+                title = {
+                    Text(
+                        stringResource(R.string.color_adjustments),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.reset() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                    if (uiState.originalBitmap != null) {
+                        IconButton(onClick = { viewModel.reset() }) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Reset")
+                        }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -311,86 +260,135 @@ fun ColorAdjustmentsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
         ) {
             Box(
                 modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .aspectRatio(4f / 3f)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .luminaGlass(
+                        shape = RoundedCornerShape(24.dp),
+                        cornerRadius = 24.dp,
+                        alpha = 0.06f,
+                        borderAlpha = 0.10f
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                if (uiState.originalBitmap != null && uiState.processedBitmap != null) {
-                    BeforeAfterSlider(
-                        beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                        afterImage = uiState.processedBitmap!!.asImageBitmap(),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Select an image to start", color = MaterialTheme.colorScheme.onSurface)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Pick Image")
+                when {
+                    uiState.processedBitmap != null -> {
+                        Image(
+                            bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    uiState.selectedImageUri != null -> {
+                        AsyncImage(
+                            model = uiState.selectedImageUri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    else -> {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Tune,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                stringResource(R.string.select_an_image_to_start),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Button(
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(stringResource(R.string.select_image))
+                            }
                         }
                     }
                 }
             }
 
             if (uiState.originalBitmap != null) {
+                Spacer(Modifier.height(8.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
                 ) {
                     AdjustmentSlider(
-                        label = "Brightness",
+                        label = stringResource(R.string.brightness),
                         value = uiState.brightness,
                         valueRange = -0.5f..0.5f,
                         onValueChange = { viewModel.updateBrightness(it) }
                     )
                     AdjustmentSlider(
-                        label = "Contrast",
+                        label = stringResource(R.string.contrast),
                         value = uiState.contrast,
                         valueRange = 0.5f..1.5f,
                         onValueChange = { viewModel.updateContrast(it) }
                     )
                     AdjustmentSlider(
-                        label = "Saturation",
+                        label = stringResource(R.string.saturation),
                         value = uiState.saturation,
                         valueRange = 0f..2f,
                         onValueChange = { viewModel.updateSaturation(it) }
                     )
                     AdjustmentSlider(
-                        label = "Warmth",
+                        label = stringResource(R.string.warmth),
                         value = uiState.warmth,
                         valueRange = -1f..1f,
                         onValueChange = { viewModel.updateWarmth(it) }
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         OutlinedButton(
                             onClick = { imagePickerLauncher.launch("image/*") },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("New Image") }
-                        Spacer(modifier = Modifier.width(16.dp))
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text(stringResource(R.string.new_image)) }
                         Button(
                             onClick = {
-                                val state = viewModel.uiState.value
-                                if (state.processedBitmap != null) {
-                                    viewModel.saveImage(activity, context)
+                                if (uiState.processedBitmap != null) {
+                                    scope.launch { viewModel.saveImage(context) }
                                 }
                             },
-                            modifier = Modifier.weight(1f)
+                            enabled = uiState.processedBitmap != null && !uiState.isLoading,
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
                         ) {
-                            Icon(Icons.Default.Save, contentDescription = "Save")
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save")
+                            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(6.dp))
+                            Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold)
                         }
                     }
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -398,21 +396,39 @@ fun ColorAdjustmentsScreen(navController: NavController) {
 }
 
 @Composable
-fun AdjustmentSlider(
+private fun AdjustmentSlider(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground)
-            Text(String.format("%.2f", value), color = MaterialTheme.colorScheme.secondary)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                String.format("%+.2f", value),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
         Slider(
             value = value,
             onValueChange = onValueChange,
-            valueRange = valueRange
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                thumbColor = MaterialTheme.colorScheme.primary
+            ),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

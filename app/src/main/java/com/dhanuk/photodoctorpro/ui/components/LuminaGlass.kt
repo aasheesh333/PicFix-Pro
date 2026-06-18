@@ -25,7 +25,11 @@ fun Modifier.luminaGlass(
 ): Modifier {
     val outline = MaterialTheme.colorScheme.outline.copy(alpha = borderAlpha)
     val highlight = Color.White.copy(alpha = borderAlpha)
-    val fill = Color.White.copy(alpha = alpha)
+    val fill = if (MaterialTheme.colorScheme.background.red < 0.2f) {
+        Color.White.copy(alpha = alpha)
+    } else {
+        Color.White.copy(alpha = alpha)
+    }
     return this
         .clip(shape)
         .background(fill)
