@@ -273,7 +273,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         ) {
                             Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(6.dp))
-                            Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.save_image), fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Spacer(Modifier.height(24.dp))
