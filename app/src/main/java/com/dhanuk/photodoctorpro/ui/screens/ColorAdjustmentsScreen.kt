@@ -178,7 +178,7 @@ class ColorAdjustmentsViewModel : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.runtime.ExperimentalMaterial3Api::class)
 @Composable
 fun ColorAdjustmentsScreen(navController: NavController) {
     val context = LocalContext.current
