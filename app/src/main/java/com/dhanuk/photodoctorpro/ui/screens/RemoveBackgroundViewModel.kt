@@ -116,7 +116,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         }
     }
 
-    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().checkActive()
+    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     private suspend fun processToGetMask(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         val options = SubjectSegmenterOptions.Builder()

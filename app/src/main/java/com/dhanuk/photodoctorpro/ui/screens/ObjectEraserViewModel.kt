@@ -195,7 +195,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     private var eraseJob: kotlinx.coroutines.Job? = null
 
-    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().checkActive()
+    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     private fun pushToStack(stack: Stack<Bitmap>, bitmap: Bitmap) {
         if (stack.size >= MAX_STACK_SIZE) {
