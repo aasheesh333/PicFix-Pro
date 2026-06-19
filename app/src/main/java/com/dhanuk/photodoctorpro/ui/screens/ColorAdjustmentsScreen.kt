@@ -12,17 +12,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Compare
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
@@ -61,6 +61,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.dhanuk.photodoctorpro.R
+import com.dhanuk.photodoctorpro.data.local.AppDatabase
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
@@ -71,11 +74,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun ColorAdjustmentsScreen(navController: NavController) {
     val context = LocalContext.current
-    val viewModel: ColorAdjustmentsViewModel = viewModel()
+    val db = AppDatabase.getDatabase(context)
+    val repository = HistoryRepository(db.historyDao())
+    val viewModel: ColorAdjustmentsViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var compareMode by remember { mutableStateOf(false) }
+    val hasAdjustments = uiState.brightness != 0f || uiState.contrast != 1f ||
+            uiState.saturation != 1f || uiState.warmth != 0f
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -133,6 +141,15 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                     }
                 },
                 actions = {
+                    if (uiState.originalBitmap != null && hasAdjustments) {
+                        IconButton(onClick = { compareMode = !compareMode }) {
+                            Icon(
+                                Icons.Outlined.Compare,
+                                contentDescription = "Compare",
+                                tint = if (compareMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     if (uiState.originalBitmap != null) {
                         IconButton(onClick = { viewModel.reset() }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Reset")
@@ -144,119 +161,158 @@ fun ColorAdjustmentsScreen(navController: NavController) {
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Box(
+        if (uiState.originalBitmap == null) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(4f / 3f)
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .luminaGlass(
-                        shape = RoundedCornerShape(24.dp),
-                        cornerRadius = 24.dp,
-                        alpha = 0.06f,
-                        borderAlpha = 0.10f
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                when {
-                    uiState.processedBitmap != null -> {
-                        Image(
-                            bitmap = uiState.processedBitmap!!.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            contentScale = ContentScale.Fit
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .luminaGlass(
+                            shape = RoundedCornerShape(24.dp),
+                            cornerRadius = 24.dp,
+                            alpha = 0.06f,
+                            borderAlpha = 0.10f
                         )
-                    }
-                    uiState.selectedImageUri != null -> {
-                        AsyncImage(
-                            model = uiState.selectedImageUri,
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.Tune,
                             contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            contentScale = ContentScale.Fit
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(56.dp)
                         )
-                    }
-                    else -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(24.dp)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.select_an_image_to_start),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            Icon(
-                                Icons.Outlined.Tune,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                stringResource(R.string.select_an_image_to_start),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(stringResource(R.string.select_image))
-                            }
+                            Text(stringResource(R.string.select_image))
                         }
                     }
                 }
             }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .luminaGlass(
+                            shape = RoundedCornerShape(20.dp),
+                            cornerRadius = 20.dp,
+                            alpha = 0.06f,
+                            borderAlpha = 0.10f
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        compareMode && uiState.processedBitmap != null && hasAdjustments -> {
+                            BeforeAfterSlider(
+                                beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                                afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(8.dp)
+                            )
+                        }
+                        uiState.processedBitmap != null -> {
+                            Image(
+                                bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(8.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        uiState.selectedImageUri != null -> {
+                            AsyncImage(
+                                model = uiState.selectedImageUri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(8.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                }
 
-            if (uiState.originalBitmap != null) {
-                Spacer(Modifier.height(8.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
-                    AdjustmentSlider(
+                    CompactAdjustmentSlider(
                         label = stringResource(R.string.brightness),
                         value = uiState.brightness,
                         valueRange = -0.5f..0.5f,
-                        onValueChange = { viewModel.updateBrightness(it) }
+                        defaultValue = 0f,
+                        onValueChange = { viewModel.updateBrightness(it) },
+                        onReset = { viewModel.updateBrightness(0f) }
                     )
-                    AdjustmentSlider(
+                    CompactAdjustmentSlider(
                         label = stringResource(R.string.contrast),
                         value = uiState.contrast,
                         valueRange = 0.5f..1.5f,
-                        onValueChange = { viewModel.updateContrast(it) }
+                        defaultValue = 1f,
+                        onValueChange = { viewModel.updateContrast(it) },
+                        onReset = { viewModel.updateContrast(1f) }
                     )
-                    AdjustmentSlider(
+                    CompactAdjustmentSlider(
                         label = stringResource(R.string.saturation),
                         value = uiState.saturation,
                         valueRange = 0f..2f,
-                        onValueChange = { viewModel.updateSaturation(it) }
+                        defaultValue = 1f,
+                        onValueChange = { viewModel.updateSaturation(it) },
+                        onReset = { viewModel.updateSaturation(1f) }
                     )
-                    AdjustmentSlider(
+                    CompactAdjustmentSlider(
                         label = stringResource(R.string.warmth),
                         value = uiState.warmth,
                         valueRange = -1f..1f,
-                        onValueChange = { viewModel.updateWarmth(it) }
+                        defaultValue = 0f,
+                        onValueChange = { viewModel.updateWarmth(it) },
+                        onReset = { viewModel.updateWarmth(0f) }
                     )
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedButton(
                             onClick = { imagePickerLauncher.launch("image/*") },
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) { Text(stringResource(R.string.new_image)) }
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.new_image), style = MaterialTheme.typography.labelLarge)
+                        }
                         Button(
                             onClick = {
                                 if (uiState.processedBitmap != null) {
@@ -264,19 +320,19 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                                 }
                             },
                             enabled = uiState.processedBitmap != null && !uiState.isLoading,
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(6.dp))
-                            Text(stringResource(R.string.save_image), fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(stringResource(R.string.save_image), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                         }
                     }
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
@@ -284,29 +340,27 @@ fun ColorAdjustmentsScreen(navController: NavController) {
 }
 
 @Composable
-private fun AdjustmentSlider(
+private fun CompactAdjustmentSlider(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
+    defaultValue: Float,
+    onValueChange: (Float) -> Unit,
+    onReset: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                String.format("%+.2f", value),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+    val isModified = value != defaultValue
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(72.dp)
+        )
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -316,7 +370,30 @@ private fun AdjustmentSlider(
                 inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
                 thumbColor = MaterialTheme.colorScheme.primary
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.weight(1f)
         )
+        if (isModified) {
+            Text(
+                String.format("%+.2f", value),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .width(44.dp)
+                    .then(
+                        Modifier.background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            RoundedCornerShape(6.dp)
+                        )
+                    )
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        } else {
+            Text(
+                String.format("%+.2f", value),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(44.dp)
+            )
+        }
     }
 }

@@ -5,13 +5,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Point
 import android.graphics.PointF
 import android.net.Uri
-import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,20 +20,29 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -45,9 +51,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
-import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
-import com.dhanuk.photodoctorpro.utils.BitmapSaver
+import com.dhanuk.photodoctorpro.utils.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,8 +62,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import org.opencv.core.Point
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 import java.io.File
-import java.io.FileOutputStream
 
 data class PerspectiveCropUiState(
     val originalBitmap: Bitmap? = null,
@@ -67,18 +78,14 @@ data class PerspectiveCropUiState(
     val savedFilePath: String? = null
 )
 
-class PerspectiveCropViewModel : ViewModel() {
+class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(PerspectiveCropUiState())
     val uiState: StateFlow<PerspectiveCropUiState> = _uiState.asStateFlow()
 
-    private var appContext: android.content.Context? = null
-    fun setContext(context: android.content.Context) { appContext = context }
-
-    fun onImageSelected(uri: Uri) {
+    fun onImageSelected(uri: Uri, context: android.content.Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val context = appContext ?: return@launch
                 val bitmap = withContext(Dispatchers.IO) {
                     val inputStream = context.contentResolver.openInputStream(uri)
                     BitmapFactory.decodeStream(inputStream)
@@ -100,17 +107,83 @@ class PerspectiveCropViewModel : ViewModel() {
 
     private fun autoDetectEdges(bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.Default) {
-            val w = bitmap.width
-            val h = bitmap.height
-            val padding = 0.05f
-            val corners = listOf(
-                PointF(w * padding, h * padding),
-                PointF(w * (1 - padding), h * padding),
-                PointF(w * (1 - padding), h * (1 - padding)),
-                PointF(w * padding, h * (1 - padding))
-            )
-            _uiState.update { it.copy(corners = corners) }
+            try {
+                val src = Mat()
+                val gray = Mat()
+                val edges = Mat()
+                val hierarchy = Mat()
+                Utils.bitmapToMat(bitmap, src)
+
+                val scale = 600f / maxOf(bitmap.width, bitmap.height)
+                val resized = Mat()
+                Imgproc.resize(src, resized, Size(), scale.toDouble(), scale.toDouble())
+
+                Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
+                Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+                Imgproc.Canny(gray, edges, 50.0, 150.0)
+
+                val contours = mutableListOf<org.opencv.core.MatOfPoint>()
+                Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+                val maxContour = contours.maxByOrNull { Imgproc.contourArea(it) }
+                val w = bitmap.width.toFloat()
+                val h = bitmap.height.toFloat()
+                val padding = 0.03f
+
+                if (maxContour != null && contours.size > 0) {
+                    val peri = Imgproc.arcLength(org.opencv.core.MatOfPoint2f(*maxContour.toArray()), true)
+                    val approx = org.opencv.core.MatOfPoint2f()
+                    Imgproc.approxPolyDP(org.opencv.core.MatOfPoint2f(*maxContour.toArray()), approx, 0.02 * peri, true)
+
+                    if (approx.toList().size == 4) {
+                        val pts = approx.toList()
+                        val sorted = sortCorners(pts, scale)
+                        _uiState.update { it.copy(corners = sorted) }
+                        src.release()
+                        gray.release()
+                        edges.release()
+                        hierarchy.release()
+                        resized.release()
+                        return@launch
+                    }
+                }
+
+                src.release()
+                gray.release()
+                edges.release()
+                hierarchy.release()
+                resized.release()
+
+                val corners = listOf(
+                    PointF(w * padding, h * padding),
+                    PointF(w * (1 - padding), h * padding),
+                    PointF(w * (1 - padding), h * (1 - padding)),
+                    PointF(w * padding, h * (1 - padding))
+                )
+                _uiState.update { it.copy(corners = corners) }
+            } catch (_: Exception) {
+                val w = bitmap.width.toFloat()
+                val h = bitmap.height.toFloat()
+                val padding = 0.03f
+                val corners = listOf(
+                    PointF(w * padding, h * padding),
+                    PointF(w * (1 - padding), h * padding),
+                    PointF(w * (1 - padding), h * (1 - padding)),
+                    PointF(w * padding, h * (1 - padding))
+                )
+                _uiState.update { it.copy(corners = corners) }
+            }
         }
+    }
+
+    private fun sortCorners(pts: List<Point>, scale: Float): List<PointF> {
+        val w = _uiState.value.originalBitmap?.width?.toFloat() ?: return emptyList()
+        val h = _uiState.value.originalBitmap?.height?.toFloat() ?: return emptyList()
+        val mapped = pts.map { PointF((it.x / scale).coerceIn(0f, w), (it.y / scale).coerceIn(0f, h)) }
+        val sortedByY = mapped.sortedBy { it.y }
+        val top = sortedByY.take(2).sortedBy { it.x }
+        val bottom = sortedByY.drop(2).sortedByDescending { it.x }
+        return listOf(top[0], top[1], bottom[0], bottom[1])
     }
 
     fun updateCorner(index: Int, x: Float, y: Float, canvasSize: IntSize) {
@@ -146,8 +219,6 @@ class PerspectiveCropViewModel : ViewModel() {
     }
 
     private fun warpPerspective(source: Bitmap, corners: List<PointF>): Bitmap {
-        val w0 = source.width.toFloat()
-        val h0 = source.height.toFloat()
         val src = floatArrayOf(
             corners[0].x, corners[0].y,
             corners[1].x, corners[1].y,
@@ -187,26 +258,16 @@ class PerspectiveCropViewModel : ViewModel() {
         val bitmap = _uiState.value.processedBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = BitmapSaver.save(
+                val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    baseName = "PDPro_Scan_${System.currentTimeMillis()}",
-                    subdir = "PhotoDoctorPro",
-                    format = Bitmap.CompressFormat.JPEG,
-                    quality = 95
+                    fileNamePrefix = "PDPro_Scan",
+                    operationType = "Document Scan",
+                    inputUriString = "",
+                    repository = repository,
+                    format = android.graphics.Bitmap.CompressFormat.JPEG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.historyDao().insert(
-                        History(
-                            operationType = "Document Scan",
-                            inputFilePath = "",
-                            filePath = savedPath,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -215,23 +276,31 @@ class PerspectiveCropViewModel : ViewModel() {
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
+
+    override fun onCleared() {
+        super.onCleared()
+        _uiState.value.originalBitmap?.recycle()
+        _uiState.value.processedBitmap?.recycle()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerspectiveCropScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
-    val viewModel: PerspectiveCropViewModel = viewModel()
-    LaunchedEffect(Unit) { viewModel.setContext(context) }
+    val activity = context.findActivity() ?: return
+    val db = AppDatabase.getDatabase(context)
+    val repository = HistoryRepository(db.historyDao())
+    val viewModel: PerspectiveCropViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var compareMode by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it) } }
+    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -300,6 +369,17 @@ fun PerspectiveCropScreen(navController: NavController) {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    if (uiState.originalBitmap != null && uiState.processedBitmap != null) {
+                        IconButton(onClick = { compareMode = !compareMode }) {
+                            Icon(
+                                Icons.Default.Compare,
+                                contentDescription = "Compare",
+                                tint = if (compareMode) MaterialTheme.colorScheme.primary else ComposeColor.Gray
+                            )
+                        }
+                    }
                 }
             )
         },
@@ -316,96 +396,107 @@ fun PerspectiveCropScreen(navController: NavController) {
                     .onSizeChanged { canvasSize = it },
                 contentAlignment = Alignment.Center
             ) {
-                if (uiState.originalBitmap != null) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                if (uiState.originalBitmap != null && uiState.processedBitmap != null && compareMode) {
+                    BeforeAfterSlider(
+                        beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                        afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                    )
+                } else if (uiState.originalBitmap != null) {
+                    if (uiState.processedBitmap != null && !compareMode) {
                         Image(
-                            bitmap = uiState.originalBitmap!!.asImageBitmap(),
-                            contentDescription = "Document",
-                            modifier = Modifier.fillMaxSize(),
+                            bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                            contentDescription = "Cropped",
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
                             contentScale = ContentScale.Fit
                         )
-                        if (uiState.processedBitmap == null) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val w = size.width
-                                val h = size.height
-                                val bitmapW = uiState.originalBitmap!!.width.toFloat()
-                                val bitmapH = uiState.originalBitmap!!.height.toFloat()
-                                val scale = minOf(w / bitmapW, h / bitmapH)
-                                val drawW = bitmapW * scale
-                                val drawH = bitmapH * scale
-                                val offsetX = (w - drawW) / 2
-                                val offsetY = (h - drawH) / 2
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Image(
+                                bitmap = uiState.originalBitmap!!.asImageBitmap(),
+                                contentDescription = "Document",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                            if (uiState.processedBitmap == null) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val w = size.width
+                                    val h = size.height
+                                    val bitmapW = uiState.originalBitmap!!.width.toFloat()
+                                    val bitmapH = uiState.originalBitmap!!.height.toFloat()
+                                    val scale = minOf(w / bitmapW, h / bitmapH)
+                                    val drawW = bitmapW * scale
+                                    val drawH = bitmapH * scale
+                                    val offsetX = (w - drawW) / 2
+                                    val offsetY = (h - drawH) / 2
 
-                                val mappedCorners = uiState.corners.map { corner ->
-                                    Offset(
-                                        offsetX + corner.x * scale,
-                                        offsetY + corner.y * scale
-                                    )
-                                }
-
-                                if (mappedCorners.size == 4) {
-                                    for (i in mappedCorners.indices) {
-                                        val start = mappedCorners[i]
-                                        val end = mappedCorners[(i + 1) % mappedCorners.size]
-                                        drawLine(
-                                            color = androidx.compose.ui.graphics.Color(0xFF00E676),
-                                            start = start,
-                                            end = end,
-                                            strokeWidth = 4f
+                                    val mappedCorners = uiState.corners.map { corner ->
+                                        Offset(
+                                            offsetX + corner.x * scale,
+                                            offsetY + corner.y * scale
                                         )
                                     }
-                                    mappedCorners.forEach { p ->
-                                        drawCircle(
-                                            color = androidx.compose.ui.graphics.Color(0xFF00E676),
-                                            radius = 16f,
-                                            center = p
-                                        )
-                                        drawCircle(
-                                            color = androidx.compose.ui.graphics.Color.White,
-                                            radius = 8f,
-                                            center = p
-                                        )
+
+                                    if (mappedCorners.size == 4) {
+                                        for (i in mappedCorners.indices) {
+                                            val start = mappedCorners[i]
+                                            val end = mappedCorners[(i + 1) % mappedCorners.size]
+                                            drawLine(
+                                                color = ComposeColor(0xFF00E676),
+                                                start = start,
+                                                end = end,
+                                                strokeWidth = 4f
+                                            )
+                                        }
+                                        mappedCorners.forEach { p ->
+                                            drawCircle(
+                                                color = ComposeColor(0xFF00E676),
+                                                radius = 16f,
+                                                center = p
+                                            )
+                                            drawCircle(
+                                                color = ComposeColor.White,
+                                                radius = 8f,
+                                                center = p
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Touch handlers for each corner
-                            if (canvasSize.width > 0) {
-                                val bitmapW = uiState.originalBitmap!!.width.toFloat()
-                                val bitmapH = uiState.originalBitmap!!.height.toFloat()
-                                val scale = minOf(
-                                    canvasSize.width.toFloat() / bitmapW,
-                                    canvasSize.height.toFloat() / bitmapH
-                                )
-                                val drawW = bitmapW * scale
-                                val drawH = bitmapH * scale
-                                val offsetX = (canvasSize.width - drawW) / 2
-                                val offsetY = (canvasSize.height - drawH) / 2
+                                if (canvasSize.width > 0) {
+                                    val bitmapW = uiState.originalBitmap!!.width.toFloat()
+                                    val bitmapH = uiState.originalBitmap!!.height.toFloat()
+                                    val scale = minOf(canvasSize.width.toFloat() / bitmapW, canvasSize.height.toFloat() / bitmapH)
+                                    val drawW = bitmapW * scale
+                                    val drawH = bitmapH * scale
+                                    val offsetX = (canvasSize.width - drawW) / 2
+                                    val offsetY = (canvasSize.height - drawH) / 2
 
-                                uiState.corners.forEachIndexed { idx, corner ->
-                                    val screenX = offsetX + corner.x * scale
-                                    val screenY = offsetY + corner.y * scale
-                                    Box(
-                                        modifier = Modifier
-                                            .offset {
-                                                androidx.compose.ui.unit.IntOffset(
-                                                    (screenX - 50).toInt().coerceAtLeast(0),
-                                                    (screenY - 50).toInt().coerceAtLeast(0)
-                                                )
-                                            }
-                                            .size(100.dp)
-                                            .pointerInput(idx) {
-                                                detectDragGestures { change, _ ->
-                                                    change.consume()
-                                                    viewModel.updateCorner(
-                                                        idx,
-                                                        change.position.x + (screenX - 50),
-                                                        change.position.y + (screenY - 50),
-                                                        canvasSize
+                                    uiState.corners.forEachIndexed { idx, corner ->
+                                        val screenX = offsetX + corner.x * scale
+                                        val screenY = offsetY + corner.y * scale
+                                        Box(
+                                            modifier = Modifier
+                                                .offset {
+                                                    androidx.compose.ui.unit.IntOffset(
+                                                        (screenX - 50).toInt().coerceAtLeast(0),
+                                                        (screenY - 50).toInt().coerceAtLeast(0)
                                                     )
                                                 }
-                                            }
-                                    )
+                                                .size(100.dp)
+                                                .pointerInput(idx) {
+                                                    detectDragGestures { change, _ ->
+                                                        change.consume()
+                                                        viewModel.updateCorner(
+                                                            idx,
+                                                            change.position.x + (screenX - 50),
+                                                            change.position.y + (screenY - 50),
+                                                            canvasSize
+                                                        )
+                                                    }
+                                                }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -427,17 +518,17 @@ fun PerspectiveCropScreen(navController: NavController) {
 
             if (uiState.originalBitmap != null) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(onClick = { viewModel.autoDetect() }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text("Auto")
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                     OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) {
                         Text("New")
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                     if (uiState.processedBitmap == null) {
                         Button(onClick = { viewModel.applyCrop() }, modifier = Modifier.weight(1f)) {
                             Text("Crop")

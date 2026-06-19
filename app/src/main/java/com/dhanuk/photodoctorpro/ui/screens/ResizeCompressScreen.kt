@@ -13,19 +13,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Compare
 import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Button
@@ -35,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -57,11 +60,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.dhanuk.photodoctorpro.R
+import com.dhanuk.photodoctorpro.data.local.AppDatabase
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
@@ -72,15 +79,18 @@ import java.text.DecimalFormat
 @Composable
 fun ResizeCompressScreen(navController: NavController) {
     val context = LocalContext.current
-    val viewModel: ResizeCompressViewModel = viewModel()
-    LaunchedEffect(Unit) { viewModel.setContext(context) }
+    val db = AppDatabase.getDatabase(context)
+    val repository = HistoryRepository(db.historyDao())
+    val viewModel: ResizeCompressViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var compareMode by remember { mutableStateOf(false) }
+    var showCustomPanel by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it) } }
+    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -132,6 +142,15 @@ fun ResizeCompressScreen(navController: NavController) {
                     }
                 },
                 actions = {
+                    if (uiState.originalBitmap != null && uiState.processedBitmap != null) {
+                        IconButton(onClick = { compareMode = !compareMode }) {
+                            Icon(
+                                Icons.Outlined.Compare,
+                                contentDescription = "Compare",
+                                tint = if (compareMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     if (uiState.originalBitmap != null) {
                         IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "New Image")
@@ -143,78 +162,108 @@ fun ResizeCompressScreen(navController: NavController) {
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Box(
+        if (uiState.originalBitmap == null) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(4f / 3f)
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .luminaGlass(
-                        shape = RoundedCornerShape(24.dp),
-                        cornerRadius = 24.dp,
-                        alpha = 0.06f,
-                        borderAlpha = 0.10f
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                when {
-                    uiState.processedBitmap != null -> {
-                        Image(
-                            bitmap = uiState.processedBitmap!!.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            contentScale = ContentScale.Fit
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .luminaGlass(
+                            shape = RoundedCornerShape(24.dp),
+                            cornerRadius = 24.dp,
+                            alpha = 0.06f,
+                            borderAlpha = 0.10f
                         )
-                    }
-                    uiState.selectedUri != null -> {
-                        AsyncImage(
-                            model = uiState.selectedUri,
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Outlined.Compress,
                             contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(12.dp),
-                            contentScale = ContentScale.Fit
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(56.dp)
                         )
-                    }
-                    else -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(24.dp)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.resize_compress_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            Icon(
-                                Icons.Outlined.Compress,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                stringResource(R.string.resize_compress_subtitle),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(stringResource(R.string.pick_image))
-                            }
+                            Text(stringResource(R.string.pick_image))
                         }
                     }
                 }
             }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .luminaGlass(
+                            shape = RoundedCornerShape(20.dp),
+                            cornerRadius = 20.dp,
+                            alpha = 0.06f,
+                            borderAlpha = 0.10f
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (compareMode && uiState.processedBitmap != null) {
+                        BeforeAfterSlider(
+                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                            afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                        )
+                    } else {
+                        when {
+                            uiState.processedBitmap != null -> {
+                                Image(
+                                    bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                            uiState.selectedUri != null -> {
+                                AsyncImage(
+                                    model = uiState.selectedUri,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                    }
+                }
 
-            if (uiState.originalBitmap != null) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
                     SizeSummaryRow(
                         originalBytes = uiState.originalSizeBytes,
                         processedBytes = uiState.processedSizeBytes,
@@ -224,40 +273,81 @@ fun ResizeCompressScreen(navController: NavController) {
                         processedH = uiState.processedBitmap?.height ?: uiState.originalBitmap!!.height
                     )
 
-                    Spacer(Modifier.height(20.dp))
-                    Text(
-                        stringResource(R.string.target_size),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
                     Spacer(Modifier.height(8.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         ResizePreset.values().forEach { preset ->
                             PresetChip(
                                 label = preset.label,
                                 selected = uiState.preset == preset,
-                                onClick = { viewModel.onPresetSelected(preset) },
+                                onClick = {
+                                    viewModel.onPresetSelected(preset)
+                                    showCustomPanel = preset == ResizePreset.CUSTOM
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(20.dp))
+                    if (showCustomPanel && uiState.preset == ResizePreset.CUSTOM) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = uiState.customWidthText,
+                                onValueChange = { viewModel.onCustomWidthChanged(it) },
+                                label = { Text("W", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                shape = RoundedCornerShape(10.dp),
+                                textStyle = MaterialTheme.typography.bodySmall
+                            )
+                            IconButton(
+                                onClick = { viewModel.onMaintainAspectRatioChanged(!uiState.maintainAspectRatio) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    if (uiState.maintainAspectRatio) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                                    contentDescription = "Lock aspect ratio",
+                                    tint = if (uiState.maintainAspectRatio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            OutlinedTextField(
+                                value = uiState.customHeightText,
+                                onValueChange = { viewModel.onCustomHeightChanged(it) },
+                                label = { Text("H", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                shape = RoundedCornerShape(10.dp),
+                                textStyle = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             stringResource(R.string.quality),
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             "${(uiState.quality * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -265,29 +355,29 @@ fun ResizeCompressScreen(navController: NavController) {
                         value = uiState.quality,
                         onValueChange = { viewModel.onQualityChanged(it) },
                         valueRange = 0.4f..1.0f,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().height(24.dp)
                     )
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(6.dp))
 
                     Button(
                         onClick = { viewModel.saveImage(context) },
                         enabled = !uiState.isProcessing,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(Icons.Outlined.Save, contentDescription = null)
-                        Spacer(Modifier.size(8.dp))
+                        Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
                         Text(
                             stringResource(R.string.save_compressed),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                         )
                     }
 
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
@@ -305,23 +395,23 @@ private fun PresetChip(
     val content = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
-            .height(56.dp)
+            .height(36.dp)
             .luminaGlass(
-                shape = RoundedCornerShape(14.dp),
-                cornerRadius = 14.dp,
+                shape = RoundedCornerShape(10.dp),
+                cornerRadius = 10.dp,
                 alpha = if (selected) 0f else 0.04f,
                 borderAlpha = if (selected) 0f else 0.10f
             )
             .background(if (selected) container else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = content,
-            maxLines = 2
+            maxLines = 1
         )
     }
 }
@@ -343,48 +433,46 @@ private fun SizeSummaryRow(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        StatBlock(
-            title = stringResource(R.string.original_label),
-            dimensions = "$originalW x $originalH",
-            size = formatBytes(originalBytes)
-        )
-        Icon(
-            Icons.Outlined.ArrowForward,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.CenterVertically)
-        )
-        StatBlock(
-            title = stringResource(R.string.optimized),
-            dimensions = "$processedW x $processedH",
-            size = formatBytes(processedBytes),
-            highlight = true
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        stringResource(R.string.saved_pct, pct),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
-private fun StatBlock(title: String, dimensions: String, size: String, highlight: Boolean = false) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            title,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            dimensions,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        Text(size, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(horizontalAlignment = Alignment.Start) {
+            Text(
+                stringResource(R.string.original_label),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "$originalW x $originalH",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Outlined.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                stringResource(R.string.saved_pct, pct),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                stringResource(R.string.optimized),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "$processedW x $processedH • ${formatBytes(processedBytes)}",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 

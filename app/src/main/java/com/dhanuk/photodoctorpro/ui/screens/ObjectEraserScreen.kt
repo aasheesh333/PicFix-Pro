@@ -21,8 +21,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -52,10 +50,12 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import com.dhanuk.photodoctorpro.utils.mapToBitmap
@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ObjectEraserScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
     val repository = HistoryRepository(db.historyDao())
     val viewModel: ObjectEraserViewModel = viewModel(factory = ViewModelFactory(repository))
@@ -74,6 +74,7 @@ fun ObjectEraserScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val globalState = LocalGlobalNavigationState.current
+    var compareMode by remember { mutableStateOf(false) }
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
@@ -184,6 +185,15 @@ fun ObjectEraserScreen(navController: NavController) {
                             Icon(Icons.Default.Check, contentDescription = "Apply Erase")
                         }
                     }
+                    if (uiState.processedBitmap != null) {
+                        IconButton(onClick = { compareMode = !compareMode }) {
+                            Icon(
+                                Icons.Default.Compare,
+                                contentDescription = "Compare",
+                                tint = if (compareMode) MaterialTheme.colorScheme.primary else Color.Gray
+                            )
+                        }
+                    }
                 }
             )
         },
@@ -205,6 +215,12 @@ fun ObjectEraserScreen(navController: NavController) {
             ) {
                 if (uiState.isLoading || uiState.isErasing) {
                     CircularProgressIndicator()
+                } else if (uiState.originalBitmap != null && compareMode && uiState.processedBitmap != null) {
+                    BeforeAfterSlider(
+                        beforeImage = uiState.originalBitmap!!.asImageBitmap(),
+                        afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else if (uiState.originalBitmap != null) {
                     EraserEditor(
                         viewModel = viewModel,
@@ -224,7 +240,6 @@ fun ObjectEraserScreen(navController: NavController) {
                 }
             }
 
-            // Controls
             if (uiState.originalBitmap == null) {
                 Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.select_image))
@@ -287,7 +302,6 @@ fun EraserEditor(
 ) {
     val zoomState = rememberZoomableBoxState()
 
-    // Live Paths
     var livePath by remember { mutableStateOf(Path()) }
     var liveBitmapPath by remember { mutableStateOf(Path()) }
 
@@ -315,19 +329,17 @@ fun EraserEditor(
 
                         livePath = Path()
                         livePath.moveTo(down.position.x, down.position.y)
-                        // Ensure a dot is drawn if it's just a tap
                         livePath.lineTo(down.position.x, down.position.y)
 
                         liveBitmapPath = Path()
                         val startX = (down.position.x - zoomState.offset.x) / zoomState.scale
                         val startY = (down.position.y - zoomState.offset.y) / zoomState.scale
-                        // NOTE: mapToBitmap helper is robust.
                         val startPt = mapToBitmap(startX, startY, layoutSize.width.toFloat(), layoutSize.height.toFloat(), bitmapToShow)
                         if (startPt != null) {
                             liveBitmapPath.moveTo(startPt.first, startPt.second)
                             liveBitmapPath.lineTo(startPt.first, startPt.second)
                         } else {
-                            liveBitmapPath.moveTo(0f, 0f) // Safety
+                            liveBitmapPath.moveTo(0f, 0f)
                         }
 
                         pathVersion++
@@ -346,7 +358,6 @@ fun EraserEditor(
                                      val oldScale = zoomState.scale
                                      val newScale = (oldScale * zoomChange).coerceIn(1f, 10f)
 
-                                     // Zoom around Centroid with TopLeft Pivot
                                      val zoomOffset = centroid - (centroid - zoomState.offset) * (newScale / oldScale)
 
                                      zoomState.scale = newScale
@@ -359,7 +370,6 @@ fun EraserEditor(
                                     if (change.positionChanged()) {
                                          livePath.lineTo(change.position.x, change.position.y)
 
-                                         // Update Bitmap Path
                                          val touchX = (change.position.x - zoomState.offset.x) / zoomState.scale
                                          val touchY = (change.position.y - zoomState.offset.y) / zoomState.scale
                                          val pt = mapToBitmap(touchX, touchY, layoutSize.width.toFloat(), layoutSize.height.toFloat(), bitmapToShow)
@@ -375,8 +385,6 @@ fun EraserEditor(
                         } while (event.changes.any { it.pressed })
 
                         if (!isZooming) {
-                            // Commit the parallel tracked Bitmap Path
-                            // Create a copy of the path to ensure persistence
                             val savedPath = Path()
                             savedPath.addPath(liveBitmapPath)
 
@@ -436,7 +444,6 @@ fun EraserEditor(
                     drawContext.canvas.translate(drawX, drawY)
                     drawContext.canvas.scale(scaleX, scaleY)
 
-                    // Draw committed paths using Native Canvas for Blur (Softness)
                     drawIntoCanvas { canvas ->
                         val paint = android.graphics.Paint()
                         paint.style = android.graphics.Paint.Style.STROKE
@@ -460,8 +467,7 @@ fun EraserEditor(
                 }
             }
 
-            // Draw Live Path (Screen Coords) - Overlay
-            if (pathVersion > 0 && !livePath.isEmpty) { // Read pathVersion to trigger redraw
+            if (pathVersion > 0 && !livePath.isEmpty) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawIntoCanvas { canvas ->
                         val paint = android.graphics.Paint()
@@ -470,15 +476,13 @@ fun EraserEditor(
                         paint.strokeJoin = android.graphics.Paint.Join.ROUND
                         paint.color = android.graphics.Color.RED
                         paint.strokeWidth = uiState.brushSize
-                        // Apply softness to live preview so user sees exactly what will happen
                         if (uiState.brushSoftness > 0) {
                             paint.maskFilter = BlurMaskFilter(uiState.brushSoftness + 0.1f, BlurMaskFilter.Blur.NORMAL)
                         }
                         canvas.nativeCanvas.drawPath(livePath.asAndroidPath(), paint)
                     }
                 }
-}
-
+            }
         }
     }
 }

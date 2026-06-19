@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,8 @@ enum class ResizePreset(val label: String, val maxDim: Int, val quality: Int) {
     SMALL("Small - 1080px", 1080, 80),
     MEDIUM("Medium - 2048px", 2048, 88),
     LARGE("Large - 3200px", 3200, 92),
-    ORIGINAL("Original size", 99999, 95)
+    ORIGINAL("Original size", 99999, 95),
+    CUSTOM("Custom", 0, 88)
 }
 
 data class ResizeUiState(
@@ -37,22 +39,23 @@ data class ResizeUiState(
     val isProcessing: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val savedFilePath: String? = null
+    val savedFilePath: String? = null,
+    val customWidth: Int = 0,
+    val customHeight: Int = 0,
+    val customWidthText: String = "",
+    val customHeightText: String = "",
+    val maintainAspectRatio: Boolean = true
 )
 
-class ResizeCompressViewModel : ViewModel() {
+class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ResizeUiState())
     val uiState: StateFlow<ResizeUiState> = _uiState.asStateFlow()
 
-    private var appContext: Context? = null
-    fun setContext(context: Context) { appContext = context }
-
-    fun onImageSelected(uri: Uri) {
+    fun onImageSelected(uri: Uri, context: Context) {
         _uiState.update { it.copy(selectedUri = uri, isLoading = true, error = null) }
         viewModelScope.launch {
             try {
-                val context = appContext ?: return@launch
                 val (bitmap, bytes) = withContext(Dispatchers.IO) {
                     val input = context.contentResolver.openInputStream(uri)
                     val bytes1 = input?.use { it.available().toLong() } ?: 0L
@@ -84,6 +87,10 @@ class ResizeCompressViewModel : ViewModel() {
                         processedBitmap = bitmap,
                         originalSizeBytes = bytes,
                         processedSizeBytes = estimateBytes(bitmap, _uiState.value.quality),
+                        customWidth = bitmap?.width ?: 0,
+                        customHeight = bitmap?.height ?: 0,
+                        customWidthText = bitmap?.width?.toString() ?: "",
+                        customHeightText = bitmap?.height?.toString() ?: "",
                         isLoading = false
                     )
                 }
@@ -94,7 +101,16 @@ class ResizeCompressViewModel : ViewModel() {
     }
 
     fun onPresetSelected(preset: ResizePreset) {
-        _uiState.update { it.copy(preset = preset) }
+        val bitmap = _uiState.value.originalBitmap
+        _uiState.update {
+            it.copy(
+                preset = preset,
+                customWidth = bitmap?.width ?: it.customWidth,
+                customHeight = bitmap?.height ?: it.customHeight,
+                customWidthText = if (preset == ResizePreset.CUSTOM) (bitmap?.width?.toString() ?: "") else it.customWidthText,
+                customHeightText = if (preset == ResizePreset.CUSTOM) (bitmap?.height?.toString() ?: "") else it.customHeightText
+            )
+        }
         applyPreset(preset, _uiState.value.quality)
     }
 
@@ -103,8 +119,59 @@ class ResizeCompressViewModel : ViewModel() {
         applyPreset(_uiState.value.preset, quality)
     }
 
+    fun onCustomWidthChanged(text: String) {
+        val w = text.toIntOrNull() ?: return
+        val bitmap = _uiState.value.originalBitmap ?: return
+        val h = if (_uiState.value.maintainAspectRatio && bitmap.width > 0) {
+            (w.toFloat() / bitmap.width * bitmap.height).toInt()
+        } else {
+            _uiState.value.customHeight
+        }
+        _uiState.update { it.copy(customWidthText = text, customWidth = w, customHeight = h, customHeightText = h.toString()) }
+        applyCustomResize(w, h)
+    }
+
+    fun onCustomHeightChanged(text: String) {
+        val h = text.toIntOrNull() ?: return
+        val bitmap = _uiState.value.originalBitmap ?: return
+        val w = if (_uiState.value.maintainAspectRatio && bitmap.height > 0) {
+            (h.toFloat() / bitmap.height * bitmap.width).toInt()
+        } else {
+            _uiState.value.customWidth
+        }
+        _uiState.update { it.copy(customHeightText = text, customHeight = h, customWidth = w, customWidthText = w.toString()) }
+        applyCustomResize(w, h)
+    }
+
+    fun onMaintainAspectRatioChanged(enabled: Boolean) {
+        _uiState.update { it.copy(maintainAspectRatio = enabled) }
+    }
+
+    private fun applyCustomResize(width: Int, height: Int) {
+        val original = _uiState.value.originalBitmap ?: return
+        if (width <= 0 || height <= 0) return
+        _uiState.update { it.copy(isProcessing = true) }
+        viewModelScope.launch {
+            val processed = withContext(Dispatchers.Default) {
+                Bitmap.createScaledBitmap(original, width, height, true)
+            }
+            val processedBytes = estimateBytes(processed, _uiState.value.quality)
+            _uiState.update {
+                it.copy(processedBitmap = processed, processedSizeBytes = processedBytes, isProcessing = false)
+            }
+        }
+    }
+
     private fun applyPreset(preset: ResizePreset, quality: Float) {
         val original = _uiState.value.originalBitmap ?: return
+        if (preset == ResizePreset.CUSTOM) {
+            val w = _uiState.value.customWidth
+            val h = _uiState.value.customHeight
+            if (w > 0 && h > 0) {
+                applyCustomResize(w, h)
+            }
+            return
+        }
         _uiState.update { it.copy(isProcessing = true) }
         viewModelScope.launch {
             val processed = withContext(Dispatchers.Default) {
@@ -147,36 +214,23 @@ class ResizeCompressViewModel : ViewModel() {
         return inSampleSize
     }
 
-    fun saveImage(context: Context) {
+    fun saveImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
         viewModelScope.launch {
             try {
                 val format = if (state.preset == ResizePreset.ORIGINAL)
-                    Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-                val ext = if (format == Bitmap.CompressFormat.PNG) ".png" else ".jpg"
-                val presetTag = state.preset.name.lowercase()
-                val savedPath = BitmapSaver.save(
+                    android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG
+                val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    baseName = "PDPro_${presetTag}_${System.currentTimeMillis()}$ext",
-                    subdir = "PhotoDoctorPro",
+                    fileNamePrefix = "PDPro_${state.preset.name.lowercase()}",
+                    operationType = "Resize (${state.preset.label})",
+                    inputUriString = state.selectedUri?.toString() ?: "",
+                    repository = repository,
                     format = format,
-                    quality = (state.quality * 100).toInt().coerceIn(1, 100)
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
-
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.historyDao().insert(
-                        History(
-                            operationType = "Resize (${state.preset.label})",
-                            inputFilePath = state.selectedUri?.toString() ?: "",
-                            filePath = savedPath,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -185,4 +239,10 @@ class ResizeCompressViewModel : ViewModel() {
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
+
+    override fun onCleared() {
+        super.onCleared()
+        _uiState.value.originalBitmap?.recycle()
+        _uiState.value.processedBitmap?.recycle()
+    }
 }
