@@ -10,13 +10,16 @@ import android.graphics.Paint
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dhanuk.photodoctorpro.data.local.AppDatabase
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.data.local.History
-import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,9 +37,24 @@ data class ColorAdjustmentsUiState(
     val savedFilePath: String? = null
 )
 
-class ColorAdjustmentsViewModel : ViewModel() {
+class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(ColorAdjustmentsUiState())
     val uiState: StateFlow<ColorAdjustmentsUiState> = _uiState.asStateFlow()
+
+    private val adjustmentTrigger = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
+    private var adjustmentJob: Job? = null
+    private var originalBitmapCopy: Bitmap? = null
+
+    init {
+        @OptIn(FlowPreview::class)
+        adjustmentJob = viewModelScope.launch {
+            adjustmentTrigger
+                .debounce(50)
+                .collect {
+                    runAdjustment()
+                }
+        }
+    }
 
     fun setOriginal(uri: Uri, context: Context) {
         _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null)
@@ -47,38 +65,55 @@ class ColorAdjustmentsViewModel : ViewModel() {
                         BitmapFactory.decodeStream(stream)
                     }
                 }
+                if (bitmap == null) {
+                    _uiState.update { it.copy(error = "Could not decode image", isLoading = false) }
+                    return@launch
+                }
+                val argb = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                if (argb == null) {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                    _uiState.update { it.copy(error = "Could not allocate bitmap", isLoading = false) }
+                    return@launch
+                }
+                val newOriginal = argb
+                originalBitmapCopy?.takeIf { !it.isRecycled }?.recycle()
+                if (argb != bitmap && !bitmap.isRecycled) bitmap.recycle()
+                originalBitmapCopy = newOriginal
                 _uiState.update {
                     it.copy(
                         selectedImageUri = uri,
-                        originalBitmap = bitmap,
-                        processedBitmap = bitmap,
+                        originalBitmap = newOriginal,
+                        processedBitmap = newOriginal,
                         isLoading = false
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message, isLoading = false) }
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("ColorVM", "setOriginal failed", e)
+                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to load", isLoading = false) }
             }
         }
     }
 
     fun updateBrightness(value: Float) {
         _uiState.update { it.copy(brightness = value) }
-        applyAdjustments()
+        adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateContrast(value: Float) {
         _uiState.update { it.copy(contrast = value) }
-        applyAdjustments()
+        adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateSaturation(value: Float) {
         _uiState.update { it.copy(saturation = value) }
-        applyAdjustments()
+        adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateWarmth(value: Float) {
         _uiState.update { it.copy(warmth = value) }
-        applyAdjustments()
+        adjustmentTrigger.tryEmit(Unit)
     }
 
     fun reset() {
@@ -90,51 +125,64 @@ class ColorAdjustmentsViewModel : ViewModel() {
                 warmth = 0f
             )
         }
-        applyAdjustments()
+        adjustmentTrigger.tryEmit(Unit)
     }
 
-    private fun applyAdjustments() {
+    private suspend fun runAdjustment() {
         val state = _uiState.value
         val original = state.originalBitmap ?: return
-        viewModelScope.launch(Dispatchers.Default) {
-            val output = applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
+        try {
+            val output = withContext(Dispatchers.Default) {
+                applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
+            }
+            val old = _uiState.value.processedBitmap
             _uiState.update { it.copy(processedBitmap = output) }
+            if (old != null && old != output && !old.isRecycled) old.recycle()
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("ColorVM", "applyAdjustments failed", e)
+            }
+            _uiState.update { it.copy(error = "Adjustment failed: ${e.message}") }
         }
     }
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
 
-    fun saveImage(context: Context) {
+    fun saveImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = BitmapSaver.save(
+                val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    baseName = "PhotoDoctorPro_Color_${System.currentTimeMillis()}",
-                    subdir = "PhotoDoctorPro",
-                    format = Bitmap.CompressFormat.PNG,
-                    quality = 100
+                    fileNamePrefix = "PhotoDoctorPro_Color",
+                    operationType = "Color Adjustments",
+                    inputUriString = state.selectedImageUri?.toString() ?: "",
+                    repository = repository,
+                    format = android.graphics.Bitmap.CompressFormat.PNG
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
-
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.historyDao().insert(
-                        History(
-                            operationType = "Color Adjustments",
-                            inputFilePath = state.selectedImageUri?.toString() ?: "",
-                            filePath = savedPath,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("ColorVM", "saveImage failed", e)
+                }
+                _uiState.update { it.copy(error = e.message ?: "Save failed") }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        adjustmentJob?.cancel()
+        adjustmentJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled && it != originalBitmapCopy }?.recycle()
+        originalBitmapCopy?.takeIf { !it.isRecycled }?.recycle()
+        originalBitmapCopy = null
     }
 
     companion object {

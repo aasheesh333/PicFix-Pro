@@ -77,7 +77,7 @@ object BitmapUtils {
 
             return@withContext bitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
             return@withContext null
         } finally {
             inputStream?.close()
@@ -116,7 +116,7 @@ object BitmapUtils {
             }
             rotated
         } catch (e: OutOfMemoryError) {
-            e.printStackTrace()
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
             bitmap
         }
     }
@@ -158,7 +158,7 @@ object BitmapUtils {
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
                 // Fallback will happen below
             }
         }
@@ -230,7 +230,7 @@ object MediaScannerConnectionWrapper {
                 null
             ) { _, _ -> }
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
         }
     }
 }
@@ -239,8 +239,8 @@ fun resolveFileUri(path: String, context: Context): Uri {
     return if (path.startsWith("content://")) {
         Uri.parse(path)
     } else {
-        val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path else path
-        val file = File(cleanPath!!)
+        val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path ?: path else path
+        val file = File(cleanPath)
         FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
     }
 }

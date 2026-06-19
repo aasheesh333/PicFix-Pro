@@ -1,5 +1,7 @@
 package com.dhanuk.photodoctorpro.data.repository
 
+import android.util.Log
+import com.dhanuk.photodoctorpro.BuildConfig
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.local.HistoryDao
 import kotlinx.coroutines.flow.Flow
@@ -16,8 +18,8 @@ class HistoryRepository(private val historyDao: HistoryDao) {
             latest.inputFilePath != history.inputFilePath
         ) {
             historyDao.insert(history)
-        } else {
-            android.util.Log.d("HistoryRepository", "Skipping duplicate history entry: $history")
+        } else if (BuildConfig.DEBUG) {
+            Log.d("HistoryRepository", "Skipping duplicate history entry: $history")
         }
     }
 

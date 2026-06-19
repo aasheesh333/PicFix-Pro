@@ -33,21 +33,21 @@ object AdManager {
 
     private fun loadInterstitialAd(context: Context) {
         val adRequest = AdRequest.Builder().build()
-        Log.d(TAG, "Loading Interstitial Ad")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Loading Interstitial Ad")
         InterstitialAd.load(
             context,
             BuildConfig.ADMOB_INTERSTITIAL_ID,
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
-                    Log.d(TAG, "Interstitial Ad Loaded")
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Interstitial Ad Loaded")
                     interstitialAd = ad
                     isAdLoaded = true
                     lastLoadError = "Success"
                 }
 
                 override fun onAdFailedToLoad(adError: LoadAdError) {
-                    Log.e(TAG, "Interstitial Ad Failed to Load: ${adError.message}")
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Interstitial Ad Failed to Load: ${adError.message}")
                     interstitialAd = null
                     isAdLoaded = false
                     lastLoadError = "Code: ${adError.code}, Message: ${adError.message}"
@@ -59,7 +59,7 @@ object AdManager {
     fun showInterstitialAd(activity: Activity) {
         // Retry loading if ad is missing
         if (interstitialAd == null) {
-            Log.d(TAG, "Ad is null, attempting to reload")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Ad is null, attempting to reload")
             loadInterstitialAd(activity)
         }
 
@@ -69,13 +69,13 @@ object AdManager {
             currentTime - lastAdShowTime >= AD_FREQUENCY_CAP_MS &&
             majorActionCount >= MAJOR_ACTION_COUNT_CAP
         ) {
-            Log.d(TAG, "Showing Interstitial Ad")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Showing Interstitial Ad")
             interstitialAd?.show(activity)
             lastAdShowTime = currentTime
             majorActionCount = 0
             loadInterstitialAd(activity) // Preload the next ad
         } else {
-             Log.d(TAG, "Ad not shown. Time diff: ${currentTime - lastAdShowTime}, Major Actions: $majorActionCount, Ad Ready: ${interstitialAd != null}")
+             if (BuildConfig.DEBUG) Log.d(TAG, "Ad not shown. Time diff: ${currentTime - lastAdShowTime}, Major Actions: $majorActionCount, Ad Ready: ${interstitialAd != null}")
         }
     }
 }

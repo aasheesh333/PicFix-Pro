@@ -7,7 +7,6 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.net.Uri
-import android.util.Log
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.lifecycle.ViewModel
@@ -17,6 +16,8 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -48,12 +49,6 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     private val undoStack = Stack<Bitmap>()
     private val redoStack = Stack<Bitmap>()
     private val MAX_STACK_SIZE = 10
-
-    init {
-        if (!OpenCVLoader.initDebug()) {
-            _uiState.value = _uiState.value.copy(error = "OpenCV initialization failed.")
-        }
-    }
 
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
@@ -89,11 +84,13 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 redoStack.push(current)
             }
             val prev = undoStack.pop()
+            val old = _uiState.value.processedBitmap
             _uiState.value = _uiState.value.copy(
                 processedBitmap = prev,
                 canUndo = undoStack.isNotEmpty(),
                 canRedo = true
             )
+            if (old != null && old != prev && !old.isRecycled) old.recycle()
         }
     }
 
@@ -104,11 +101,13 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 pushToStack(undoStack, current)
             }
             val next = redoStack.pop()
+            val old = _uiState.value.processedBitmap
             _uiState.value = _uiState.value.copy(
                 processedBitmap = next,
                 canUndo = true,
                 canRedo = redoStack.isNotEmpty()
             )
+            if (old != null && old != next && !old.isRecycled) old.recycle()
         }
     }
 
@@ -133,47 +132,65 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
 
-        _uiState.value = _uiState.value.copy(isErasing = true, error = null)
+        eraseJob?.cancel()
+        eraseJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isErasing = true, error = null)
 
-        pushToStack(undoStack, sourceBitmap)
-        redoStack.clear()
+            pushToStack(undoStack, sourceBitmap)
+            redoStack.clear()
 
-        viewModelScope.launch {
+            var workingBitmap: Bitmap? = null
+            var softMask: Bitmap? = null
             try {
-                // Ensure correct config
-                val workingBitmap = if (sourceBitmap.config != Bitmap.Config.ARGB_8888 || !sourceBitmap.isMutable) {
+                workingBitmap = if (sourceBitmap.config != Bitmap.Config.ARGB_8888 || !sourceBitmap.isMutable) {
                     sourceBitmap.copy(Bitmap.Config.ARGB_8888, true)
                 } else {
                     sourceBitmap
                 }
+                ensureActive()
 
-                // Create Mask with per-path softness
-                val softMask = createMask(workingBitmap.width, workingBitmap.height, paths)
+                softMask = createMask(workingBitmap.width, workingBitmap.height, paths)
+                ensureActive()
 
-                // Calculate dynamic inpaint radius
-                // Telea inpainting works best with a radius that covers the neighborhood structure.
-                // We bump it up if we have large strokes or high softness.
                 val maxStroke = paths.maxOfOrNull { it.strokeWidth } ?: 20f
                 val maxSoftness = paths.maxOfOrNull { it.softness } ?: 0f
                 val dynamicRadius = max(15.0, maxStroke / 3.0) + (maxSoftness / 2.0)
 
-                // Inpaint and Blend
                 val resultBitmap = applyInpainting(workingBitmap, softMask, dynamicRadius)
+                ensureActive()
 
+                softMask = null
+                if (workingBitmap != sourceBitmap) workingBitmap.recycle()
+                workingBitmap = null
+
+                val oldProcessed = _uiState.value.processedBitmap
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
                     processedBitmap = resultBitmap,
-                    paths = emptyList(), // Clear paths after applying
+                    paths = emptyList(),
                     canUndo = true,
                     canRedo = false
                 )
+                if (oldProcessed != null && oldProcessed != resultBitmap && !oldProcessed.isRecycled) {
+                    oldProcessed.recycle()
+                }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                softMask?.recycle()
+                if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
+                throw ce
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
+                }
                 if (undoStack.isNotEmpty()) undoStack.pop()
                 _uiState.value = _uiState.value.copy(isErasing = false, error = "Error: ${e.message}")
             }
         }
     }
+
+    private var eraseJob: kotlinx.coroutines.Job? = null
+
+    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     private fun pushToStack(stack: Stack<Bitmap>, bitmap: Bitmap) {
         if (stack.size >= MAX_STACK_SIZE) {
@@ -215,74 +232,62 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     private suspend fun applyInpainting(original: Bitmap, softMask: Bitmap, radius: Double): Bitmap = withContext(Dispatchers.Default) {
         val src = Mat()
-        Utils.bitmapToMat(original, src)
-        Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2RGB)
-
         val softMaskMat = Mat()
-        Utils.bitmapToMat(softMask, softMaskMat)
-        Imgproc.cvtColor(softMaskMat, softMaskMat, Imgproc.COLOR_BGRA2GRAY)
-
-        // Create Hard Mask for Inpaint (Threshold)
-        // We need a binary mask for the Inpaint function itself
         val hardMaskMat = Mat()
-        // Threshold: any non-zero pixel in the soft mask (even 1/255) becomes opaque for the INPAINT step.
-        // This ensures we have data for the blend everywhere.
-        Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
-
         val inpaintedMat = Mat()
-        Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
-
-        // BLENDING
-        // Convert Soft Mask to Float 0..1
         val softMaskFloat = Mat()
-        softMaskMat.convertTo(softMaskFloat, CvType.CV_32F, 1.0/255.0)
-
-        // Expand mask to 3 channels
         val mask3 = Mat()
-        Imgproc.cvtColor(softMaskFloat, mask3, Imgproc.COLOR_GRAY2RGB)
-
-        // Inverted mask (1 - mask)
         val invMask3 = Mat()
-        Core.subtract(Mat(mask3.size(), mask3.type(), Scalar(1.0, 1.0, 1.0)), mask3, invMask3)
-
         val srcFloat = Mat()
-        src.convertTo(srcFloat, CvType.CV_32F)
-
         val inpaintedFloat = Mat()
-        inpaintedMat.convertTo(inpaintedFloat, CvType.CV_32F)
-
-        // Multiply
         val part1 = Mat()
-        Core.multiply(srcFloat, invMask3, part1) // original * (1 - mask)
-
         val part2 = Mat()
-        Core.multiply(inpaintedFloat, mask3, part2) // inpainted * mask
-
         val resultFloat = Mat()
-        Core.add(part1, part2, resultFloat)
-
         val finalMat = Mat()
-        resultFloat.convertTo(finalMat, CvType.CV_8U)
+        try {
+            Utils.bitmapToMat(original, src)
+            Imgproc.cvtColor(src, src, Imgproc.COLOR_BGRA2BGR)
 
-        val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(finalMat, resultBitmap)
+            Utils.bitmapToMat(softMask, softMaskMat)
+            Imgproc.cvtColor(softMaskMat, softMaskMat, Imgproc.COLOR_BGRA2GRAY)
 
-        // Release resources
-        src.release()
-        softMaskMat.release()
-        hardMaskMat.release()
-        inpaintedMat.release()
-        softMaskFloat.release()
-        mask3.release()
-        invMask3.release()
-        srcFloat.release()
-        inpaintedFloat.release()
-        part1.release()
-        part2.release()
-        resultFloat.release()
-        finalMat.release()
+            // Threshold: any non-zero pixel in the soft mask (even 1/255) becomes opaque for the INPAINT step.
+            Imgproc.threshold(softMaskMat, hardMaskMat, 1.0, 255.0, Imgproc.THRESH_BINARY)
 
-        resultBitmap
+            Photo.inpaint(src, hardMaskMat, inpaintedMat, radius, Photo.INPAINT_TELEA)
+
+            // BLENDING
+            softMaskMat.convertTo(softMaskFloat, CvType.CV_32F, 1.0/255.0)
+            Imgproc.cvtColor(softMaskFloat, mask3, Imgproc.COLOR_GRAY2RGB)
+            Core.subtract(Mat(mask3.size(), mask3.type(), Scalar(1.0, 1.0, 1.0)), mask3, invMask3)
+
+            src.convertTo(srcFloat, CvType.CV_32F)
+            inpaintedMat.convertTo(inpaintedFloat, CvType.CV_32F)
+
+            Core.multiply(srcFloat, invMask3, part1)
+            Core.multiply(inpaintedFloat, mask3, part2)
+
+            Core.add(part1, part2, resultFloat)
+            resultFloat.convertTo(finalMat, CvType.CV_8U)
+
+            val resultBitmap = Bitmap.createBitmap(finalMat.cols(), finalMat.rows(), Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(finalMat, resultBitmap)
+            return@withContext resultBitmap
+        } finally {
+            src.release()
+            softMaskMat.release()
+            hardMaskMat.release()
+            inpaintedMat.release()
+            softMaskFloat.release()
+            mask3.release()
+            invMask3.release()
+            srcFloat.release()
+            inpaintedFloat.release()
+            part1.release()
+            part2.release()
+            resultFloat.release()
+            finalMat.release()
+        }
     }
 
     suspend fun saveImage(activity: Activity): Boolean {
@@ -305,6 +310,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
         } catch (e: Exception) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("ObjectEraserVM", "saveImage failed", e)
+            }
             _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             false
         } finally {
@@ -318,6 +326,18 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     fun onSavedMessageShown() {
         _uiState.value = _uiState.value.copy(savedFilePath = null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        eraseJob?.cancel()
+        eraseJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        undoStack.forEach { if (!it.isRecycled) it.recycle() }
+        redoStack.forEach { if (!it.isRecycled) it.recycle() }
+        undoStack.clear()
+        redoStack.clear()
     }
 }
 

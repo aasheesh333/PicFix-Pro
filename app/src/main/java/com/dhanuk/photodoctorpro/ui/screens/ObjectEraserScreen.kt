@@ -138,12 +138,12 @@ fun ObjectEraserScreen(navController: NavController) {
             onShareOther = {
                  try {
                      context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image"))
-                 } catch (e: Exception) { e.printStackTrace() }
+                 } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ObjectEraserVM", "operation failed", e) }
             },
             onOpen = {
                 try {
                     context.startActivity(createOpenIntent(path, context))
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ObjectEraserVM", "operation failed", e) }
             }
         )
     }

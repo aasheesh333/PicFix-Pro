@@ -44,6 +44,7 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import com.dhanuk.photodoctorpro.utils.mapToBitmap
@@ -54,7 +55,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RemoveBackgroundScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
     val repository = HistoryRepository(db.historyDao())
     val viewModel: RemoveBackgroundViewModel = viewModel(factory = ViewModelFactory(repository))
@@ -129,7 +130,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                  try {
                      context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image"))
                  } catch (e: Exception) {
-                     e.printStackTrace()
+                     if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
                      Toast.makeText(context, "Error sharing: ${e.message}", Toast.LENGTH_SHORT).show()
                  }
             },
@@ -137,7 +138,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 try {
                     context.startActivity(createOpenIntent(path, context))
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
                     Toast.makeText(context, "Error opening: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }

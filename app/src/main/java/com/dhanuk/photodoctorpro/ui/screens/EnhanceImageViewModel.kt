@@ -20,19 +20,30 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
     private val _uiState = MutableStateFlow(EnhanceImageUiState())
     val uiState = _uiState.asStateFlow()
 
+    private var enhanceJob: kotlinx.coroutines.Job? = null
+
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
             _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
-            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
-            if (bitmap != null) {
-                val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
-                _uiState.value = _uiState.value.copy(
-                    originalBitmap = bitmap,
-                    isLoading = false,
-                    isLargeImage = isLarge
-                )
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+            try {
+                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
+                if (bitmap != null) {
+                    val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
+                    val old = _uiState.value.originalBitmap
+                    _uiState.value = _uiState.value.copy(
+                        originalBitmap = bitmap,
+                        isLoading = false,
+                        isLargeImage = isLarge
+                    )
+                    if (old != null && old != bitmap && !old.isRecycled) old.recycle()
+                } else {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+                }
+            } catch (e: Exception) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("EnhanceVM", "onImageSelected failed", e)
+                }
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Load failed: ${e.message}")
             }
         }
     }
@@ -46,16 +57,24 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         val original = _uiState.value.originalBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-        viewModelScope.launch {
+        enhanceJob?.cancel()
+        enhanceJob = viewModelScope.launch {
             try {
                 val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor)
+                ensureActive()
+                val old = _uiState.value.enhancedBitmap
                 _uiState.value = _uiState.value.copy(
                     enhancedBitmap = enhanced,
                     isLoading = false,
                     scaleFactor = scaleFactor
                 )
+                if (old != null && old != enhanced && !old.isRecycled) old.recycle()
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Throwable) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("EnhanceVM", "enhanceImage failed", e)
+                }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = "Error: ${e.localizedMessage ?: "Unknown error"}"
@@ -63,6 +82,8 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
             }
         }
     }
+
+    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     suspend fun saveImage(activity: Activity): Boolean {
         val bitmap = _uiState.value.enhancedBitmap ?: return false
@@ -84,6 +105,9 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
         } catch (e: Exception) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("EnhanceVM", "saveImage failed", e)
+            }
             _uiState.value = _uiState.value.copy(error = "Failed to save: ${e.message}")
             false
         } finally {
@@ -101,6 +125,14 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
 
     fun onSavedMessageShown() {
          _uiState.value = _uiState.value.copy(savedFilePath = null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        enhanceJob?.cancel()
+        enhanceJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.enhancedBitmap?.takeIf { !it.isRecycled }?.recycle()
     }
 }
 

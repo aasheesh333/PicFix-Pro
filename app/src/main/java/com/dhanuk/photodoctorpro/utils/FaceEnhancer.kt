@@ -22,6 +22,8 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.math.max
 import kotlin.math.min
 
@@ -49,11 +51,37 @@ class FaceEnhancer private constructor(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
+    private val interpLock = ReentrantLock()
     private val MODEL_SIZE = 512
 
     init {
+        val modelFile = try {
+            loadModelFile("gfpgan.tflite")
+        } catch (e: Exception) {
+            logError("Failed to load GFPGAN model: ${e.message}")
+            return
+        }
+
         try {
             val options = Interpreter.Options()
+            tryGpuDelegate(options)
+            interpreter = Interpreter(modelFile, options)
+        } catch (e: Throwable) {
+            logError("FaceEnhancer init failed: ${e.message}")
+            close()
+        }
+    }
+
+    companion object {
+        private fun logError(msg: String) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("FaceEnhancer", msg)
+            }
+        }
+    }
+
+    private fun tryGpuDelegate(options: Interpreter.Options) {
+        try {
             val compatList = CompatibilityList()
             if (compatList.isDelegateSupportedOnThisDevice) {
                 val delegate = GpuDelegate()
@@ -62,44 +90,40 @@ class FaceEnhancer private constructor(private val context: Context) {
             } else {
                 options.setNumThreads(4)
             }
-
-            try {
-                val modelFile = loadModelFile("gfpgan.tflite")
-                interpreter = Interpreter(modelFile, options)
-            } catch (e: Throwable) {
-                 // Ignore, fallback will skip face enhancement
-                 close()
-            }
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            close()
+        } catch (e: Exception) {
+            logError("GPU delegate unavailable, using CPU: ${e.message}")
+            options.setNumThreads(4)
         }
     }
 
     fun close() {
         try {
             interpreter?.close()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (_: Exception) {}
         try {
             gpuDelegate?.close()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (_: Exception) {}
         try {
              faceDetector.close()
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
         interpreter = null
         gpuDelegate = null
     }
 
     private fun loadModelFile(path: String): java.nio.MappedByteBuffer {
         val fileDescriptor = context.assets.openFd("models/$path")
-        if (fileDescriptor.declaredLength <= 0) {
-            throw IOException("Model file $path is empty")
+        return fileDescriptor.use { fd ->
+            if (fd.declaredLength <= 0) {
+                throw IOException("Model file $path is empty")
+            }
+            FileInputStream(fd.fileDescriptor).use { stream ->
+                stream.channel.map(
+                    FileChannel.MapMode.READ_ONLY,
+                    fd.startOffset,
+                    fd.declaredLength
+                )
+            }
         }
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 
     suspend fun enhanceFaces(original: Bitmap, upscaled: Bitmap, scaleFactor: Int): Bitmap {
@@ -189,6 +213,12 @@ class FaceEnhancer private constructor(private val context: Context) {
 
     private fun runFaceInference(bitmap: Bitmap): Bitmap {
         val interp = interpreter ?: return bitmap
+        return interpLock.withLock {
+            runFaceInferenceInternal(interp, bitmap)
+        }
+    }
+
+    private fun runFaceInferenceInternal(interp: Interpreter, bitmap: Bitmap): Bitmap {
 
         val input = ByteBuffer.allocateDirect(1 * MODEL_SIZE * MODEL_SIZE * 3 * 4)
         input.order(ByteOrder.nativeOrder())

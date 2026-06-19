@@ -40,7 +40,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,27 +64,24 @@ data class MemeMakerUiState(
     val savedFilePath: String? = null
 )
 
-class MemeMakerViewModel : ViewModel() {
+class MemeMakerViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(MemeMakerUiState())
     val uiState: StateFlow<MemeMakerUiState> = _uiState.asStateFlow()
 
-    private var appContext: android.content.Context? = null
-    fun setContext(context: android.content.Context) { appContext = context }
-
-    fun onImageSelected(uri: Uri) {
+    fun onImageSelected(uri: Uri, context: android.content.Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val context = appContext ?: return@launch
                 val bitmap = withContext(Dispatchers.IO) {
                     val inputStream = context.contentResolver.openInputStream(uri)
                     BitmapFactory.decodeStream(inputStream)
                 }
                 if (bitmap != null) {
+                    val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                     _uiState.update {
                         it.copy(
-                            originalBitmap = bitmap,
-                            processedBitmap = bitmap,
+                            originalBitmap = argbBitmap,
+                            processedBitmap = null,
                             isLoading = false
                         )
                     }
@@ -106,16 +105,26 @@ class MemeMakerViewModel : ViewModel() {
     fun renderMeme() {
         val state = _uiState.value
         val original = state.originalBitmap ?: return
-        viewModelScope.launch(Dispatchers.Default) {
-            val result = withContext(Dispatchers.Default) {
-                drawMeme(original, state.topText, state.bottomText)
+        renderJob?.cancel()
+        renderJob = viewModelScope.launch(Dispatchers.Default) {
+            val result = drawMeme(original, state.topText, state.bottomText)
+            if (!isActive) {
+                if (result != original && !result.isRecycled) result.recycle()
+                return@launch
             }
-            _uiState.update { it.copy(processedBitmap = result) }
+            withContext(Dispatchers.Main) {
+                val old = _uiState.value.processedBitmap
+                _uiState.update { it.copy(processedBitmap = result) }
+                if (old != null && old != result && !old.isRecycled) old.recycle()
+            }
         }
     }
 
+    private var renderJob: kotlinx.coroutines.Job? = null
+
     private fun drawMeme(bitmap: Bitmap, topText: String, bottomText: String): Bitmap {
         val mutable = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            ?: throw IllegalStateException("Failed to allocate bitmap for meme render")
         val canvas = Canvas(mutable)
         val w = mutable.width.toFloat()
         val h = mutable.height.toFloat()
@@ -160,26 +169,16 @@ class MemeMakerViewModel : ViewModel() {
         val bitmap = _uiState.value.processedBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = BitmapSaver.save(
+                val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    baseName = "PDPro_Meme_${System.currentTimeMillis()}",
-                    subdir = "PhotoDoctorPro",
-                    format = Bitmap.CompressFormat.JPEG,
-                    quality = 95
+                    fileNamePrefix = "PDPro_Meme",
+                    operationType = "Meme",
+                    inputUriString = "",
+                    repository = repository,
+                    format = android.graphics.Bitmap.CompressFormat.JPEG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.historyDao().insert(
-                        History(
-                            operationType = "Meme",
-                            inputFilePath = "",
-                            filePath = savedPath,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -188,22 +187,31 @@ class MemeMakerViewModel : ViewModel() {
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
+
+    override fun onCleared() {
+        super.onCleared()
+        renderJob?.cancel()
+        renderJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemeMakerScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
-    val viewModel: MemeMakerViewModel = viewModel()
-    LaunchedEffect(Unit) { viewModel.setContext(context) }
+    val activity = context.findActivity() ?: return
+    val db = AppDatabase.getDatabase(context)
+    val repository = HistoryRepository(db.historyDao())
+    val viewModel: MemeMakerViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it) } }
+    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -248,7 +256,7 @@ fun MemeMakerScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, "Share Meme"))
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("MemeMakerVM", "operation failed", e) }
             },
             onOpen = {
                 try {
@@ -259,7 +267,7 @@ fun MemeMakerScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("MemeMakerVM", "operation failed", e) }
             }
         )
     }

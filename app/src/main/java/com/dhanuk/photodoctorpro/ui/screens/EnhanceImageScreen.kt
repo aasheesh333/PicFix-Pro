@@ -33,6 +33,7 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
 
@@ -40,7 +41,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun EnhanceImageScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
     val repository = HistoryRepository(db.historyDao())
     val viewModel: EnhanceImageViewModel = viewModel(factory = ViewModelFactory(repository))
@@ -111,11 +112,11 @@ fun EnhanceImageScreen(navController: NavController) {
                 try {
                     context.startActivity(Intent.createChooser(
                         com.dhanuk.photodoctorpro.utils.createShareIntent(path, context), "Share Image"))
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("EnhanceImageVM", "operation failed", e) }
             },
             onOpen = {
                 try { context.startActivity(com.dhanuk.photodoctorpro.utils.createOpenIntent(path, context)) }
-                catch (e: Exception) { e.printStackTrace() }
+                catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("EnhanceImageVM", "operation failed", e) }
             }
         )
     }

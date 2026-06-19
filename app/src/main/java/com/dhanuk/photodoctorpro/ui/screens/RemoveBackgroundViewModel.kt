@@ -22,15 +22,14 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import org.opencv.android.Utils
-import org.opencv.core.Mat
-import org.opencv.core.Size
-import org.opencv.imgproc.Imgproc
+
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
 
@@ -45,18 +44,31 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     private val redoStack = ArrayDeque<Bitmap>()
     private val MAX_STACK_SIZE = 10
 
+    private var removeBgJob: kotlinx.coroutines.Job? = null
+    private var refinementJob: kotlinx.coroutines.Job? = null
+
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
-            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
-            if (bitmap != null) {
-                val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-                _uiState.value = _uiState.value.copy(
-                    originalBitmap = argbBitmap,
-                    isLoading = false
-                )
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+            try {
+                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
+                if (bitmap != null) {
+                    val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                    val old = _uiState.value.originalBitmap
+                    _uiState.value = _uiState.value.copy(
+                        originalBitmap = argbBitmap,
+                        isLoading = false
+                    )
+                    if (old != null && old != argbBitmap && !old.isRecycled) old.recycle()
+                    if (bitmap != argbBitmap && !bitmap.isRecycled) bitmap.recycle()
+                } else {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+                }
+            } catch (e: Exception) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("RemoveBGVM", "onImageSelected failed", e)
+                }
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Load failed: ${e.message}")
             }
         }
     }
@@ -65,12 +77,22 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         val rawBitmap = _uiState.value.originalBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-        viewModelScope.launch {
+        removeBgJob?.cancel()
+        removeBgJob = viewModelScope.launch {
             try {
                 val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                ensureActive()
                 val mask = processToGetMask(inputBitmap)
+                ensureActive()
                 val result = applyMaskToOriginal(inputBitmap, mask)
+                ensureActive()
+                if (inputBitmap != rawBitmap && !inputBitmap.isRecycled) inputBitmap.recycle()
 
+                val oldProcessed = _uiState.value.processedBitmap
+                val oldMask = _uiState.value.maskBitmap
+
+                undoStack.forEach { if (!it.isRecycled) it.recycle() }
+                redoStack.forEach { if (!it.isRecycled) it.recycle() }
                 undoStack.clear()
                 redoStack.clear()
                 pushToUndo(mask.copy(mask.config, true))
@@ -81,12 +103,20 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
                     maskBitmap = mask,
                     isRefining = false
                 )
+                if (oldProcessed != null && oldProcessed != result && !oldProcessed.isRecycled) oldProcessed.recycle()
+                if (oldMask != null && oldMask != mask && !oldMask.isRecycled) oldMask.recycle()
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("RemoveBGVM", "removeBackground failed", e)
+                }
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Unknown error")
             }
         }
     }
+
+    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     private suspend fun processToGetMask(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         val options = SubjectSegmenterOptions.Builder()
@@ -168,13 +198,26 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         val mask = _uiState.value.maskBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true)
 
-        viewModelScope.launch {
-             val result = applyMaskToOriginal(original, mask)
-             _uiState.value = _uiState.value.copy(
-                 processedBitmap = result,
-                 isRefining = false,
-                 isLoading = false
-             )
+        refinementJob?.cancel()
+        refinementJob = viewModelScope.launch {
+             try {
+                 val result = applyMaskToOriginal(original, mask)
+                 ensureActive()
+                 val old = _uiState.value.processedBitmap
+                 _uiState.value = _uiState.value.copy(
+                     processedBitmap = result,
+                     isRefining = false,
+                     isLoading = false
+                 )
+                 if (old != null && old != result && !old.isRecycled) old.recycle()
+             } catch (ce: kotlinx.coroutines.CancellationException) {
+                 throw ce
+             } catch (e: Exception) {
+                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                     android.util.Log.e("RemoveBGVM", "applyRefinement failed", e)
+                 }
+                 _uiState.value = _uiState.value.copy(isLoading = false, error = "Refinement failed: ${e.message}")
+             }
         }
     }
 
@@ -228,7 +271,9 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             val current = _uiState.value.maskBitmap
             if (current != null) redoStack.addLast(current)
             val prev = undoStack.removeLast()
+             val old = _uiState.value.maskBitmap
              _uiState.value = _uiState.value.copy(maskBitmap = prev.copy(prev.config, true))
+             if (old != null && old != _uiState.value.maskBitmap && !old.isRecycled) old.recycle()
              maskVersion.value += 1
         }
     }
@@ -240,7 +285,9 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
                  pushToUndo(current.copy(current.config, true))
             }
             val next = redoStack.removeLast()
+             val old = _uiState.value.maskBitmap
              _uiState.value = _uiState.value.copy(maskBitmap = next.copy(next.config, true))
+             if (old != null && old != _uiState.value.maskBitmap && !old.isRecycled) old.recycle()
              maskVersion.value += 1
         }
     }
@@ -265,6 +312,9 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
         } catch (e: Exception) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("RemoveBGVM", "saveImage failed", e)
+            }
             _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
             false
         } finally {
@@ -284,6 +334,21 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
 
     fun onSavedMessageShown() {
          _uiState.value = _uiState.value.copy(savedFilePath = null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        removeBgJob?.cancel()
+        refinementJob?.cancel()
+        removeBgJob = null
+        refinementJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.maskBitmap?.takeIf { !it.isRecycled }?.recycle()
+        undoStack.forEach { if (!it.isRecycled) it.recycle() }
+        redoStack.forEach { if (!it.isRecycled) it.recycle() }
+        undoStack.clear()
+        redoStack.clear()
     }
 }
 

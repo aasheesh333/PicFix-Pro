@@ -88,7 +88,7 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
                     return@withContext file.uri.toString()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ImageToPdfVM", "operation failed", e)
             }
         }
 

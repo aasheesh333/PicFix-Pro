@@ -12,6 +12,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.math.min
 import kotlin.math.max
 
@@ -23,9 +25,39 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     private var scaleFactor: Int = -1
 
     init {
+        val modelFile = try {
+            loadModelFile(modelFilename)
+        } catch (e: Exception) {
+            logError("Failed to load model file: ${e.message}")
+            return
+        }
+
         try {
             val options = Interpreter.Options()
             val compatList = CompatibilityList()
+            tryGpuDelegate(options, compatList)
+            interpreter = Interpreter(modelFile, options)
+            inputShape = interpreter?.getInputTensor(0)?.shape()
+            detectScaleFactor()
+        } catch (e: Throwable) {
+            logError("Interpreter initialization failed: ${e.message}")
+            interpreter = null
+            close()
+        }
+    }
+
+    companion object {
+        private fun logError(msg: String) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("ESRGANHelper", msg)
+            }
+        }
+    }
+
+    private val interpLock = ReentrantLock()
+
+    private fun tryGpuDelegate(options: Interpreter.Options, compatList: CompatibilityList) {
+        try {
             if (compatList.isDelegateSupportedOnThisDevice) {
                 val delegate = GpuDelegate()
                 gpuDelegate = delegate
@@ -33,26 +65,23 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
             } else {
                 options.setNumThreads(4)
             }
-
-            val modelFile = loadModelFile(modelFilename)
-            interpreter = Interpreter(modelFile, options)
-            inputShape = interpreter?.getInputTensor(0)?.shape()
-
-            detectScaleFactor()
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            interpreter = null
-            close()
+        } catch (e: Exception) {
+            logError("GPU delegate unavailable, using CPU: ${e.message}")
+            options.setNumThreads(4)
         }
     }
 
     private fun loadModelFile(path: String): MappedByteBuffer {
         val fileDescriptor = context.assets.openFd("models/$path")
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        return fileDescriptor.use { fd ->
+            FileInputStream(fd.fileDescriptor).use { stream ->
+                stream.channel.map(
+                    FileChannel.MapMode.READ_ONLY,
+                    fd.startOffset,
+                    fd.declaredLength
+                )
+            }
+        }
     }
 
     fun isReady(): Boolean = interpreter != null
@@ -60,22 +89,22 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     fun close() {
         try {
             interpreter?.close()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (_: Exception) {}
         try {
             gpuDelegate?.close()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (_: Exception) {}
         interpreter = null
         gpuDelegate = null
     }
 
     private fun detectScaleFactor() {
         val interp = interpreter ?: return
+        val shape = inputShape
 
-        val h = if (inputShape != null && inputShape!!.size > 2 && inputShape!![1] > 0) inputShape!![1] else 32
-        val w = if (inputShape != null && inputShape!!.size > 2 && inputShape!![2] > 0) inputShape!![2] else 32
+        val h = if (shape != null && shape.size > 2 && shape[1] > 0) shape[1] else 32
+        val w = if (shape != null && shape.size > 2 && shape[2] > 0) shape[2] else 32
 
-        // Prepare input
-        if (inputShape != null && (inputShape!![1] <= 0 || inputShape!![2] <= 0)) {
+        if (shape != null && (shape[1] <= 0 || shape[2] <= 0)) {
              interp.resizeInput(0, intArrayOf(1, h, w, 3))
              interp.allocateTensors()
         }
@@ -83,17 +112,23 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
         val outputTensor = interp.getOutputTensor(0)
         val outShape = outputTensor.shape()
 
-        if (outShape[1] > 0) {
-            scaleFactor = outShape[1] / h
-        } else {
-            scaleFactor = if (modelFilename.contains("x2")) 2 else if (modelFilename.contains("x4")) 4 else 4
-        }
+        scaleFactor = if (outShape[1] > 0) outShape[1] / h
+                      else if (modelFilename.contains("x2")) 2
+                      else if (modelFilename.contains("x4")) 4
+                      else 4
     }
 
     fun enhance(bitmap: Bitmap): Bitmap {
         val interp = interpreter ?: throw IllegalStateException("Model not loaded")
+        return interpLock.withLock {
+            enhanceInternal(interp, bitmap)
+        }
+    }
 
-        val modelH = if (inputShape != null && inputShape!!.size > 2 && inputShape!![1] > 0) inputShape!![1] else 0
+    private fun enhanceInternal(interp: Interpreter, bitmap: Bitmap): Bitmap {
+
+        val shape = inputShape
+        val modelH = if (shape != null && shape.size > 2 && shape[1] > 0) shape[1] else 0
 
         val isFixed = (modelH > 0)
         val TILE_SIZE = if (isFixed) modelH else 512

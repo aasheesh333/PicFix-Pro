@@ -6,6 +6,7 @@ import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
 import com.dhanuk.photodoctorpro.utils.ThemeController
@@ -16,8 +17,9 @@ class PhotoDoctorApplication : Application() {
 
         ThemeController.init(this)
 
-        if (OpenCVLoader.initDebug()) {
-            Log.d("PhotoDoctor", "OpenCV loaded successfully")
+        OpenCVInitialized = OpenCVLoader.initDebug()
+        if (OpenCVInitialized) {
+            if (BuildConfig.DEBUG) Log.d("PhotoDoctor", "OpenCV loaded successfully")
         } else {
             Log.e("PhotoDoctor", "OpenCV initialization failed!")
         }
@@ -30,14 +32,23 @@ class PhotoDoctorApplication : Application() {
 
         if (BuildConfig.ONESIGNAL_APP_ID.isNotEmpty()) {
             OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
+            requestNotificationPermission()
         } else {
             Log.w("PhotoDoctor", "OneSignal APP_ID is empty - push notifications disabled")
         }
+    }
 
-        // requestPermission will show the native Android notification permission prompt.
-        // NOTE: It's recommended to call this from your UI layer instead.
-        CoroutineScope(Dispatchers.Main).launch {
+    private fun requestNotificationPermission() {
+        applicationScope.launch {
             OneSignal.Notifications.requestPermission(true)
         }
+    }
+
+    companion object {
+        @Volatile
+        var OpenCVInitialized: Boolean = false
+            private set
+
+        private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 }

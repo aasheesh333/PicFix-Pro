@@ -74,7 +74,7 @@ class SettingsViewModel : ViewModel() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("SettingsVM", "operation failed", e)
             }
             UserPreferences.setSaveDirectory(context, uri.toString())
             saveDirectory = uri.toString()

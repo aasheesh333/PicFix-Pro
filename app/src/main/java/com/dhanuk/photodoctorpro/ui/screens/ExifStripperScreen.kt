@@ -33,9 +33,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
-import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
+import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,15 +58,14 @@ data class ExifStripperUiState(
     val savedFilePath: String? = null
 )
 
-class ExifStripperViewModel : ViewModel() {
+class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(ExifStripperUiState())
     val uiState: StateFlow<ExifStripperUiState> = _uiState.asStateFlow()
 
-    fun onImageSelected(uri: Uri) {
+    fun onImageSelected(uri: Uri, context: android.content.Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, selectedUri = uri, error = null) }
             try {
-                val context = appContext ?: return@launch
                 val (bitmap, exifInfo) = withContext(Dispatchers.IO) {
                     val cr = context.contentResolver
                     val inputStream = cr.openInputStream(uri) ?: return@withContext Pair(null as Bitmap?, "")
@@ -103,37 +104,21 @@ class ExifStripperViewModel : ViewModel() {
         }
     }
 
-    private var appContext: android.content.Context? = null
-    fun setContext(context: android.content.Context) {
-        appContext = context
-    }
-
     fun saveCleanImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.previewBitmap ?: return
         viewModelScope.launch {
             try {
-                val savedPath = BitmapSaver.save(
+                val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    baseName = "PDPro_Safe_${System.currentTimeMillis()}",
-                    subdir = "PhotoDoctorPro",
-                    format = Bitmap.CompressFormat.JPEG,
-                    quality = 95
+                    fileNamePrefix = "PDPro_Safe",
+                    operationType = "EXIF Strip",
+                    inputUriString = state.selectedUri?.toString() ?: "",
+                    repository = repository,
+                    format = android.graphics.Bitmap.CompressFormat.JPEG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
-
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    db.historyDao().insert(
-                        History(
-                            operationType = "EXIF Strip",
-                            inputFilePath = state.selectedUri?.toString() ?: "",
-                            filePath = savedPath,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -142,22 +127,28 @@ class ExifStripperViewModel : ViewModel() {
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
+
+    override fun onCleared() {
+        super.onCleared()
+        _uiState.value.previewBitmap?.recycle()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExifStripperScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
-    val viewModel: ExifStripperViewModel = viewModel()
-    LaunchedEffect(Unit) { viewModel.setContext(context) }
+    val activity = context.findActivity() ?: return
+    val db = AppDatabase.getDatabase(context)
+    val repository = HistoryRepository(db.historyDao())
+    val viewModel: ExifStripperViewModel = viewModel(factory = ViewModelFactory(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it) } }
+    ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -202,7 +193,7 @@ fun ExifStripperScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, "Share Image"))
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
             },
             onOpen = {
                 try {
@@ -213,7 +204,7 @@ fun ExifStripperScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
             }
         )
     }

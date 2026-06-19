@@ -82,43 +82,55 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
     private val _uiState = MutableStateFlow(PerspectiveCropUiState())
     val uiState: StateFlow<PerspectiveCropUiState> = _uiState.asStateFlow()
 
+    private var autoDetectJob: kotlinx.coroutines.Job? = null
+    private var applyCropJob: kotlinx.coroutines.Job? = null
+
     fun onImageSelected(uri: Uri, context: android.content.Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val bitmap = withContext(Dispatchers.IO) {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    BitmapFactory.decodeStream(inputStream)
-                }
-                if (bitmap != null) {
-                    _uiState.update {
-                        it.copy(
-                            originalBitmap = bitmap,
-                            isLoading = false
-                        )
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream)
                     }
-                    autoDetectEdges(bitmap)
                 }
+                if (bitmap == null) {
+                    _uiState.update { it.copy(isLoading = false, error = "Could not decode image") }
+                    return@launch
+                }
+                val old = _uiState.value.originalBitmap
+                _uiState.update {
+                    it.copy(
+                        originalBitmap = bitmap,
+                        isLoading = false
+                    )
+                }
+                if (old != null && old != bitmap && !old.isRecycled) old.recycle()
+                autoDetectEdges(bitmap)
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message, isLoading = false) }
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("PerspectiveCropVM", "onImageSelected failed", e)
+                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to load", isLoading = false) }
             }
         }
     }
 
     private fun autoDetectEdges(bitmap: Bitmap) {
-        viewModelScope.launch(Dispatchers.Default) {
+        autoDetectJob?.cancel()
+        autoDetectJob = viewModelScope.launch(Dispatchers.Default) {
+            val src = Mat()
+            val gray = Mat()
+            val edges = Mat()
+            val hierarchy = Mat()
+            val resized = Mat()
             try {
-                val src = Mat()
-                val gray = Mat()
-                val edges = Mat()
-                val hierarchy = Mat()
                 Utils.bitmapToMat(bitmap, src)
 
                 val scale = 600f / maxOf(bitmap.width, bitmap.height)
-                val resized = Mat()
                 Imgproc.resize(src, resized, Size(), scale.toDouble(), scale.toDouble())
 
-                Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
+                Imgproc.cvtColor(resized, gray, Imgproc.COLOR_BGRA2GRAY)
                 Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
                 Imgproc.Canny(gray, edges, 50.0, 150.0)
 
@@ -131,28 +143,24 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
                 val padding = 0.03f
 
                 if (maxContour != null && contours.size > 0) {
-                    val peri = Imgproc.arcLength(org.opencv.core.MatOfPoint2f(*maxContour.toArray()), true)
+                    val maxContourPts = maxContour.toArray()
+                    val peri = Imgproc.arcLength(org.opencv.core.MatOfPoint2f(*maxContourPts), true)
                     val approx = org.opencv.core.MatOfPoint2f()
-                    Imgproc.approxPolyDP(org.opencv.core.MatOfPoint2f(*maxContour.toArray()), approx, 0.02 * peri, true)
+                    try {
+                        Imgproc.approxPolyDP(org.opencv.core.MatOfPoint2f(*maxContourPts), approx, 0.02 * peri, true)
 
-                    if (approx.toList().size == 4) {
-                        val pts = approx.toList()
-                        val sorted = sortCorners(pts, scale)
-                        _uiState.update { it.copy(corners = sorted) }
-                        src.release()
-                        gray.release()
-                        edges.release()
-                        hierarchy.release()
-                        resized.release()
-                        return@launch
+                        if (approx.toList().size == 4) {
+                            val pts = approx.toList()
+                            val sorted = sortCorners(pts, scale)
+                            if (sorted.size == 4) {
+                                _uiState.update { it.copy(corners = sorted) }
+                            }
+                            return@launch
+                        }
+                    } finally {
+                        approx.release()
                     }
                 }
-
-                src.release()
-                gray.release()
-                edges.release()
-                hierarchy.release()
-                resized.release()
 
                 val corners = listOf(
                     PointF(w * padding, h * padding),
@@ -161,7 +169,12 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
                     PointF(w * padding, h * (1 - padding))
                 )
                 _uiState.update { it.copy(corners = corners) }
-            } catch (_: Exception) {
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("PerspectiveCropVM", "autoDetectEdges failed", e)
+                }
                 val w = bitmap.width.toFloat()
                 val h = bitmap.height.toFloat()
                 val padding = 0.03f
@@ -172,6 +185,12 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
                     PointF(w * padding, h * (1 - padding))
                 )
                 _uiState.update { it.copy(corners = corners) }
+            } finally {
+                src.release()
+                gray.release()
+                edges.release()
+                hierarchy.release()
+                resized.release()
             }
         }
     }
@@ -213,12 +232,24 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
         val bitmap = state.originalBitmap ?: return
         val corners = state.corners
         if (corners.size != 4) return
-        viewModelScope.launch {
+        applyCropJob?.cancel()
+        applyCropJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val result = withContext(Dispatchers.Default) {
-                warpPerspective(bitmap, corners)
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    warpPerspective(bitmap, corners)
+                }
+                val old = _uiState.value.processedBitmap
+                _uiState.update { it.copy(processedBitmap = result, isLoading = false) }
+                if (old != null && old != result && !old.isRecycled) old.recycle()
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
+            } catch (e: Exception) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("PerspectiveCropVM", "applyCrop failed", e)
+                }
+                _uiState.update { it.copy(isLoading = false, error = "Crop failed: ${e.message}") }
             }
-            _uiState.update { it.copy(processedBitmap = result, isLoading = false) }
         }
     }
 
@@ -273,7 +304,10 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("PerspectiveCropVM", "saveImage failed", e)
+                }
+                _uiState.update { it.copy(error = e.message ?: "Save failed") }
             }
         }
     }
@@ -283,8 +317,12 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
 
     override fun onCleared() {
         super.onCleared()
-        _uiState.value.originalBitmap?.recycle()
-        _uiState.value.processedBitmap?.recycle()
+        autoDetectJob?.cancel()
+        applyCropJob?.cancel()
+        autoDetectJob = null
+        applyCropJob = null
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
     }
 }
 
@@ -349,7 +387,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, "Share Image"))
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
             },
             onOpen = {
                 try {
@@ -360,7 +398,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
             }
         )
     }

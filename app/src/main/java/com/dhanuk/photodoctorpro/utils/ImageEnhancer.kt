@@ -60,9 +60,10 @@ object ImageEnhancer {
             return@withContext finalResult
 
         } catch (e: Throwable) {
-            e.printStackTrace()
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("ImageEnhancer", "enhanceImage failed", e)
+            }
             // Fallback to pure OpenCV Bicubic if generic error or OOM
-            // Ensure fallback handles size check too (redundant but safe)
             return@withContext OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
         }
     }
@@ -112,50 +113,48 @@ object ImageEnhancer {
                 }
                 else -> OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
             }
-        } catch (e: Throwable) {
-            throw e
         }
     }
 
     private fun applyPostProcessing(bitmap: Bitmap): Bitmap {
         val src = Mat()
-        Utils.bitmapToMat(bitmap, src)
         val dst = Mat()
-        src.copyTo(dst)
-
-        // 1. Unsharp Mask
         val blurred = Mat()
-        Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 3.0)
-        Core.addWeighted(src, 1.5, blurred, -0.5, 0.0, dst)
-
-        // 2. Detail Enhancement (CLAHE)
         val lab = Mat()
-        Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
-        val channels = ArrayList<Mat>()
-        Core.split(lab, channels)
-        val clahe = Imgproc.createCLAHE()
-        clahe.clipLimit = 2.0
-        clahe.apply(channels[0], channels[0])
-        Core.merge(channels, lab)
-        Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2RGB)
-
-        // 3. Denoise (Bilateral Filter)
         val denoised = Mat()
-        Imgproc.bilateralFilter(dst, denoised, 5, 50.0, 50.0)
-        dst.release()
+        val channels = ArrayList<Mat>()
+        try {
+            Utils.bitmapToMat(bitmap, src)
+            src.copyTo(dst)
 
-        val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(denoised, result)
-        denoised.release()
+            // 1. Unsharp Mask
+            Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 3.0)
+            Core.addWeighted(src, 1.5, blurred, -0.5, 0.0, dst)
 
-        src.release()
-        blurred.release()
-        lab.release()
-        channels.forEach { it.release() }
-        clahe.collectGarbage()
+            // 2. Detail Enhancement (CLAHE)
+            Imgproc.cvtColor(dst, lab, Imgproc.COLOR_RGB2Lab)
+            Core.split(lab, channels)
+            val clahe = Imgproc.createCLAHE()
+            clahe.clipLimit = 2.0
+            clahe.apply(channels[0], channels[0])
+            Core.merge(channels, lab)
+            Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2RGB)
 
-        // 4. Vibrance
-        return adjustVibrance(result, 1.1f)
+            // 3. Denoise (Bilateral Filter)
+            Imgproc.bilateralFilter(dst, denoised, 5, 50.0, 50.0)
+
+            val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(denoised, result)
+
+            return adjustVibrance(result, 1.1f)
+        } finally {
+            src.release()
+            dst.release()
+            blurred.release()
+            lab.release()
+            denoised.release()
+            channels.forEach { it.release() }
+        }
     }
 
     private fun adjustVibrance(bitmap: Bitmap, value: Float): Bitmap {
