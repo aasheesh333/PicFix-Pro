@@ -72,47 +72,45 @@ object ImageEnhancer {
         val esrganX2 = getEsrgan(context, "esrgan_x2.tflite")
         val esrganX4 = getEsrgan(context, "esrgan_x4.tflite")
 
-        try {
-            return when (scaleFactor) {
-                2 -> {
-                    if (esrganX2.isReady()) esrganX2.enhance(bitmap)
-                    else OpenCVEnhancerFallback.enhance(bitmap, 2)
-                }
-                4 -> {
-                    if (esrganX4.isReady()) esrganX4.enhance(bitmap)
-                    else if (esrganX2.isReady()) {
-                        val step1 = esrganX2.enhance(bitmap)
-                        val step2 = esrganX2.enhance(step1)
-                        step1.recycle()
-                        step2
-                    }
-                    else OpenCVEnhancerFallback.enhance(bitmap, 4)
-                }
-                6 -> {
-                    val step1 = if (esrganX2.isReady()) esrganX2.enhance(bitmap) else OpenCVEnhancerFallback.enhance(bitmap, 2)
-                    val w = step1.width * 3
-                    val h = step1.height * 3
-                    val step2 = Bitmap.createScaledBitmap(step1, w, h, true)
-                    if (step1 != bitmap) step1.recycle()
-                    step2
-                }
-                8 -> {
-                    val step1 = if (esrganX4.isReady()) esrganX4.enhance(bitmap)
-                                else if (esrganX2.isReady()) {
-                                    val s1 = esrganX2.enhance(bitmap)
-                                    val s2 = esrganX2.enhance(s1)
-                                    s1.recycle()
-                                    s2
-                                } else OpenCVEnhancerFallback.enhance(bitmap, 4)
-
-                    val step2 = if (esrganX2.isReady()) esrganX2.enhance(step1)
-                                else OpenCVEnhancerFallback.enhance(step1, 2)
-
-                    if (step1 != bitmap) step1.recycle()
-                    step2
-                }
-                else -> OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
+        return when (scaleFactor) {
+            2 -> {
+                if (esrganX2.isReady()) esrganX2.enhance(bitmap)
+                else OpenCVEnhancerFallback.enhance(bitmap, 2)
             }
+            4 -> {
+                if (esrganX4.isReady()) esrganX4.enhance(bitmap)
+                else if (esrganX2.isReady()) {
+                    val step1 = esrganX2.enhance(bitmap)
+                    val step2 = esrganX2.enhance(step1)
+                    step1.recycle()
+                    step2
+                }
+                else OpenCVEnhancerFallback.enhance(bitmap, 4)
+            }
+            6 -> {
+                val step1 = if (esrganX2.isReady()) esrganX2.enhance(bitmap) else OpenCVEnhancerFallback.enhance(bitmap, 2)
+                val w = step1.width * 3
+                val h = step1.height * 3
+                val step2 = Bitmap.createScaledBitmap(step1, w, h, true)
+                if (step1 != bitmap) step1.recycle()
+                step2
+            }
+            8 -> {
+                val step1 = if (esrganX4.isReady()) esrganX4.enhance(bitmap)
+                            else if (esrganX2.isReady()) {
+                                val s1 = esrganX2.enhance(bitmap)
+                                val s2 = esrganX2.enhance(s1)
+                                s1.recycle()
+                                s2
+                            } else OpenCVEnhancerFallback.enhance(bitmap, 4)
+
+                val step2 = if (esrganX2.isReady()) esrganX2.enhance(step1)
+                            else OpenCVEnhancerFallback.enhance(step1, 2)
+
+                if (step1 != bitmap) step1.recycle()
+                step2
+            }
+            else -> OpenCVEnhancerFallback.enhance(bitmap, scaleFactor)
         }
     }
 
