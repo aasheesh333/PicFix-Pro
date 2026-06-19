@@ -61,16 +61,23 @@ class FaceEnhancer private constructor(private val context: Context) {
     private val MODEL_SIZE = 512
 
     init {
-        val modelFile = runCatching { loadModelFile("gfpgan.tflite") }
-            .onFailure { logError("Failed to load GFPGAN model: ${it.message}") }
-            .getOrNull() ?: return
+        val loaded = runCatching { loadModelFile("gfpgan.tflite") }
+        val modelFile = if (loaded.isSuccess) {
+            loaded.getOrNull()
+        } else {
+            logError("Failed to load GFPGAN model: ${loaded.exceptionOrNull()?.message}")
+            null
+        }
 
-        runCatching {
+        if (modelFile == null) return
+
+        val initResult = runCatching {
             val options = Interpreter.Options()
             tryGpuDelegate(options)
             interpreter = Interpreter(modelFile, options)
-        }.onFailure {
-            logError("FaceEnhancer init failed: ${it.message}")
+        }
+        if (initResult.isFailure) {
+            logError("FaceEnhancer init failed: ${initResult.exceptionOrNull()?.message}")
             close()
         }
     }

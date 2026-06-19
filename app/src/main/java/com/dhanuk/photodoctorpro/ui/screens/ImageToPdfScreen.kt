@@ -30,6 +30,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import java.io.File
 
@@ -37,7 +38,7 @@ import java.io.File
 @Composable
 fun ImageToPdfScreen(navController: NavController) {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
     val repository = HistoryRepository(db.historyDao())
     val viewModel: ImageToPdfViewModel = viewModel(factory = ViewModelFactory(repository))

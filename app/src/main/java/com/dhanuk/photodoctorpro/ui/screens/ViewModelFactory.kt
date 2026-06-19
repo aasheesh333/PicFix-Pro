@@ -26,6 +26,26 @@ class ViewModelFactory(private val repository: HistoryRepository) : ViewModelPro
             @Suppress("UNCHECKED_CAST")
             return ImageToPdfViewModel(repository) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        if (modelClass.isAssignableFrom(ColorAdjustmentsViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ColorAdjustmentsViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(ResizeCompressViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ResizeCompressViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(PerspectiveCropViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return PerspectiveCropViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(ExifStripperViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ExifStripperViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(MemeMakerViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return MemeMakerViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
