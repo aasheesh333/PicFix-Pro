@@ -61,7 +61,7 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         enhanceJob = viewModelScope.launch {
             try {
                 val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor)
-                ensureActive()
+checkActive()
                 val old = _uiState.value.enhancedBitmap
                 _uiState.value = _uiState.value.copy(
                     enhancedBitmap = enhanced,
@@ -83,7 +83,7 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         }
     }
 
-    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
+    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     suspend fun saveImage(activity: Activity): Boolean {
         val bitmap = _uiState.value.enhancedBitmap ?: return false

@@ -17,7 +17,6 @@ import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -147,20 +146,25 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
                 } else {
                     sourceBitmap
                 }
-                ensureActive()
+                if (workingBitmap == null) {
+                    _uiState.value = _uiState.value.copy(isErasing = false, error = "Could not allocate bitmap")
+                    return@launch
+                }
+                checkActive()
 
-                softMask = createMask(workingBitmap.width, workingBitmap.height, paths)
-                ensureActive()
+                val safeWorking = workingBitmap!!
+                softMask = createMask(safeWorking.width, safeWorking.height, paths)
+                checkActive()
 
                 val maxStroke = paths.maxOfOrNull { it.strokeWidth } ?: 20f
                 val maxSoftness = paths.maxOfOrNull { it.softness } ?: 0f
                 val dynamicRadius = max(15.0, maxStroke / 3.0) + (maxSoftness / 2.0)
 
-                val resultBitmap = applyInpainting(workingBitmap, softMask, dynamicRadius)
-                ensureActive()
+                val resultBitmap = applyInpainting(safeWorking, softMask!!, dynamicRadius)
+                checkActive()
 
                 softMask = null
-                if (workingBitmap != sourceBitmap) workingBitmap.recycle()
+                if (safeWorking != sourceBitmap) safeWorking.recycle()
                 workingBitmap = null
 
                 val oldProcessed = _uiState.value.processedBitmap
@@ -190,7 +194,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
 
     private var eraseJob: kotlinx.coroutines.Job? = null
 
-    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
+    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().checkActive()
 
     private fun pushToStack(stack: Stack<Bitmap>, bitmap: Bitmap) {
         if (stack.size >= MAX_STACK_SIZE) {

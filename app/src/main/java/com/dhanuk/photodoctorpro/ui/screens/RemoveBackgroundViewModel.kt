@@ -23,7 +23,6 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -81,11 +80,11 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         removeBgJob = viewModelScope.launch {
             try {
                 val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                ensureActive()
+                checkActive()
                 val mask = processToGetMask(inputBitmap)
-                ensureActive()
+                checkActive()
                 val result = applyMaskToOriginal(inputBitmap, mask)
-                ensureActive()
+                checkActive()
                 if (inputBitmap != rawBitmap && !inputBitmap.isRecycled) inputBitmap.recycle()
 
                 val oldProcessed = _uiState.value.processedBitmap
@@ -116,7 +115,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         }
     }
 
-    private suspend fun ensureActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
+    private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().checkActive()
 
     private suspend fun processToGetMask(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         val options = SubjectSegmenterOptions.Builder()
@@ -202,7 +201,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         refinementJob = viewModelScope.launch {
              try {
                  val result = applyMaskToOriginal(original, mask)
-                 ensureActive()
+                 checkActive()
                  val old = _uiState.value.processedBitmap
                  _uiState.value = _uiState.value.copy(
                      processedBitmap = result,

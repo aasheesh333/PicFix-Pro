@@ -25,22 +25,18 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     private var scaleFactor: Int = -1
 
     init {
-        val modelFile = try {
-            loadModelFile(modelFilename)
-        } catch (e: Exception) {
-            logError("Failed to load model file: ${e.message}")
-            return
-        }
+        val modelFile = runCatching { loadModelFile(modelFilename) }
+            .onFailure { logError("Failed to load model file: ${it.message}") }
+            .getOrNull() ?: return
 
-        try {
+        runCatching {
             val options = Interpreter.Options()
-            val compatList = CompatibilityList()
-            tryGpuDelegate(options, compatList)
+            tryGpuDelegate(options, CompatibilityList())
             interpreter = Interpreter(modelFile, options)
             inputShape = interpreter?.getInputTensor(0)?.shape()
             detectScaleFactor()
-        } catch (e: Throwable) {
-            logError("Interpreter initialization failed: ${e.message}")
+        }.onFailure {
+            logError("Interpreter initialization failed: ${it.message}")
             interpreter = null
             close()
         }

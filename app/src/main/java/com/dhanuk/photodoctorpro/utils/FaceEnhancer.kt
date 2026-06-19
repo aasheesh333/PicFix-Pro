@@ -38,6 +38,12 @@ class FaceEnhancer private constructor(private val context: Context) {
                 INSTANCE ?: FaceEnhancer(context.applicationContext).also { INSTANCE = it }
             }
         }
+
+        private fun logError(msg: String) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("FaceEnhancer", msg)
+            }
+        }
     }
 
     private val faceDetector by lazy {
@@ -55,28 +61,17 @@ class FaceEnhancer private constructor(private val context: Context) {
     private val MODEL_SIZE = 512
 
     init {
-        val modelFile = try {
-            loadModelFile("gfpgan.tflite")
-        } catch (e: Exception) {
-            logError("Failed to load GFPGAN model: ${e.message}")
-            return
-        }
+        val modelFile = runCatching { loadModelFile("gfpgan.tflite") }
+            .onFailure { logError("Failed to load GFPGAN model: ${it.message}") }
+            .getOrNull() ?: return
 
-        try {
+        runCatching {
             val options = Interpreter.Options()
             tryGpuDelegate(options)
             interpreter = Interpreter(modelFile, options)
-        } catch (e: Throwable) {
-            logError("FaceEnhancer init failed: ${e.message}")
+        }.onFailure {
+            logError("FaceEnhancer init failed: ${it.message}")
             close()
-        }
-    }
-
-    companion object {
-        private fun logError(msg: String) {
-            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
-                android.util.Log.e("FaceEnhancer", msg)
-            }
         }
     }
 
