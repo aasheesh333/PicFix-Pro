@@ -179,7 +179,11 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
     private fun sortCorners(pts: List<Point>, scale: Float): List<PointF> {
         val w = _uiState.value.originalBitmap?.width?.toFloat() ?: return emptyList()
         val h = _uiState.value.originalBitmap?.height?.toFloat() ?: return emptyList()
-        val mapped = pts.map { PointF((it.x / scale).coerceIn(0f, w), (it.y / scale).coerceIn(0f, h)) }
+        val mapped = pts.map {
+            val nx = (it.x / scale.toDouble()).coerceIn(0.0, w.toDouble()).toFloat()
+            val ny = (it.y / scale.toDouble()).coerceIn(0.0, h.toDouble()).toFloat()
+            PointF(nx, ny)
+        }
         val sortedByY = mapped.sortedBy { it.y }
         val top = sortedByY.take(2).sortedBy { it.x }
         val bottom = sortedByY.drop(2).sortedByDescending { it.x }
