@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -312,7 +313,6 @@ fun EraserEditor(
     var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
     val bitmapToShow = uiState.processedBitmap ?: uiState.originalBitmap ?: return
-    val bitmapToShowImage = rememberBitmap(bitmapToShow)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
@@ -417,9 +417,13 @@ fun EraserEditor(
                         transformOrigin = TransformOrigin(0f, 0f)
                     )
             ) {
-                if (bitmapToShowImage != null) {
+                if (bitmapToShow != null) {
+                    val bitmapToShowImage = remember(bitmapToShow) {
+                        bitmapToShow.takeIf { !it.isRecycled }?.asImageBitmap()
+                    }
+                    bitmapToShowImage?.let { img ->
                     Image(
-                        bitmap = bitmapToShowImage,
+                        bitmap = img,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
@@ -427,7 +431,6 @@ fun EraserEditor(
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val viewAspectRatio = size.width / size.height
-                    val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
 
                     var drawWidth = size.width
                     var drawHeight = size.height
@@ -470,6 +473,7 @@ fun EraserEditor(
 
                     drawContext.canvas.restore()
                 }
+                }
             }
 
             if (pathVersion > 0 && !livePath.isEmpty) {
@@ -490,4 +494,5 @@ fun EraserEditor(
             }
         }
     }
+}
 }
