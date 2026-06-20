@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -40,6 +41,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
@@ -303,10 +305,10 @@ fun MemeMakerScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Meme Maker") },
+                title = { Text(stringResource(R.string.meme_maker)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 }
             )
@@ -330,7 +332,7 @@ fun MemeMakerScreen(navController: NavController) {
                 if (processedImage != null) {
                     Image(
                         bitmap = processedImage,
-                        contentDescription = "Meme Preview",
+                        contentDescription = stringResource(R.string.meme_share),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
@@ -338,10 +340,10 @@ fun MemeMakerScreen(navController: NavController) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.TextFields, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Create viral memes in seconds", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.meme_maker_subtitle), style = MaterialTheme.typography.bodyLarge)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Pick Image")
+                            Text(stringResource(R.string.pick_image))
                         }
                     }
                 }
@@ -352,14 +354,14 @@ fun MemeMakerScreen(navController: NavController) {
                     OutlinedTextField(
                         value = uiState.topText,
                         onValueChange = { viewModel.setTopText(it) },
-                        label = { Text("Top Text") },
+                        label = { Text(stringResource(R.string.top_text_hint)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = uiState.bottomText,
                         onValueChange = { viewModel.setBottomText(it) },
-                        label = { Text("Bottom Text") },
+                        label = { Text(stringResource(R.string.bottom_text_hint)) },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -369,15 +371,15 @@ fun MemeMakerScreen(navController: NavController) {
                         OutlinedButton(
                             onClick = { imagePickerLauncher.launch("image/*") },
                             modifier = Modifier.weight(1f)
-                        ) { Text("New Image") }
+                        ) { Text(stringResource(R.string.new_image)) }
                         Spacer(modifier = Modifier.width(16.dp))
                         Button(
                             onClick = { viewModel.saveImage(context) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Save, contentDescription = "Save")
+                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.cd_save_directory))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 }

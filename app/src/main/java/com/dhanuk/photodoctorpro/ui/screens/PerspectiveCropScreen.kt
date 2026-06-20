@@ -44,12 +44,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
+import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
@@ -418,10 +420,10 @@ fun PerspectiveCropScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Document Scanner") },
+                title = { Text(stringResource(R.string.document_scanner)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 },
                 actions = {
@@ -559,12 +561,12 @@ if (processedImage == null) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Auto-flatten documents & photos", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.auto_flatten_documents_photos), style = MaterialTheme.typography.bodyLarge)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Drag corners to adjust", color = MaterialTheme.colorScheme.secondary)
+                        Text(stringResource(R.string.drag_corners_to_adjust), color = MaterialTheme.colorScheme.secondary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Pick Image")
+                            Text(stringResource(R.string.pick_image))
                         }
                     }
                 }
@@ -578,23 +580,23 @@ if (processedImage == null) {
                     OutlinedButton(onClick = { viewModel.autoDetect() }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Auto")
+                        Text(stringResource(R.string.action_auto))
                     }
                     OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) {
-                        Text("New")
+                        Text(stringResource(R.string.action_new))
                     }
                     if (uiState.processedBitmap == null) {
                         Button(onClick = { viewModel.applyCrop() }, modifier = Modifier.weight(1f)) {
-                            Text("Crop")
+                            Text(stringResource(R.string.action_crop))
                         }
                     } else {
                         Button(
                             onClick = { viewModel.saveImage(context) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Save, contentDescription = "Save")
+                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.cd_save_directory))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 }

@@ -115,7 +115,7 @@ fun ObjectEraserScreen(navController: NavController) {
                              navController.popBackStack()
                          }
                      }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
                 Row {
@@ -123,8 +123,8 @@ fun ObjectEraserScreen(navController: NavController) {
                         showUnsavedDialog = false
                         viewModel.reset()
                         navController.popBackStack()
-                    }) { Text("Discard") }
-                    TextButton(onClick = { showUnsavedDialog = false }) { Text("Cancel") }
+                    }) { Text(stringResource(R.string.action_discard)) }
+                    TextButton(onClick = { showUnsavedDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
             }
         )
@@ -250,14 +250,14 @@ fun ObjectEraserScreen(navController: NavController) {
                 }
             } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Brush Size: ${uiState.brushSize.toInt()}")
+                    Text(stringResource(R.string.brush_size_value, uiState.brushSize.toInt()))
                     Slider(
                         value = uiState.brushSize,
                         onValueChange = { viewModel.onBrushSizeChanged(it) },
                         valueRange = 10f..100f
                     )
 
-                    Text("Brush Softness: ${uiState.brushSoftness.toInt()}")
+                    Text(stringResource(R.string.brush_softness_value, uiState.brushSoftness.toInt()))
                     Slider(
                         value = uiState.brushSoftness,
                         onValueChange = { viewModel.onBrushSoftnessChanged(it) },
@@ -269,13 +269,13 @@ fun ObjectEraserScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         OutlinedButton(onClick = { viewModel.undo() }, enabled = uiState.canUndo) {
-                            Text("Undo")
+                            Text(stringResource(R.string.undo))
                         }
                         Button(onClick = { viewModel.eraseObjects() }, enabled = uiState.paths.isNotEmpty()) {
-                            Text("Erase")
+                            Text(stringResource(R.string.erase))
                         }
                         OutlinedButton(onClick = { viewModel.redo() }, enabled = uiState.canRedo) {
-                            Text("Redo")
+                            Text(stringResource(R.string.action_redo))
                         }
                     }
 
@@ -286,11 +286,11 @@ fun ObjectEraserScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         Button(onClick = { scope.launch { viewModel.saveImage(activity) } }, modifier = Modifier.weight(1f)) {
-                            Text("Save")
+                            Text(stringResource(R.string.action_save))
                         }
                         Spacer(Modifier.width(16.dp))
                         OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.weight(1f)) {
-                            Text("Reset")
+                            Text(stringResource(R.string.reset))
                         }
                     }
                 }

@@ -319,7 +319,7 @@ fun ResizeCompressScreen(navController: NavController) {
                             ) {
                                 Icon(
                                     if (uiState.maintainAspectRatio) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                                    contentDescription = "Lock aspect ratio",
+                                    contentDescription = stringResource(R.string.cd_maintain_aspect_ratio),
                                     tint = if (uiState.maintainAspectRatio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )

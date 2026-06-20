@@ -22,6 +22,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.ViewModel
@@ -29,6 +30,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
@@ -225,10 +227,10 @@ fun ExifStripperScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Privacy Doctor") },
+                title = { Text(stringResource(R.string.privacy_doctor)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 }
             )
@@ -245,7 +247,7 @@ fun ExifStripperScreen(navController: NavController) {
                 if (previewImage != null) {
                     Image(
                         bitmap = previewImage,
-                        contentDescription = "Preview",
+                        contentDescription = stringResource(R.string.cd_image_preview),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
@@ -253,12 +255,12 @@ fun ExifStripperScreen(navController: NavController) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Strip hidden metadata from your photos", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.privacy_doctor_subtitle), style = MaterialTheme.typography.bodyLarge)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Remove GPS, camera info, and timestamps", color = MaterialTheme.colorScheme.secondary)
+                        Text(stringResource(R.string.exif_metadata_header), color = MaterialTheme.colorScheme.secondary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Text("Pick Image to Scan")
+                            Text(stringResource(R.string.pick_image))
                         }
                     }
                 }
@@ -272,7 +274,7 @@ fun ExifStripperScreen(navController: NavController) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("⚠️ Hidden data found:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+                                Text(stringResource(R.string.has_exif_metadata), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(uiState.exifSummary, color = MaterialTheme.colorScheme.onErrorContainer)
                             }
@@ -283,7 +285,7 @@ fun ExifStripperScreen(navController: NavController) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                         ) {
                             Text(
-                                "✓ No hidden metadata found. Safe to share!",
+                                stringResource(R.string.no_exif_metadata),
                                 modifier = Modifier.padding(16.dp),
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
@@ -294,16 +296,16 @@ fun ExifStripperScreen(navController: NavController) {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) {
-                            Text("New Image")
+                            Text(stringResource(R.string.new_image))
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Button(
                             onClick = { viewModel.saveCleanImage(context) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Save, contentDescription = "Save")
+                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.cd_save_directory))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save Clean")
+                            Text(stringResource(R.string.strip_save))
                         }
                     }
                 }

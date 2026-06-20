@@ -104,7 +104,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                              navController.popBackStack()
                          }
                      }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
                 Row {
@@ -112,8 +112,8 @@ fun RemoveBackgroundScreen(navController: NavController) {
                         showUnsavedDialog = false
                         viewModel.reset()
                         navController.popBackStack()
-                    }) { Text("Discard") }
-                    TextButton(onClick = { showUnsavedDialog = false }) { Text("Cancel") }
+                    }) { Text(stringResource(R.string.action_discard)) }
+                    TextButton(onClick = { showUnsavedDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
             }
         )
@@ -261,7 +261,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 } else {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         OutlinedButton(onClick = { viewModel.startRefining() }) {
-                            Text("Refine Edges")
+                            Text(stringResource(R.string.refine_edges))
                         }
                         Button(onClick = { scope.launch { viewModel.saveImage(activity) } }) {
                             Text(stringResource(R.string.save_png))
@@ -383,13 +383,13 @@ fun RefineEditor(
                         Icon(Icons.Default.Remove, "Erase")
                     }
                 }
-                IconButton(onClick = { viewModel.redo() }) { Icon(Icons.Default.ArrowForward, "Redo") }
+                IconButton(onClick = { viewModel.redo() }) { Icon(Icons.Default.ArrowForward, stringResource(R.string.action_redo)) }
             }
 
-            Text("Brush Size")
+            Text(stringResource(R.string.brush_size))
             Slider(value = brushSize, onValueChange = { brushSize = it }, valueRange = 10f..100f)
 
-            Text("Brush Softness: ${feather.toInt()}")
+            Text(stringResource(R.string.brush_softness_value, feather.toInt()))
             Slider(
                 value = feather,
                 onValueChange = { feather = it },

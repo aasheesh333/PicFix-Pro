@@ -88,7 +88,7 @@ fun EnhanceImageScreen(navController: NavController) {
                             navController.popBackStack()
                         }
                     }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
                 Row {
@@ -96,8 +96,8 @@ fun EnhanceImageScreen(navController: NavController) {
                         showUnsavedDialog = false
                         viewModel.reset()
                         navController.popBackStack()
-                    }) { Text("Discard") }
-                    TextButton(onClick = { showUnsavedDialog = false }) { Text("Cancel") }
+                    }) { Text(stringResource(R.string.action_discard)) }
+                    TextButton(onClick = { showUnsavedDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
             }
         )
@@ -203,7 +203,7 @@ fun EnhanceImageScreen(navController: NavController) {
                     Text(stringResource(R.string.select_image))
                 }
             } else if (uiState.enhancedBitmap == null) {
-                Text("Select Upscale Factor:")
+                Text(stringResource(R.string.select_upscale_factor))
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                     listOf(2, 4, 6, 8).forEach { scale ->
                         val isEnabled = !uiState.isLoading && !(uiState.isLargeImage && scale > 4)
@@ -211,14 +211,14 @@ fun EnhanceImageScreen(navController: NavController) {
                             onClick = { viewModel.enhanceImage(context, scale) },
                             enabled = isEnabled
                         ) {
-                            Text("${scale}x")
+                            Text(stringResource(R.string.scale_factor_x, scale))
                         }
                     }
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Button(onClick = { scope.launch { viewModel.saveImage(activity) } }, modifier = Modifier.weight(1f)) {
-                        Text("Save")
+                        Text(stringResource(R.string.action_save))
                     }
                     Spacer(Modifier.width(16.dp))
                     OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.weight(1f)) {
