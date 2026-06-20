@@ -431,6 +431,7 @@ fun EraserEditor(
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val viewAspectRatio = size.width / size.height
+                    val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
 
                     var drawWidth = size.width
                     var drawHeight = size.height
