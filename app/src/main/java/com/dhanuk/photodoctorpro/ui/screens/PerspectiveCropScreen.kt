@@ -3,7 +3,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -54,6 +53,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,9 +90,7 @@ class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val bitmap = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        BitmapFactory.decodeStream(stream)
-                    }
+                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 }
                 if (bitmap == null) {
                     _uiState.update { it.copy(isLoading = false, error = "Could not decode image") }
@@ -338,6 +336,9 @@ fun PerspectiveCropScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val processedImage = rememberBitmap(uiState.processedBitmap)
     var compareMode by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -413,7 +414,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    if (uiState.originalBitmap != null && uiState.processedBitmap != null) {
+                    if (originalImage != null && processedImage != null) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
                                 Icons.Default.Compare,
@@ -438,16 +439,16 @@ fun PerspectiveCropScreen(navController: NavController) {
                     .onSizeChanged { canvasSize = it },
                 contentAlignment = Alignment.Center
             ) {
-                if (uiState.originalBitmap != null && uiState.processedBitmap != null && compareMode) {
+                if (originalImage != null && processedImage != null && compareMode) {
                     BeforeAfterSlider(
-                        beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                        afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                        beforeImage = originalImage,
+                        afterImage = processedImage,
                         modifier = Modifier.fillMaxSize().padding(8.dp)
                     )
-                } else if (uiState.originalBitmap != null) {
-                    if (uiState.processedBitmap != null && !compareMode) {
+                } else if (originalImage != null) {
+                    if (processedImage != null && !compareMode) {
                         Image(
-                            bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                            bitmap = processedImage,
                             contentDescription = "Cropped",
                             modifier = Modifier.fillMaxSize().padding(8.dp),
                             contentScale = ContentScale.Fit
@@ -455,12 +456,12 @@ fun PerspectiveCropScreen(navController: NavController) {
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
                             Image(
-                                bitmap = uiState.originalBitmap!!.asImageBitmap(),
+                                bitmap = originalImage,
                                 contentDescription = "Document",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
-                            if (uiState.processedBitmap == null) {
+if (processedImage == null) {
                                 Canvas(modifier = Modifier.fillMaxSize()) {
                                     val w = size.width
                                     val h = size.height
@@ -558,7 +559,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                 }
             }
 
-            if (uiState.originalBitmap != null) {
+            if (originalImage != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

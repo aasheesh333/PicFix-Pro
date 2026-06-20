@@ -71,6 +71,7 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import java.text.DecimalFormat
@@ -87,6 +88,9 @@ fun ResizeCompressScreen(navController: NavController) {
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var compareMode by remember { mutableStateOf(false) }
     var showCustomPanel by remember { mutableStateOf(false) }
+
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val processedImage = rememberBitmap(uiState.processedBitmap)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -225,19 +229,19 @@ fun ResizeCompressScreen(navController: NavController) {
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (compareMode && uiState.processedBitmap != null) {
+                    if (compareMode && originalImage != null && processedImage != null) {
                         BeforeAfterSlider(
-                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                            afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                            beforeImage = originalImage,
+                            afterImage = processedImage,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(8.dp)
                         )
                     } else {
                         when {
-                            uiState.processedBitmap != null -> {
+                            processedImage != null -> {
                                 Image(
-                                    bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                                    bitmap = processedImage,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .fillMaxSize()

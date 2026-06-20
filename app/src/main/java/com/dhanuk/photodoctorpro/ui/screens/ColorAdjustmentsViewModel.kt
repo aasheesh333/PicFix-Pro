@@ -2,7 +2,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
@@ -61,17 +60,19 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
         viewModelScope.launch {
             try {
                 val bitmap = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        BitmapFactory.decodeStream(stream)
-                    }
+                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 }
                 if (bitmap == null) {
                     _uiState.update { it.copy(error = "Could not decode image", isLoading = false) }
                     return@launch
                 }
-                val argb = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val argb = if (bitmap.config != Bitmap.Config.ARGB_8888 || !bitmap.isMutable) {
+                    bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                } else {
+                    bitmap
+                }
                 if (argb == null) {
-                    if (!bitmap.isRecycled) bitmap.recycle()
+                    bitmap.takeIf { !it.isRecycled }?.recycle()
                     _uiState.update { it.copy(error = "Could not allocate bitmap", isLoading = false) }
                     return@launch
                 }
@@ -79,6 +80,7 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
                 originalBitmapCopy?.takeIf { !it.isRecycled }?.recycle()
                 if (argb != bitmap && !bitmap.isRecycled) bitmap.recycle()
                 originalBitmapCopy = newOriginal
+                val oldProcessed = _uiState.value.processedBitmap
                 _uiState.update {
                     it.copy(
                         selectedImageUri = uri,
@@ -87,6 +89,7 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
                         isLoading = false
                     )
                 }
+                if (oldProcessed != null && oldProcessed != newOriginal && !oldProcessed.isRecycled) oldProcessed.recycle()
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ColorVM", "setOriginal failed", e)

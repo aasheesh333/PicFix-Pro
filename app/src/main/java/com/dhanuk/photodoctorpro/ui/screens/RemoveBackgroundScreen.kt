@@ -42,6 +42,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -67,6 +68,9 @@ fun RemoveBackgroundScreen(navController: NavController) {
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
+
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val processedImage = rememberBitmap(uiState.processedBitmap)
 
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
@@ -220,10 +224,10 @@ fun RemoveBackgroundScreen(navController: NavController) {
                         maskVersion = viewModel.maskVersion.value
                     )
                 } else {
-                    if (uiState.processedBitmap != null && uiState.originalBitmap != null) {
+                    if (originalImage != null && processedImage != null) {
                         BeforeAfterSlider(
-                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                            afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                            beforeImage = originalImage,
+                            afterImage = processedImage,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (uiState.selectedImageUri != null) {
@@ -283,6 +287,9 @@ fun RefineEditor(
     var feather by remember { mutableStateOf(0f) }
     var isAddMode by remember { mutableStateOf(false) }
 
+    val originalImage = rememberBitmap(original)
+    val maskImage = remember(maskVersion) { mask.asImageBitmap() }
+
     var currentPath by remember { mutableStateOf(android.graphics.Path()) }
     val zoomState = rememberZoomableBoxState()
 
@@ -330,13 +337,12 @@ fun RefineEditor(
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Image(
-                        bitmap = original.asImageBitmap(),
+                        bitmap = originalImage ?: return@Box,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
 
-                    val maskImage = remember(maskVersion) { mask.asImageBitmap() }
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val viewAspectRatio = size.width / size.height
                         val imageAspectRatio = original.width.toFloat() / original.height.toFloat()

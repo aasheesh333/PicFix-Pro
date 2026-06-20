@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +31,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
@@ -53,6 +53,9 @@ fun EnhanceImageScreen(navController: NavController) {
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     val hasUnsavedChanges = uiState.enhancedBitmap != null && uiState.savedFilePath == null
+
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val enhancedImage = rememberBitmap(uiState.enhancedBitmap)
 
     // Hold to compare
     var isHoldingOriginal by remember { mutableStateOf(false) }
@@ -173,10 +176,10 @@ fun EnhanceImageScreen(navController: NavController) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    if (uiState.enhancedBitmap != null && uiState.originalBitmap != null) {
+                    if (originalImage != null && enhancedImage != null) {
                         BeforeAfterSlider(
-                            beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                            afterImage = uiState.enhancedBitmap!!.asImageBitmap(),
+                            beforeImage = originalImage,
+                            afterImage = enhancedImage,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (uiState.selectedImageUri != null) {

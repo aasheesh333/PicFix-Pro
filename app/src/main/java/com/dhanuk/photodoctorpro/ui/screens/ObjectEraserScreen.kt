@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,6 +52,7 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -75,6 +75,9 @@ fun ObjectEraserScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
     val globalState = LocalGlobalNavigationState.current
     var compareMode by remember { mutableStateOf(false) }
+
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val processedImage = rememberBitmap(uiState.processedBitmap)
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
@@ -215,10 +218,10 @@ fun ObjectEraserScreen(navController: NavController) {
             ) {
                 if (uiState.isLoading || uiState.isErasing) {
                     CircularProgressIndicator()
-                } else if (uiState.originalBitmap != null && compareMode && uiState.processedBitmap != null) {
+                } else if (originalImage != null && compareMode && processedImage != null) {
                     BeforeAfterSlider(
-                        beforeImage = uiState.originalBitmap!!.asImageBitmap(),
-                        afterImage = uiState.processedBitmap!!.asImageBitmap(),
+                        beforeImage = originalImage,
+                        afterImage = processedImage,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else if (uiState.originalBitmap != null) {
@@ -308,7 +311,8 @@ fun EraserEditor(
     var pathVersion by remember { mutableStateOf(0) }
     var layoutSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
-    val bitmapToShow = uiState.processedBitmap ?: uiState.originalBitmap!!
+    val bitmapToShow = uiState.processedBitmap ?: uiState.originalBitmap ?: return
+    val bitmapToShowImage = rememberBitmap(bitmapToShow)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
@@ -413,12 +417,13 @@ fun EraserEditor(
                         transformOrigin = TransformOrigin(0f, 0f)
                     )
             ) {
-                Image(
-                    bitmap = bitmapToShow.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
+                bitmapToShowImage?.let { img ->
+                    Image(
+                        bitmap = img,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val viewAspectRatio = size.width / size.height
@@ -465,7 +470,7 @@ fun EraserEditor(
 
                     drawContext.canvas.restore()
                 }
-            }
+                }
 
             if (pathVersion > 0 && !livePath.isEmpty) {
                 Canvas(modifier = Modifier.fillMaxSize()) {

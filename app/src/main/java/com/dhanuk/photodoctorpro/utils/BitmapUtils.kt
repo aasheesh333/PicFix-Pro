@@ -42,6 +42,7 @@ object BitmapUtils {
 
     suspend fun loadBitmapFromUri(uri: Uri, context: Context, maxDimension: Int = 3000): Bitmap? = withContext(Dispatchers.IO) {
         var inputStream: InputStream? = null
+        var bitmap: Bitmap? = null
         try {
             // 1. Decode bounds only
             inputStream = context.contentResolver.openInputStream(uri)
@@ -59,25 +60,28 @@ object BitmapUtils {
 
             // 3. Decode full bitmap with subsampling
             inputStream = context.contentResolver.openInputStream(uri)
-            var bitmap = BitmapFactory.decodeStream(inputStream, null, options)
+            bitmap = BitmapFactory.decodeStream(inputStream, null, options)
+            inputStream?.close()
 
             // 4. Handle EXIF Rotation
             if (bitmap != null) {
-                inputStream?.close()
                 inputStream = context.contentResolver.openInputStream(uri)
                 if (inputStream != null) {
-                   val exifInterface = ExifInterface(inputStream)
-                   val orientation = exifInterface.getAttributeInt(
-                       ExifInterface.TAG_ORIENTATION,
-                       ExifInterface.ORIENTATION_NORMAL
-                   )
-                   bitmap = rotateBitmap(bitmap, orientation)
+                    val exifInterface = ExifInterface(inputStream)
+                    val orientation = exifInterface.getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION,
+                        ExifInterface.ORIENTATION_NORMAL
+                    )
+                    if (orientation != ExifInterface.ORIENTATION_NORMAL) {
+                        bitmap = rotateBitmap(bitmap, orientation)
+                    }
                 }
             }
 
             return@withContext bitmap
         } catch (e: Exception) {
-            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "loadBitmapFromUri failed", e)
+            bitmap?.takeIf { !it.isRecycled }?.recycle()
             return@withContext null
         } finally {
             inputStream?.close()

@@ -3,7 +3,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -27,7 +26,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +40,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import kotlinx.coroutines.Dispatchers
@@ -75,11 +74,12 @@ class MemeMakerViewModel(private val repository: com.dhanuk.photodoctorpro.data.
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val bitmap = withContext(Dispatchers.IO) {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    BitmapFactory.decodeStream(inputStream)
+                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 }
                 if (bitmap != null) {
                     val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                    val oldOriginal = _uiState.value.originalBitmap
+                    val oldProcessed = _uiState.value.processedBitmap
                     _uiState.update {
                         it.copy(
                             originalBitmap = argbBitmap,
@@ -87,9 +87,17 @@ class MemeMakerViewModel(private val repository: com.dhanuk.photodoctorpro.data.
                             isLoading = false
                         )
                     }
+                    if (oldOriginal != null && oldOriginal != argbBitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
+                    if (oldProcessed != null && !oldProcessed.isRecycled) oldProcessed.recycle()
+                    if (argbBitmap != bitmap && !bitmap.isRecycled) bitmap.recycle()
+                } else {
+                    _uiState.update { it.copy(error = "Failed to load image", isLoading = false) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message, isLoading = false) }
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("MemeMakerVM", "onImageSelected failed", e)
+                }
+                _uiState.update { it.copy(error = e.message ?: "Load failed", isLoading = false) }
             }
         }
     }
@@ -211,6 +219,9 @@ fun MemeMakerScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
+    val originalImage = rememberBitmap(uiState.originalBitmap)
+    val processedImage = rememberBitmap(uiState.processedBitmap)
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
@@ -301,9 +312,9 @@ fun MemeMakerScreen(navController: NavController) {
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (uiState.processedBitmap != null) {
+                if (processedImage != null) {
                     Image(
-                        bitmap = uiState.processedBitmap!!.asImageBitmap(),
+                        bitmap = processedImage,
                         contentDescription = "Meme Preview",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit

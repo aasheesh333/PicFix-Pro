@@ -3,7 +3,7 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.os.Environment
 import android.net.Uri
 import android.os.Environment
 import android.widget.Toast
@@ -20,7 +20,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +34,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
@@ -68,9 +68,7 @@ class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.da
             try {
                 val (bitmap, exifInfo) = withContext(Dispatchers.IO) {
                     val cr = context.contentResolver
-                    val inputStream = cr.openInputStream(uri) ?: return@withContext Pair(null as Bitmap?, "")
-                    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = false }
-                    val bmp = BitmapFactory.decodeStream(inputStream)
+                    val bmp = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                     val exif = try {
                         cr.openInputStream(uri)?.use { stream ->
                             val exifInterface = ExifInterface(stream)
@@ -90,6 +88,7 @@ class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.da
                     } catch (e: Exception) { "" }
                     Pair(bmp, exif)
                 }
+                val old = _uiState.value.previewBitmap
                 _uiState.update {
                     it.copy(
                         previewBitmap = bitmap,
@@ -98,7 +97,11 @@ class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.da
                         isLoading = false
                     )
                 }
+                if (old != null && old != bitmap && !old.isRecycled) old.recycle()
             } catch (e: Exception) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("ExifStripperVM", "onImageSelected failed", e)
+                }
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }
         }
@@ -130,7 +133,7 @@ class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.da
 
     override fun onCleared() {
         super.onCleared()
-        _uiState.value.previewBitmap?.recycle()
+        _uiState.value.previewBitmap?.takeIf { !it.isRecycled }?.recycle()
     }
 }
 
@@ -145,6 +148,8 @@ fun ExifStripperScreen(navController: NavController) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+
+    val previewImage = rememberBitmap(uiState.previewBitmap)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -229,9 +234,9 @@ fun ExifStripperScreen(navController: NavController) {
                 modifier = Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (uiState.previewBitmap != null) {
+                if (previewImage != null) {
                     Image(
-                        bitmap = uiState.previewBitmap!!.asImageBitmap(),
+                        bitmap = previewImage,
                         contentDescription = "Preview",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
