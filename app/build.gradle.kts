@@ -184,7 +184,19 @@ dependencies {
     // implementation(libs.realesrgan.mobile)
 
 
+    // OneSignal
+    implementation(libs.onesignal)
+
+    // Splash screen
+    implementation(libs.androidx.core.splashscreen)
+
+
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.arch.core.testing)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -192,5 +204,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     // implementation(libs.reorderable)
-    implementation(libs.onesignal)
 }

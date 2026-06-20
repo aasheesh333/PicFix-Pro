@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PhotoDoctorProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
@@ -20,7 +21,9 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition { false }
         AdManager.initialize(this)
 
         requestRequiredPermissions()

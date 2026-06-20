@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dhanuk.photodoctorpro.PhotoDoctorApplication
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
@@ -151,6 +152,13 @@ class ObjectEraserViewModel(
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
 
+        if (!PhotoDoctorApplication.OpenCVInitialized) {
+            _uiState.value = _uiState.value.copy(
+                error = "Image processing engine is not ready yet. Please try again in a moment."
+            )
+            return
+        }
+
         eraseJob?.cancel()
         eraseJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isErasing = true, error = null)
@@ -202,6 +210,17 @@ class ObjectEraserViewModel(
                 softMask?.recycle()
                 if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
                 throw ce
+            } catch (ule: UnsatisfiedLinkError) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.e("ObjectEraserVM", "OpenCV native library not loaded", ule)
+                }
+                if (undoStack.isNotEmpty()) undoStack.pop()
+                softMask?.recycle()
+                if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
+                _uiState.value = _uiState.value.copy(
+                    isErasing = false,
+                    error = "Image processing engine failed to load. Please restart the app."
+                )
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
@@ -321,7 +340,7 @@ class ObjectEraserViewModel(
 
         return try {
             val fileName = "PhotoDoctorPro_Erased_${System.currentTimeMillis()}"
-            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.JPEG)
+            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
             repository.addHistory(
                 History(
                     operationType = "Object Erased",
@@ -369,16 +388,17 @@ data class ObjectEraserUiState(
     val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
-    val paths: List<EraserPath> = emptyList(), // Updated to EraserPath
+    val paths: List<EraserPath> = emptyList(),
     val brushSize: Float = 40f,
-    val brushSoftness: Float = 0f, // Added Softness
+    val brushSoftness: Float = 0f,
     val isErasing: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
     val resetPerformed: Boolean = false,
     val canUndo: Boolean = false,
-    val canRedo: Boolean = false
+    val canRedo: Boolean = false,
+    val openCvReady: Boolean = PhotoDoctorApplication.OpenCVInitialized
 )
 
 private const val KEY_URI = "selectedImageUri"

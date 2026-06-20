@@ -30,7 +30,12 @@ object ImageEnhancer {
         }
     }
 
-    suspend fun enhanceImage(context: Context, bitmap: Bitmap, scaleFactor: Int): Bitmap = withContext(Dispatchers.Default) {
+    suspend fun enhanceImage(
+        context: Context,
+        bitmap: Bitmap,
+        scaleFactor: Int,
+        onProgress: ((Float) -> Unit)? = null
+    ): Bitmap = withContext(Dispatchers.Default) {
         // Strict Size Check
         val targetW = bitmap.width.toLong() * scaleFactor
         val targetH = bitmap.height.toLong() * scaleFactor
@@ -42,7 +47,9 @@ object ImageEnhancer {
 
         try {
             // 1. Super Resolution (ESRGAN)
+            onProgress?.invoke(0.1f)
             val upscaled = runSuperResolution(context, bitmap, scaleFactor)
+            onProgress?.invoke(0.6f)
 
             // 2. Face Enhancement (GFPGAN)
             val faceEnhancer = FaceEnhancer.getInstance(context)
@@ -52,10 +59,12 @@ object ImageEnhancer {
                 // singleton - don't close
             }
             if (upscaled != faceEnhanced && upscaled != bitmap) upscaled.recycle()
+            onProgress?.invoke(0.8f)
 
             // 3. Post Processing (OpenCV)
             val finalResult = applyPostProcessing(faceEnhanced)
             if (faceEnhanced != finalResult && faceEnhanced != bitmap) faceEnhanced.recycle()
+            onProgress?.invoke(1.0f)
 
             return@withContext finalResult
 

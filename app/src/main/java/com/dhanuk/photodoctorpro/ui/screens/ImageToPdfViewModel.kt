@@ -42,7 +42,11 @@ class ImageToPdfViewModel(
 
     fun onImageReordered(from: Int, to: Int) {
         val currentList = _uiState.value.selectedImageUris.toMutableList()
-        currentList.add(to, currentList.removeAt(from))
+        if (from !in currentList.indices) return
+        val item = currentList.removeAt(from)
+        val adjustedTo = if (from < to) to - 1 else to
+        val target = adjustedTo.coerceIn(0, currentList.size)
+        currentList.add(target, item)
         _uiState.value = _uiState.value.copy(selectedImageUris = currentList)
     }
 
@@ -55,13 +59,34 @@ class ImageToPdfViewModel(
         viewModelScope.launch {
             try {
                 val pdfDocument = PdfDocument()
+                val pageWidth = 595
+                val pageHeight = 842
+                val pageMargin = 24
+                val drawableWidth = (pageWidth - 2 * pageMargin).toFloat()
+                val drawableHeight = (pageHeight - 2 * pageMargin).toFloat()
+
                 uris.forEachIndexed { index, uri ->
                     val bitmap = BitmapUtils.loadBitmapFromUri(uri, activity)
                     if (bitmap != null) {
                         try {
-                            val pageInfo = PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
+                            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
                             val page = pdfDocument.startPage(pageInfo)
-                            page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            val pageCanvas = page.canvas
+
+                            val sourceRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                            val targetRatio = drawableWidth / drawableHeight
+                            var scaledW = drawableWidth
+                            var scaledH = drawableHeight
+                            if (sourceRatio > targetRatio) {
+                                scaledH = drawableWidth / sourceRatio
+                            } else {
+                                scaledW = drawableHeight * sourceRatio
+                            }
+                            val left = pageMargin + (drawableWidth - scaledW) / 2f
+                            val top = pageMargin + (drawableHeight - scaledH) / 2f
+
+                            val destRect = android.graphics.RectF(left, top, left + scaledW, top + scaledH)
+                            pageCanvas.drawBitmap(bitmap, null, destRect, null)
                             pdfDocument.finishPage(page)
                         } finally {
                             if (!bitmap.isRecycled) bitmap.recycle()
@@ -122,6 +147,10 @@ class ImageToPdfViewModel(
 
     fun onSavedMessageShown() {
         _uiState.value = _uiState.value.copy(savedFilePath = null, pdfCreationSuccess = false)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
     }
 }
 

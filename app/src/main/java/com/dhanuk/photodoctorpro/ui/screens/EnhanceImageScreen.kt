@@ -174,7 +174,16 @@ fun EnhanceImageScreen(navController: NavController) {
                 contentAlignment = Alignment.Center
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator()
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        if (uiState.progress > 0f) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                stringResource(R.string.progress_percent, (uiState.progress * 100).toInt()),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                 } else {
                     if (originalImage != null && enhancedImage != null) {
                         BeforeAfterSlider(

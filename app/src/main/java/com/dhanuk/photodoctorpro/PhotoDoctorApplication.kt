@@ -9,12 +9,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
+import com.dhanuk.photodoctorpro.utils.CrashReporter
 import com.dhanuk.photodoctorpro.utils.ThemeController
 
 class PhotoDoctorApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        CrashReporter.install()
         ThemeController.init(this)
 
         initOpenCvAsync()

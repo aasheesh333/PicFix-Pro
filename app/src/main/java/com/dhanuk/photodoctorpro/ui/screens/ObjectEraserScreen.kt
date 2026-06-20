@@ -185,7 +185,7 @@ fun ObjectEraserScreen(navController: NavController) {
                 },
                 actions = {
                     if (uiState.paths.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.eraseObjects() }) {
+                        IconButton(onClick = { viewModel.eraseObjects() }, enabled = uiState.openCvReady && !uiState.isErasing) {
                             Icon(Icons.Default.Check, contentDescription = "Apply Erase")
                         }
                     }
@@ -271,7 +271,10 @@ fun ObjectEraserScreen(navController: NavController) {
                         OutlinedButton(onClick = { viewModel.undo() }, enabled = uiState.canUndo) {
                             Text(stringResource(R.string.undo))
                         }
-                        Button(onClick = { viewModel.eraseObjects() }, enabled = uiState.paths.isNotEmpty()) {
+                        Button(
+                            onClick = { viewModel.eraseObjects() },
+                            enabled = uiState.paths.isNotEmpty() && uiState.openCvReady && !uiState.isErasing
+                        ) {
                             Text(stringResource(R.string.erase))
                         }
                         OutlinedButton(onClick = { viewModel.redo() }, enabled = uiState.canRedo) {

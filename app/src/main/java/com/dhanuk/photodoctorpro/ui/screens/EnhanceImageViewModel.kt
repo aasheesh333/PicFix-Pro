@@ -71,19 +71,22 @@ class EnhanceImageViewModel(
         }
 
         val original = _uiState.value.originalBitmap ?: return
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null, progress = 0f)
 
         enhanceJob?.cancel()
         enhanceJob = viewModelScope.launch {
             try {
-                val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor)
-checkActive()
+                val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor) { progress ->
+                    _uiState.value = _uiState.value.copy(progress = progress)
+                }
+                checkActive()
                 val old = _uiState.value.enhancedBitmap
                 savedStateHandle[KEY_SCALE] = scaleFactor
                 _uiState.value = _uiState.value.copy(
                     enhancedBitmap = enhanced,
                     isLoading = false,
-                    scaleFactor = scaleFactor
+                    scaleFactor = scaleFactor,
+                    progress = 1f
                 )
                 if (old != null && old != enhanced && !old.isRecycled) old.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -94,6 +97,7 @@ checkActive()
                 }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    progress = 0f,
                     error = "Error: ${e.localizedMessage ?: "Unknown error"}"
                 )
             }
@@ -161,7 +165,8 @@ data class EnhanceImageUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
-    val isLargeImage: Boolean = false
+    val isLargeImage: Boolean = false,
+    val progress: Float = 0f
 )
 
 private const val KEY_URI = "selectedImageUri"
