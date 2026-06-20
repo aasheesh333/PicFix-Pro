@@ -1,51 +1,46 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.createSavedStateHandle
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 
-class ViewModelFactory(private val repository: HistoryRepository) : ViewModelProvider.Factory {
+class ViewModelFactory(
+    private val repository: HistoryRepository
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+        val handle: SavedStateHandle = extras.createSavedStateHandle()
+        @Suppress("UNCHECKED_CAST")
+        return when {
+            modelClass.isAssignableFrom(HistoryViewModel::class.java) ->
+                HistoryViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(RemoveBackgroundViewModel::class.java) ->
+                RemoveBackgroundViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(ObjectEraserViewModel::class.java) ->
+                ObjectEraserViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(EnhanceImageViewModel::class.java) ->
+                EnhanceImageViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(ImageToPdfViewModel::class.java) ->
+                ImageToPdfViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(ColorAdjustmentsViewModel::class.java) ->
+                ColorAdjustmentsViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(ResizeCompressViewModel::class.java) ->
+                ResizeCompressViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(PerspectiveCropViewModel::class.java) ->
+                PerspectiveCropViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(ExifStripperViewModel::class.java) ->
+                ExifStripperViewModel(repository, handle) as T
+            modelClass.isAssignableFrom(MemeMakerViewModel::class.java) ->
+                MemeMakerViewModel(repository, handle) as T
+            else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
+
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(HistoryViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return HistoryViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(RemoveBackgroundViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return RemoveBackgroundViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(ObjectEraserViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ObjectEraserViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(EnhanceImageViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return EnhanceImageViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(ImageToPdfViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ImageToPdfViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(ColorAdjustmentsViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ColorAdjustmentsViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(ResizeCompressViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ResizeCompressViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(PerspectiveCropViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return PerspectiveCropViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(ExifStripperViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ExifStripperViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(MemeMakerViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return MemeMakerViewModel(repository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        throw IllegalArgumentException(
+            "Use create(modelClass, extras) so SavedStateHandle can be provided."
+        )
     }
 }

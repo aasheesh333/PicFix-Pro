@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.History
@@ -11,22 +12,33 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.ImageEnhancer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewModel() {
+class EnhanceImageViewModel(
+    private val repository: HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(EnhanceImageUiState())
+    private val _uiState = MutableStateFlow(
+        EnhanceImageUiState(
+            selectedImageUri = savedStateHandle.get<String>(KEY_URI)?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            },
+            scaleFactor = savedStateHandle.get<Int>(KEY_SCALE) ?: 2
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     private var enhanceJob: kotlinx.coroutines.Job? = null
 
     fun onImageSelected(uri: Uri, context: Context) {
+        savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch {
             _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
             try {
@@ -67,6 +79,7 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
                 val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor)
 checkActive()
                 val old = _uiState.value.enhancedBitmap
+                savedStateHandle[KEY_SCALE] = scaleFactor
                 _uiState.value = _uiState.value.copy(
                     enhancedBitmap = enhanced,
                     isLoading = false,
@@ -150,3 +163,6 @@ data class EnhanceImageUiState(
     val savedFilePath: String? = null,
     val isLargeImage: Boolean = false
 )
+
+private const val KEY_URI = "selectedImageUri"
+private const val KEY_SCALE = "scaleFactor"

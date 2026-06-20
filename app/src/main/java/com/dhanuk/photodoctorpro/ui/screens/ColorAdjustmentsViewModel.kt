@@ -7,6 +7,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
@@ -36,8 +37,21 @@ data class ColorAdjustmentsUiState(
     val savedFilePath: String? = null
 )
 
-class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(ColorAdjustmentsUiState())
+class ColorAdjustmentsViewModel(
+    private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        ColorAdjustmentsUiState(
+            selectedImageUri = savedStateHandle.get<String>(KEY_URI)?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            },
+            brightness = savedStateHandle.get<Float>(KEY_BRIGHT) ?: 0f,
+            contrast = savedStateHandle.get<Float>(KEY_CONTRAST) ?: 1f,
+            saturation = savedStateHandle.get<Float>(KEY_SAT) ?: 1f,
+            warmth = savedStateHandle.get<Float>(KEY_WARM) ?: 0f
+        )
+    )
     val uiState: StateFlow<ColorAdjustmentsUiState> = _uiState.asStateFlow()
 
     private val adjustmentTrigger = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
@@ -56,6 +70,7 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
     }
 
     fun setOriginal(uri: Uri, context: Context) {
+        savedStateHandle[KEY_URI] = uri.toString()
         _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null)
         viewModelScope.launch {
             try {
@@ -100,26 +115,34 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
     }
 
     fun updateBrightness(value: Float) {
+        savedStateHandle[KEY_BRIGHT] = value
         _uiState.update { it.copy(brightness = value) }
         adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateContrast(value: Float) {
+        savedStateHandle[KEY_CONTRAST] = value
         _uiState.update { it.copy(contrast = value) }
         adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateSaturation(value: Float) {
+        savedStateHandle[KEY_SAT] = value
         _uiState.update { it.copy(saturation = value) }
         adjustmentTrigger.tryEmit(Unit)
     }
 
     fun updateWarmth(value: Float) {
+        savedStateHandle[KEY_WARM] = value
         _uiState.update { it.copy(warmth = value) }
         adjustmentTrigger.tryEmit(Unit)
     }
 
     fun reset() {
+        savedStateHandle[KEY_BRIGHT] = 0f
+        savedStateHandle[KEY_CONTRAST] = 1f
+        savedStateHandle[KEY_SAT] = 1f
+        savedStateHandle[KEY_WARM] = 0f
         _uiState.update {
             it.copy(
                 brightness = 0f,
@@ -228,3 +251,9 @@ class ColorAdjustmentsViewModel(private val repository: com.dhanuk.photodoctorpr
         }
     }
 }
+
+private const val KEY_URI = "selectedImageUri"
+private const val KEY_BRIGHT = "brightness"
+private const val KEY_CONTRAST = "contrast"
+private const val KEY_SAT = "saturation"
+private const val KEY_WARM = "warmth"

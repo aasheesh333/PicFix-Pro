@@ -12,6 +12,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.net.Uri
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.History
@@ -33,9 +34,18 @@ import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.util.ArrayDeque
 
-class RemoveBackgroundViewModel(private val repository: HistoryRepository) : ViewModel() {
+class RemoveBackgroundViewModel(
+    private val repository: HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(RemoveBackgroundUiState())
+    private val _uiState = MutableStateFlow(
+        RemoveBackgroundUiState(
+            selectedImageUri = savedStateHandle.get<String>(KEY_URI)?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            }
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     val maskVersion = mutableStateOf(0)
@@ -48,6 +58,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     private var refinementJob: kotlinx.coroutines.Job? = null
 
     fun onImageSelected(uri: Uri, context: Context) {
+        savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch {
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
             try {
@@ -361,3 +372,5 @@ data class RemoveBackgroundUiState(
     val error: String? = null,
     val savedFilePath: String? = null
 )
+
+private const val KEY_URI = "selectedImageUri"

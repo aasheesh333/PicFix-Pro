@@ -70,6 +70,7 @@ import org.opencv.imgproc.Imgproc
 import java.io.File
 
 data class PerspectiveCropUiState(
+    val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
     val corners: List<PointF> = emptyList(),
@@ -78,14 +79,24 @@ data class PerspectiveCropUiState(
     val savedFilePath: String? = null
 )
 
-class PerspectiveCropViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(PerspectiveCropUiState())
+class PerspectiveCropViewModel(
+    private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
+    private val savedStateHandle: androidx.lifecycle.SavedStateHandle
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        PerspectiveCropUiState(
+            selectedImageUri = savedStateHandle.get<String>("pcrop_uri")?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            }
+        )
+    )
     val uiState: StateFlow<PerspectiveCropUiState> = _uiState.asStateFlow()
 
     private var autoDetectJob: kotlinx.coroutines.Job? = null
     private var applyCropJob: kotlinx.coroutines.Job? = null
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
+        savedStateHandle["pcrop_uri"] = uri.toString()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {

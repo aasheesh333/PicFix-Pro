@@ -56,11 +56,21 @@ data class ExifStripperUiState(
     val savedFilePath: String? = null
 )
 
-class ExifStripperViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(ExifStripperUiState())
+class ExifStripperViewModel(
+    private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
+    private val savedStateHandle: androidx.lifecycle.SavedStateHandle
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        ExifStripperUiState(
+            selectedUri = savedStateHandle.get<String>("exif_uri")?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            }
+        )
+    )
     val uiState: StateFlow<ExifStripperUiState> = _uiState.asStateFlow()
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
+        savedStateHandle["exif_uri"] = uri.toString()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, selectedUri = uri, error = null) }
             try {

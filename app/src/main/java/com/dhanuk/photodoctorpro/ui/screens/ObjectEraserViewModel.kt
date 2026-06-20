@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.net.Uri
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.History
@@ -41,9 +42,20 @@ data class EraserPath(
     val softness: Float
 )
 
-class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewModel() {
+class ObjectEraserViewModel(
+    private val repository: HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ObjectEraserUiState())
+    private val _uiState = MutableStateFlow(
+        ObjectEraserUiState(
+            selectedImageUri = savedStateHandle.get<String>(KEY_URI)?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            },
+            brushSize = savedStateHandle.get<Float>(KEY_BRUSH) ?: 40f,
+            brushSoftness = savedStateHandle.get<Float>(KEY_SOFT) ?: 0f
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     private val undoStack = Stack<Bitmap>()
@@ -51,6 +63,7 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     private val MAX_STACK_SIZE = 10
 
     fun onImageSelected(uri: Uri, context: Context) {
+        savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context, 2048) }
@@ -63,10 +76,12 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     }
 
     fun onBrushSizeChanged(newSize: Float) {
+        savedStateHandle[KEY_BRUSH] = newSize
         _uiState.value = _uiState.value.copy(brushSize = newSize)
     }
 
     fun onBrushSoftnessChanged(newSoftness: Float) {
+        savedStateHandle[KEY_SOFT] = newSoftness
         _uiState.value = _uiState.value.copy(brushSoftness = newSoftness)
     }
 
@@ -365,3 +380,7 @@ data class ObjectEraserUiState(
     val canUndo: Boolean = false,
     val canRedo: Boolean = false
 )
+
+private const val KEY_URI = "selectedImageUri"
+private const val KEY_BRUSH = "brushSize"
+private const val KEY_SOFT = "brushSoftness"

@@ -1,5 +1,6 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
@@ -12,7 +13,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class HistoryViewModel(private val repository: HistoryRepository) : ViewModel() {
+class HistoryViewModel(
+    private val repository: HistoryRepository,
+    @Suppress("unused") private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
     val history: StateFlow<List<com.dhanuk.photodoctorpro.data.local.History>> = repository.getAllHistory()
         .stateIn(

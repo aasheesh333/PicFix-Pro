@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.History
@@ -15,17 +17,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.documentfile.provider.DocumentFile
 import com.dhanuk.photodoctorpro.utils.UserPreferences
 import java.io.File
 import java.io.FileOutputStream
 
-class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel() {
+class ImageToPdfViewModel(
+    private val repository: HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ImageToPdfUiState())
+    private val _uiState = MutableStateFlow(
+        ImageToPdfUiState(
+            selectedImageUris = savedStateHandle.get<List<String>>(KEY_URIS)
+                ?.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+                ?: emptyList()
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     fun onImagesSelected(uris: List<Uri>) {
+        savedStateHandle[KEY_URIS] = uris.map { it.toString() }
         _uiState.value = _uiState.value.copy(selectedImageUris = uris)
     }
 
@@ -121,3 +132,5 @@ data class ImageToPdfUiState(
     val error: String? = null,
     val savedFilePath: String? = null
 )
+
+private const val KEY_URIS = "selectedImageUris"

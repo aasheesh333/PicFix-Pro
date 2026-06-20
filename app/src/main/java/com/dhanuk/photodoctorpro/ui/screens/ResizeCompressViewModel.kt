@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
@@ -48,12 +49,31 @@ data class ResizeUiState(
     val maintainAspectRatio: Boolean = true
 )
 
-class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
+class ResizeCompressViewModel(
+    private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ResizeUiState())
+    private val _uiState = MutableStateFlow(
+        ResizeUiState(
+            selectedUri = savedStateHandle.get<String>(KEY_URI)?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            },
+            preset = savedStateHandle.get<String>(KEY_PRESET)?.let { name ->
+                runCatching { ResizePreset.valueOf(name) }.getOrNull()
+            } ?: ResizePreset.MEDIUM,
+            quality = savedStateHandle.get<Float>(KEY_QUALITY) ?: 0.88f,
+            customWidth = savedStateHandle.get<Int>(KEY_CW) ?: 0,
+            customHeight = savedStateHandle.get<Int>(KEY_CH) ?: 0,
+            customWidthText = savedStateHandle.get<String>(KEY_CWT) ?: "",
+            customHeightText = savedStateHandle.get<String>(KEY_CHT) ?: "",
+            maintainAspectRatio = savedStateHandle.get<Boolean>(KEY_AR) ?: true
+        )
+    )
     val uiState: StateFlow<ResizeUiState> = _uiState.asStateFlow()
 
     fun onImageSelected(uri: Uri, context: Context) {
+        savedStateHandle[KEY_URI] = uri.toString()
         _uiState.update { it.copy(selectedUri = uri, isLoading = true, error = null) }
         viewModelScope.launch {
             try {
@@ -98,6 +118,7 @@ class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.
 
     fun onPresetSelected(preset: ResizePreset) {
         val bitmap = _uiState.value.originalBitmap
+        savedStateHandle[KEY_PRESET] = preset.name
         _uiState.update {
             it.copy(
                 preset = preset,
@@ -111,6 +132,7 @@ class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.
     }
 
     fun onQualityChanged(quality: Float) {
+        savedStateHandle[KEY_QUALITY] = quality
         _uiState.update { it.copy(quality = quality) }
         applyPreset(_uiState.value.preset, quality)
     }
@@ -123,6 +145,10 @@ class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.
         } else {
             _uiState.value.customHeight
         }
+        savedStateHandle[KEY_CW] = w
+        savedStateHandle[KEY_CWT] = text
+        savedStateHandle[KEY_CH] = h
+        savedStateHandle[KEY_CHT] = h.toString()
         _uiState.update { it.copy(customWidthText = text, customWidth = w, customHeight = h, customHeightText = h.toString()) }
         applyCustomResize(w, h)
     }
@@ -135,11 +161,16 @@ class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.
         } else {
             _uiState.value.customWidth
         }
+        savedStateHandle[KEY_CH] = h
+        savedStateHandle[KEY_CHT] = text
+        savedStateHandle[KEY_CW] = w
+        savedStateHandle[KEY_CWT] = w.toString()
         _uiState.update { it.copy(customHeightText = text, customHeight = h, customWidth = w, customWidthText = w.toString()) }
         applyCustomResize(w, h)
     }
 
     fun onMaintainAspectRatioChanged(enabled: Boolean) {
+        savedStateHandle[KEY_AR] = enabled
         _uiState.update { it.copy(maintainAspectRatio = enabled) }
     }
 
@@ -262,3 +293,12 @@ class ResizeCompressViewModel(private val repository: com.dhanuk.photodoctorpro.
         _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
     }
 }
+
+private const val KEY_URI = "selectedUri"
+private const val KEY_PRESET = "preset"
+private const val KEY_QUALITY = "quality"
+private const val KEY_CW = "customWidth"
+private const val KEY_CH = "customHeight"
+private const val KEY_CWT = "customWidthText"
+private const val KEY_CHT = "customHeightText"
+private const val KEY_AR = "maintainAspectRatio"

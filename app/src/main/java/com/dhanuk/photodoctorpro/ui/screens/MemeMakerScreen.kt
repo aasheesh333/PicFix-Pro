@@ -56,6 +56,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 data class MemeMakerUiState(
+    val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
     val processedBitmap: Bitmap? = null,
     val topText: String = "TOP TEXT",
@@ -65,11 +66,23 @@ data class MemeMakerUiState(
     val savedFilePath: String? = null
 )
 
-class MemeMakerViewModel(private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(MemeMakerUiState())
+class MemeMakerViewModel(
+    private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
+    private val savedStateHandle: androidx.lifecycle.SavedStateHandle
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        MemeMakerUiState(
+            selectedImageUri = savedStateHandle.get<String>("meme_uri")?.let {
+                runCatching { Uri.parse(it) }.getOrNull()
+            },
+            topText = savedStateHandle.get<String>("meme_top") ?: "TOP TEXT",
+            bottomText = savedStateHandle.get<String>("meme_bottom") ?: "BOTTOM TEXT"
+        )
+    )
     val uiState: StateFlow<MemeMakerUiState> = _uiState.asStateFlow()
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
+        savedStateHandle["meme_uri"] = uri.toString()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
@@ -103,11 +116,13 @@ class MemeMakerViewModel(private val repository: com.dhanuk.photodoctorpro.data.
     }
 
     fun setTopText(text: String) {
+        savedStateHandle["meme_top"] = text
         _uiState.update { it.copy(topText = text) }
         renderMeme()
     }
 
     fun setBottomText(text: String) {
+        savedStateHandle["meme_bottom"] = text
         _uiState.update { it.copy(bottomText = text) }
         renderMeme()
     }
