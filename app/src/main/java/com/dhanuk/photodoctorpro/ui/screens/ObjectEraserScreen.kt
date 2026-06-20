@@ -417,9 +417,9 @@ fun EraserEditor(
                         transformOrigin = TransformOrigin(0f, 0f)
                     )
             ) {
-                bitmapToShowImage?.let { img ->
+                if (bitmapToShowImage != null) {
                     Image(
-                        bitmap = img,
+                        bitmap = bitmapToShowImage,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
@@ -470,7 +470,7 @@ fun EraserEditor(
 
                     drawContext.canvas.restore()
                 }
-                }
+            }
 
             if (pathVersion > 0 && !livePath.isEmpty) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
