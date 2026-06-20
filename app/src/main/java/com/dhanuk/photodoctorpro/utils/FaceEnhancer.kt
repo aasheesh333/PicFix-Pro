@@ -103,17 +103,19 @@ class FaceEnhancer private constructor(private val context: Context) {
     }
 
     fun close() {
-        try {
-            interpreter?.close()
-        } catch (_: Exception) {}
-        try {
-            gpuDelegate?.close()
-        } catch (_: Exception) {}
-        try {
-             faceDetector.close()
-        } catch (_: Exception) {}
-        interpreter = null
-        gpuDelegate = null
+        interpLock.withLock {
+            try {
+                interpreter?.close()
+            } catch (_: Exception) {}
+            try {
+                gpuDelegate?.close()
+            } catch (_: Exception) {}
+            try {
+                 faceDetector.close()
+            } catch (_: Exception) {}
+            interpreter = null
+            gpuDelegate = null
+        }
     }
 
     private fun loadModelFile(path: String): java.nio.MappedByteBuffer {

@@ -13,9 +13,11 @@ import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.ImageEnhancer
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewModel() {
 
@@ -28,7 +30,7 @@ class EnhanceImageViewModel(private val repository: HistoryRepository) : ViewMod
         viewModelScope.launch {
             _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
             try {
-                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
+                val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context) }
                 if (bitmap != null) {
                     val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
                     val old = _uiState.value.originalBitmap
@@ -73,7 +75,7 @@ checkActive()
                 if (old != null && old != enhanced && !old.isRecycled) old.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("EnhanceVM", "enhanceImage failed", e)
                 }

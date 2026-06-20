@@ -51,7 +51,7 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
         viewModelScope.launch {
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
             try {
-                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
+                val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context, 2048) }
                 if (bitmap != null) {
                     val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                     val old = _uiState.value.originalBitmap
@@ -271,24 +271,18 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
             val current = _uiState.value.maskBitmap
             if (current != null) redoStack.addLast(current)
             val prev = undoStack.removeLast()
-             val old = _uiState.value.maskBitmap
-             _uiState.value = _uiState.value.copy(maskBitmap = prev.copy(prev.config, true))
-             if (old != null && old != _uiState.value.maskBitmap && !old.isRecycled) old.recycle()
-             maskVersion.value += 1
+            _uiState.value = _uiState.value.copy(maskBitmap = prev)
+            maskVersion.value += 1
         }
     }
 
     fun redo() {
         if (redoStack.isNotEmpty()) {
             val current = _uiState.value.maskBitmap
-            if (current != null) {
-                 pushToUndo(current.copy(current.config, true))
-            }
+            if (current != null) pushToUndo(current)
             val next = redoStack.removeLast()
-             val old = _uiState.value.maskBitmap
-             _uiState.value = _uiState.value.copy(maskBitmap = next.copy(next.config, true))
-             if (old != null && old != _uiState.value.maskBitmap && !old.isRecycled) old.recycle()
-             maskVersion.value += 1
+            _uiState.value = _uiState.value.copy(maskBitmap = next)
+            maskVersion.value += 1
         }
     }
 
@@ -323,6 +317,11 @@ class RemoveBackgroundViewModel(private val repository: HistoryRepository) : Vie
     }
 
     fun reset() {
+        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        _uiState.value.maskBitmap?.takeIf { !it.isRecycled }?.recycle()
+        undoStack.forEach { if (!it.isRecycled) it.recycle() }
+        redoStack.forEach { if (!it.isRecycled) it.recycle() }
         _uiState.value = RemoveBackgroundUiState()
         undoStack.clear()
         redoStack.clear()

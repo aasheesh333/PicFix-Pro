@@ -53,7 +53,9 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     fun onImageSelected(uri: Uri, context: Context) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
+            val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context, 2048) }
+            undoStack.forEach { if (!it.isRecycled) it.recycle() }
+            redoStack.forEach { if (!it.isRecycled) it.recycle() }
             undoStack.clear()
             redoStack.clear()
             _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false)
@@ -114,6 +116,8 @@ class ObjectEraserViewModel(private val repository: HistoryRepository) : ViewMod
     fun reset() {
         val uri = _uiState.value.selectedImageUri
         val bitmap = _uiState.value.originalBitmap
+        undoStack.forEach { if (!it.isRecycled) it.recycle() }
+        redoStack.forEach { if (!it.isRecycled) it.recycle() }
         undoStack.clear()
         redoStack.clear()
         _uiState.value = ObjectEraserUiState(

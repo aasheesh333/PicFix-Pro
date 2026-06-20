@@ -47,10 +47,14 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
                 uris.forEachIndexed { index, uri ->
                     val bitmap = BitmapUtils.loadBitmapFromUri(uri, activity)
                     if (bitmap != null) {
-                        val pageInfo = PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
-                        val page = pdfDocument.startPage(pageInfo)
-                        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
-                        pdfDocument.finishPage(page)
+                        try {
+                            val pageInfo = PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
+                            val page = pdfDocument.startPage(pageInfo)
+                            page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            pdfDocument.finishPage(page)
+                        } finally {
+                            if (!bitmap.isRecycled) bitmap.recycle()
+                        }
                     }
                 }
 
@@ -95,7 +99,9 @@ class ImageToPdfViewModel(private val repository: HistoryRepository) : ViewModel
         val dir = com.dhanuk.photodoctorpro.utils.BitmapUtils.resolveWritableDir(context, "PhotoDoctorPro")
         if (!dir.exists()) dir.mkdirs()
         val file = File(dir, fileName)
-        document.writeTo(FileOutputStream(file))
+        FileOutputStream(file).use { outStream ->
+            document.writeTo(outStream)
+        }
         file.absolutePath
     }
 
