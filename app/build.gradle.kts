@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.gradle.api.GradleException
 
 plugins {
     alias(libs.plugins.android.application)
@@ -66,6 +67,30 @@ android {
 
         val bannerId = getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111") // Default Test ID
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$bannerId\"")
+
+        // Validate AdMob IDs: real AdMob IDs must start with "ca-app-pub-" and must NOT be the Google test IDs when shipping release builds.
+        val googleTestAppId = "ca-app-pub-3940256099942544~3347511713"
+        val googleTestInterstitialId = "ca-app-pub-3940256099942544/1033173712"
+        val googleTestBannerId = "ca-app-pub-3940256099942544/6300978111"
+        if (admobAppId == googleTestAppId || interstitialId == googleTestInterstitialId || bannerId == googleTestBannerId) {
+            val taskPath = gradle.startParameter.taskNames.joinToString(" ")
+            if (taskPath.contains("Release", ignoreCase = true) || taskPath.contains("Bundle", ignoreCase = true)) {
+                throw GradleException(
+                    "Release/Bundle build detected with Google test AdMob IDs. " +
+                    "Override ADMOB_APP_ID / ADMOB_INTERSTITIAL_ID / ADMOB_BANNER_ID via env vars or local.properties " +
+                    "before producing a release build."
+                )
+            } else {
+                logger.warn(
+                    "WARNING: Using Google test AdMob IDs. Override before shipping a release."
+                )
+            }
+        }
+        if (admobAppId.isBlank() || interstitialId.isBlank() || bannerId.isBlank()) {
+            throw GradleException(
+                "AdMob IDs must not be blank. Set ADMOB_APP_ID / ADMOB_INTERSTITIAL_ID / ADMOB_BANNER_ID."
+            )
+        }
     }
 
     signingConfigs {

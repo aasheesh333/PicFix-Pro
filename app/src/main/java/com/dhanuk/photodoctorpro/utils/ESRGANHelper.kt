@@ -94,14 +94,16 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     fun isReady(): Boolean = interpreter != null
 
     fun close() {
-        try {
-            interpreter?.close()
-        } catch (_: Exception) {}
-        try {
-            gpuDelegate?.close()
-        } catch (_: Exception) {}
-        interpreter = null
-        gpuDelegate = null
+        interpLock.withLock {
+            try {
+                interpreter?.close()
+            } catch (_: Exception) {}
+            try {
+                gpuDelegate?.close()
+            } catch (_: Exception) {}
+            interpreter = null
+            gpuDelegate = null
+        }
     }
 
     private fun detectScaleFactor() {

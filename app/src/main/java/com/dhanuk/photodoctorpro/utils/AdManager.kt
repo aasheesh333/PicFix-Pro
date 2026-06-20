@@ -78,4 +78,15 @@ object AdManager {
              if (BuildConfig.DEBUG) Log.d(TAG, "Ad not shown. Time diff: ${currentTime - lastAdShowTime}, Major Actions: $majorActionCount, Ad Ready: ${interstitialAd != null}")
         }
     }
+
+    /**
+     * Release ad resources. Safe to call multiple times. Call from Activity.onDestroy()
+     * to ensure the loaded InterstitialAd is not pinned to a destroyed Activity.
+     */
+    fun cleanup() {
+        interstitialAd = null
+        isAdLoaded = false
+        lastLoadError = "Cleaned up"
+        majorActionCount = 0
+    }
 }

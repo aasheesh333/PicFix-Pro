@@ -17,12 +17,7 @@ class PhotoDoctorApplication : Application() {
 
         ThemeController.init(this)
 
-        OpenCVInitialized = OpenCVLoader.initDebug()
-        if (OpenCVInitialized) {
-            if (BuildConfig.DEBUG) Log.d("PhotoDoctor", "OpenCV loaded successfully")
-        } else {
-            Log.e("PhotoDoctor", "OpenCV initialization failed!")
-        }
+        initOpenCvAsync()
 
         if (BuildConfig.DEBUG) {
             OneSignal.Debug.logLevel = LogLevel.VERBOSE
@@ -35,6 +30,18 @@ class PhotoDoctorApplication : Application() {
             requestNotificationPermission()
         } else {
             Log.w("PhotoDoctor", "OneSignal APP_ID is empty - push notifications disabled")
+        }
+    }
+
+    private fun initOpenCvAsync() {
+        applicationScope.launch {
+            val ok = OpenCVLoader.initDebug()
+            OpenCVInitialized = ok
+            if (ok) {
+                if (BuildConfig.DEBUG) Log.d("PhotoDoctor", "OpenCV loaded successfully")
+            } else {
+                Log.e("PhotoDoctor", "OpenCV initialization failed!")
+            }
         }
     }
 

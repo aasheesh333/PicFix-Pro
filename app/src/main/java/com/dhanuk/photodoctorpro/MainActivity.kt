@@ -33,6 +33,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        AdManager.cleanup()
+    }
+
     private fun requestRequiredPermissions() {
         val permissions = mutableListOf<String>()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
