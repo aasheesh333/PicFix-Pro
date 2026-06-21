@@ -160,8 +160,10 @@ class EnhanceImageViewModel(
         super.onCleared()
         enhanceJob?.cancel()
         enhanceJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.enhancedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        val original = _uiState.value.originalBitmap
+        val enhanced = _uiState.value.enhancedBitmap
+        if (enhanced != null && enhanced !== original && !enhanced.isRecycled) enhanced.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
     }
 }
 

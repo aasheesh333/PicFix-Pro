@@ -122,7 +122,6 @@ class ResizeCompressViewModel(
                 if (oldProcessed != null && oldProcessed !== bitmap && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
                     oldProcessed.recycle()
                 }
-                if (oldProcessed != null && oldProcessed != bitmap && !oldProcessed.isRecycled) oldProcessed.recycle()
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ResizeVM", "onImageSelected failed", e)

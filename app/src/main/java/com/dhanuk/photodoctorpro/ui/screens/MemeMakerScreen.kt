@@ -103,8 +103,10 @@ data class MemeMakerUiState(
                             isLoading = false
                         )
                     }
-                    if (oldOriginal != null && oldOriginal != argbBitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
-                    if (oldProcessed != null && !oldProcessed.isRecycled) oldProcessed.recycle()
+                    if (oldOriginal != null && oldOriginal !== argbBitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
+                    if (oldProcessed != null && oldProcessed !== argbBitmap && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
+                        oldProcessed.recycle()
+                    }
                     if (argbBitmap != bitmap && !bitmap.isRecycled) bitmap.recycle()
                 } else {
                     _uiState.update { it.copy(error = "Failed to load image", isLoading = false) }
@@ -118,10 +120,10 @@ data class MemeMakerUiState(
         }
     }
 
-    private val textChangeTrigger = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
+    private val textChangeTrigger = MutableSharedFlow<Unit>(
         replay = 0,
         extraBufferCapacity = 8,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     private var textChangeJob: kotlinx.coroutines.Job? = null
 
