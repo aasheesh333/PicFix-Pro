@@ -94,6 +94,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = getProperty("KEYSTORE_FILE")
+            if (keystorePath.isNotEmpty()) {
+                storeFile = file(keystorePath)
+                storePassword = getProperty("KEYSTORE_PASSWORD")
+                keyAlias = "mykey"
+                keyPassword = getProperty("KEY_PASSWORD")
+                // Explicitly set type to avoid detection errors
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Debug builds always use Google test AdMob IDs so local dev installs serve test ads.
@@ -109,20 +123,6 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
-        }
-    }
-
-    signingConfigs {
-        create("release") {
-            val keystorePath = getProperty("KEYSTORE_FILE")
-            if (keystorePath.isNotEmpty()) {
-                storeFile = file(keystorePath)
-                storePassword = getProperty("KEYSTORE_PASSWORD")
-                keyAlias = "mykey"
-                keyPassword = getProperty("KEY_PASSWORD")
-                // Explicitly set type to avoid detection errors
-                storeType = "PKCS12"
-            }
         }
     }
 
