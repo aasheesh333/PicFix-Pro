@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,7 +74,6 @@ import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import java.io.File
 
 /**
  * Aspect ratio lock for the cropped output. FREE = use the actual selected
@@ -138,6 +136,8 @@ class PerspectiveCropViewModel(
                 }
                 if (old != null && old != bitmap && !old.isRecycled) old.recycle()
                 autoDetectEdges(bitmap)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("PerspectiveCropVM", "onImageSelected failed", e)
@@ -489,6 +489,8 @@ class PerspectiveCropViewModel(
                     format = android.graphics.Bitmap.CompressFormat.PNG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("PerspectiveCropVM", "saveImage failed", e)

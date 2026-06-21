@@ -23,7 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -48,8 +47,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 
 data class ExifStripperUiState(
     val selectedUri: Uri? = null,
@@ -87,17 +84,19 @@ class ExifStripperViewModel(
                             val exifInterface = ExifInterface(stream)
                             val tags = mutableListOf<String>()
                             if (!exifInterface.getAttribute(ExifInterface.TAG_GPS_LATITUDE).isNullOrEmpty()) {
-                                tags.add("GPS Location")
+                                tags.add(context.getString(R.string.exif_gps_location))
                             }
                             if (!exifInterface.getAttribute(ExifInterface.TAG_DATETIME).isNullOrEmpty()) {
-                                tags.add("Date/Time: ${exifInterface.getAttribute(ExifInterface.TAG_DATETIME)}")
+                                tags.add(context.getString(R.string.exif_date_time, exifInterface.getAttribute(ExifInterface.TAG_DATETIME)))
                             }
                             if (!exifInterface.getAttribute(ExifInterface.TAG_MAKE).isNullOrEmpty() ||
                                 !exifInterface.getAttribute(ExifInterface.TAG_MODEL).isNullOrEmpty()) {
-                                tags.add("Camera: ${exifInterface.getAttribute(ExifInterface.TAG_MAKE)} ${exifInterface.getAttribute(ExifInterface.TAG_MODEL)}")
+                                tags.add(context.getString(R.string.exif_camera, exifInterface.getAttribute(ExifInterface.TAG_MAKE) ?: "", exifInterface.getAttribute(ExifInterface.TAG_MODEL) ?: ""))
                             }
                             tags.joinToString("\n")
                         } ?: ""
+                    } catch (ce: kotlinx.coroutines.CancellationException) {
+                        throw ce
                     } catch (e: Exception) { "" }
                     Pair(bmp, exif)
                 }
@@ -111,6 +110,8 @@ class ExifStripperViewModel(
                     )
                 }
                 if (old != null && old != bitmap && !old.isRecycled) old.recycle()
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ExifStripperVM", "onImageSelected failed", e)
@@ -135,6 +136,8 @@ class ExifStripperViewModel(
                     format = android.graphics.Bitmap.CompressFormat.JPEG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }

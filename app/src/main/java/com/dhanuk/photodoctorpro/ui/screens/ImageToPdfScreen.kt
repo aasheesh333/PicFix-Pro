@@ -30,7 +30,6 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
-import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory

@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
-import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History

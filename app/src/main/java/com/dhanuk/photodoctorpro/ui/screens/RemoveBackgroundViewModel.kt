@@ -53,6 +53,7 @@ class RemoveBackgroundViewModel(
 
     private val undoStack = ArrayDeque<Bitmap>()
     private val redoStack = ArrayDeque<Bitmap>()
+    private val stackLock = Any()
     private val MAX_STACK_SIZE = 10
 
     private var removeBgJob: kotlinx.coroutines.Job? = null
@@ -76,6 +77,8 @@ class RemoveBackgroundViewModel(
                 } else {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed))
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("RemoveBGVM", "onImageSelected failed", e)
@@ -103,11 +106,13 @@ class RemoveBackgroundViewModel(
                 val oldProcessed = _uiState.value.processedBitmap
                 val oldMask = _uiState.value.maskBitmap
 
-                undoStack.forEach { if (!it.isRecycled) it.recycle() }
-                redoStack.forEach { if (!it.isRecycled) it.recycle() }
-                undoStack.clear()
-                redoStack.clear()
-                pushToUndo(mask.copy(mask.config, true))
+                synchronized(stackLock) {
+                    undoStack.forEach { if (!it.isRecycled) it.recycle() }
+                    redoStack.forEach { if (!it.isRecycled) it.recycle() }
+                    undoStack.clear()
+                    redoStack.clear()
+                    pushToUndoLocked(mask.copy(mask.config, true))
+                }
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -275,11 +280,13 @@ class RemoveBackgroundViewModel(
 
     fun saveMaskStateForUndo() {
         val currentMask = _uiState.value.maskBitmap ?: return
-        pushToUndo(currentMask.copy(currentMask.config, true))
-        redoStack.clear()
+        synchronized(stackLock) {
+            pushToUndoLocked(currentMask.copy(currentMask.config, true))
+            redoStack.clear()
+        }
     }
 
-    private fun pushToUndo(bitmap: Bitmap) {
+    private fun pushToUndoLocked(bitmap: Bitmap) {
         if (undoStack.size >= MAX_STACK_SIZE) {
             undoStack.removeFirst()
         }
@@ -287,23 +294,62 @@ class RemoveBackgroundViewModel(
     }
 
     fun undo() {
-        if (undoStack.isNotEmpty()) {
-            val current = _uiState.value.maskBitmap
-            if (current != null) redoStack.addLast(current)
-            val prev = undoStack.removeLast()
-            _uiState.value = _uiState.value.copy(maskBitmap = prev)
-            _maskVersion.value += 1
+        synchronized(stackLock) {
+            if (undoStack.isNotEmpty()) {
+                val current = _uiState.value.maskBitmap
+                if (current != null) redoStack.addLast(current)
+                val prev = undoStack.removeLast()
+                val original = _uiState.value.originalBitmap
+                val newProcessed = if (original != null && !original.isRecycled && !prev.isRecycled) {
+                    applyMaskToOriginalSync(original, prev)
+                } else {
+                    _uiState.value.processedBitmap
+                }
+                val oldProcessed = _uiState.value.processedBitmap
+                _uiState.value = _uiState.value.copy(maskBitmap = prev, processedBitmap = newProcessed)
+                if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
+                _maskVersion.value += 1
+            }
         }
     }
 
     fun redo() {
-        if (redoStack.isNotEmpty()) {
-            val current = _uiState.value.maskBitmap
-            if (current != null) pushToUndo(current)
-            val next = redoStack.removeLast()
-            _uiState.value = _uiState.value.copy(maskBitmap = next)
-            _maskVersion.value += 1
+        synchronized(stackLock) {
+            if (redoStack.isNotEmpty()) {
+                val current = _uiState.value.maskBitmap
+                if (current != null) pushToUndoLocked(current)
+                val next = redoStack.removeLast()
+                val original = _uiState.value.originalBitmap
+                val newProcessed = if (original != null && !original.isRecycled && !next.isRecycled) {
+                    applyMaskToOriginalSync(original, next)
+                } else {
+                    _uiState.value.processedBitmap
+                }
+                val oldProcessed = _uiState.value.processedBitmap
+                _uiState.value = _uiState.value.copy(maskBitmap = next, processedBitmap = newProcessed)
+                if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
+                _maskVersion.value += 1
+            }
         }
+    }
+
+    private fun applyMaskToOriginalSync(original: Bitmap, mask: Bitmap): Bitmap {
+        val scaledMask = if (mask.width != original.width || mask.height != original.height) {
+            Bitmap.createScaledBitmap(mask, original.width, original.height, true)
+        } else {
+            mask
+        }
+        val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val paint = Paint()
+        paint.isAntiAlias = true
+        canvas.drawBitmap(scaledMask, 0f, 0f, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(original, 0f, 0f, paint)
+        if (scaledMask != mask) {
+            scaledMask.recycle()
+        }
+        return result
     }
 
     suspend fun saveImage(activity: Activity): Boolean {
@@ -325,6 +371,8 @@ class RemoveBackgroundViewModel(
             AdManager.showInterstitialAd(activity)
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("RemoveBGVM", "saveImage failed", e)
@@ -340,11 +388,13 @@ class RemoveBackgroundViewModel(
         _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
         _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
         _uiState.value.maskBitmap?.takeIf { !it.isRecycled }?.recycle()
-        undoStack.forEach { if (!it.isRecycled) it.recycle() }
-        redoStack.forEach { if (!it.isRecycled) it.recycle() }
+        synchronized(stackLock) {
+            undoStack.forEach { if (!it.isRecycled) it.recycle() }
+            redoStack.forEach { if (!it.isRecycled) it.recycle() }
+            undoStack.clear()
+            redoStack.clear()
+        }
         _uiState.value = RemoveBackgroundUiState()
-        undoStack.clear()
-        redoStack.clear()
     }
 
     fun onErrorShown() {
@@ -364,12 +414,13 @@ class RemoveBackgroundViewModel(
         _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
         _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
         _uiState.value.maskBitmap?.takeIf { !it.isRecycled }?.recycle()
-        undoStack.forEach { if (!it.isRecycled) it.recycle() }
-        redoStack.forEach { if (!it.isRecycled) it.recycle() }
-        undoStack.clear()
-        redoStack.clear()
+        synchronized(stackLock) {
+            undoStack.forEach { if (!it.isRecycled) it.recycle() }
+            redoStack.forEach { if (!it.isRecycled) it.recycle() }
+            undoStack.clear()
+            redoStack.clear()
+        }
     }
-}
 
 data class RemoveBackgroundUiState(
     val selectedImageUri: Uri? = null,

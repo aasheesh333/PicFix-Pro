@@ -245,4 +245,7 @@
     <string name="height_label">H</string>
     <string name="refinement_failed_fmt">Refinement failed: %1$s</string>
     <string name="save_failed_fmt">Failed to save image: %1$s</string>
+    <string name="exif_gps_location">GPS Location</string>
+    <string name="exif_date_time">Date/Time: %1$s</string>
+    <string name="exif_camera">Camera: %1$s %2$s</string>
 </resources>

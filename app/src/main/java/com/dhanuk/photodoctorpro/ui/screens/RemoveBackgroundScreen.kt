@@ -33,7 +33,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
@@ -135,7 +134,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                      context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image)))
                  } catch (e: Exception) {
                      if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                     Toast.makeText(context, "context.getString(R.string.error_sharing, e.message)", Toast.LENGTH_SHORT).show()
+                     Toast.makeText(context, context.getString(R.string.error_sharing, e.message), Toast.LENGTH_SHORT).show()
                  }
             },
             onOpen = {
@@ -143,7 +142,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                     context.startActivity(createOpenIntent(path, context))
                 } catch (e: Exception) {
                     if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                    Toast.makeText(context, "context.getString(R.string.error_opening, e.message)", Toast.LENGTH_SHORT).show()
+                     Toast.makeText(context, context.getString(R.string.error_opening, e.message), Toast.LENGTH_SHORT).show()
                 }
             }
         )

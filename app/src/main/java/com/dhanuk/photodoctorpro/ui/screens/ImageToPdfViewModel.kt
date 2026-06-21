@@ -110,6 +110,8 @@ class ImageToPdfViewModel(
                 )
                 _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = filePath)
                 AdManager.showInterstitialAd(activity)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isCreating = false, error = e.message)
             } finally {
@@ -132,6 +134,8 @@ class ImageToPdfViewModel(
                     }
                     return@withContext file.uri.toString()
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ImageToPdfVM", "operation failed", e)
             }

@@ -480,6 +480,8 @@ private fun SizeSummaryRow(
     }
 }
 
+private val BYTE_FORMAT = DecimalFormat("#,##0.#")
+
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0L) return "—"
     val units = arrayOf("B", "KB", "MB", "GB")
@@ -489,6 +491,5 @@ private fun formatBytes(bytes: Long): String {
         value /= 1024
         unitIndex++
     }
-    val df = DecimalFormat("#,##0.#")
-    return "${df.format(value)} ${units[unitIndex]}"
+    return "${BYTE_FORMAT.format(value)} ${units[unitIndex]}"
 }

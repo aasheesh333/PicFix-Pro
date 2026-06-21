@@ -106,6 +106,8 @@ class ColorAdjustmentsViewModel(
                 if (oldProcessed != null && oldProcessed !== argb && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
                     oldProcessed.recycle()
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ColorVM", "setOriginal failed", e)
@@ -202,6 +204,8 @@ class ColorAdjustmentsViewModel(
                     format = android.graphics.Bitmap.CompressFormat.PNG
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ColorVM", "saveImage failed", e)

@@ -341,6 +341,8 @@ class ObjectEraserViewModel(
             AdManager.showInterstitialAd(activity)
             _uiState.value = _uiState.value.copy(savedFilePath = filePath)
             true
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ObjectEraserVM", "saveImage failed", e)

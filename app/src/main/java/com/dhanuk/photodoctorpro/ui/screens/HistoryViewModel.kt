@@ -37,6 +37,8 @@ class HistoryViewModel(
             _isClearing.value = true
             try {
                 repository.clearHistory()
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
@@ -49,6 +51,8 @@ class HistoryViewModel(
         viewModelScope.launch(viewModelExceptionHandler("HistoryVM") + Dispatchers.IO) {
             try {
                 repository.deleteHistory(id)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 _error.value = e.message
             }
