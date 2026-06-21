@@ -107,7 +107,7 @@ fun ObjectEraserScreen(navController: NavController) {
                 Button(onClick = {
                      scope.launch {
                          if (uiState.paths.isNotEmpty()) {
-                             viewModel.eraseObjects()
+                             viewModel.eraseObjectsSuspend()
                          }
                          val success = viewModel.saveImage(activity)
                          if (success) {
@@ -206,8 +206,7 @@ fun ObjectEraserScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .padding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -268,7 +267,7 @@ fun ObjectEraserScreen(navController: NavController) {
                     Text(stringResource(R.string.select_image))
                 }
             } else {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     Text(stringResource(R.string.brush_size_value, uiState.brushSize.toInt()))
                     Slider(
                         value = uiState.brushSize,

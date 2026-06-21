@@ -38,6 +38,8 @@ import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
+import com.dhanuk.photodoctorpro.utils.createShareIntent
+import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -185,42 +187,16 @@ fun ExifStripperScreen(navController: NavController) {
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        setPackage("com.whatsapp")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
-                }
+                try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
+                catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share Image"))
-                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image")) }
+                catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
             },
             onOpen = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "image/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
+                try { context.startActivity(createOpenIntent(path, context)) }
+                catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ExifStripperVM", "operation failed", e) }
             }
         )
     }

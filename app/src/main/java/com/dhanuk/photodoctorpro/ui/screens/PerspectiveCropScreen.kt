@@ -61,6 +61,8 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
+import com.dhanuk.photodoctorpro.utils.createShareIntent
+import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -418,29 +420,36 @@ class PerspectiveCropViewModel(
             corners[2].x, corners[2].y,
             corners[3].x, corners[3].y
         )
-        val widthA = distance(src[0], src[1], src[4], src[5])
-        val widthB = distance(src[2], src[3], src[6], src[7])
-        val heightA = distance(src[0], src[1], src[2], src[3])
-        val heightB = distance(src[4], src[5], src[6], src[7])
-        val rawW = maxOf(widthA, widthB)
-        val rawH = maxOf(heightA, heightB)
+        // Compute natural content dimensions from the quadrilateral.
+        // Average the top/bottom edges for width, left/right edges for height.
+        val widthTop = distance(src[0], src[1], src[2], src[3]) // TL-TR
+        val widthBottom = distance(src[6], src[7], src[4], src[5]) // BL-BR
+        val heightLeft = distance(src[0], src[1], src[6], src[7]) // TL-BL
+        val heightRight = distance(src[2], src[3], src[4], src[5]) // TR-BR
+        val naturalW = (widthTop + widthBottom) / 2f
+        val naturalH = (heightLeft + heightRight) / 2f
+
         val lock = _uiState.value.aspectRatio
-        val (finalW, finalH) = if (lock.ratio != null) {
-            // Force the output to the locked aspect ratio. Use the longer
-            // of the two dimensions as the limiting side; derive the other
-            // from the ratio. This stops the "stretched" output the user
-            // reported when auto-detect produced a non-rectangular region.
-            val currentRatio = if (rawH > 0) rawW / rawH else lock.ratio
-            if (currentRatio > lock.ratio) {
-                rawW to (rawW / lock.ratio)
+        val (warpW, warpH) = if (lock.ratio != null) {
+            // When locked, we want to preserve the content's natural aspect ratio
+            // as much as possible. First compute the content's aspect ratio.
+            val contentRatio = if (naturalH > 0) naturalW / naturalH else lock.ratio
+            val targetRatio = lock.ratio!!
+            // Fit the content into the target ratio with letterboxing.
+            // Determine which dimension is the limiting factor.
+            if (contentRatio > targetRatio) {
+                // Content is wider than target → width is limiting, height will have padding
+                naturalW to (naturalW / targetRatio)
             } else {
-                (rawH * lock.ratio) to rawH
+                // Content is taller than target → height is limiting, width will have padding
+                (naturalH * targetRatio) to naturalH
             }
         } else {
-            rawW to rawH
+            naturalW to naturalH
         }
-        val outW = finalW.toInt().coerceAtLeast(1)
-        val outH = finalH.toInt().coerceAtLeast(1)
+
+        val outW = warpW.toInt().coerceAtLeast(1)
+        val outH = warpH.toInt().coerceAtLeast(1)
 
         val dst = floatArrayOf(
             0f, 0f,
@@ -601,42 +610,16 @@ fun PerspectiveCropScreen(navController: NavController) {
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        setPackage("com.whatsapp")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
-                }
+                try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
+                catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share Image"))
-                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image")) }
+                catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
             },
             onOpen = {
-                try {
-                    val file = File(path)
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "image/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
+                try { context.startActivity(createOpenIntent(path, context)) }
+                catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
             }
         )
     }
