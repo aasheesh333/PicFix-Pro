@@ -24,6 +24,13 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     private var inputShape: IntArray? = null
     private var scaleFactor: Int = -1
 
+    // IMPORTANT: this field MUST be declared before the `init` block.
+    // Kotlin initialises instance properties and init blocks in source order;
+    // if this lock is declared after the init block, it is `null` while
+    // `init { initialize() }` runs. The init path calls `close()` on failure
+    // (which takes this lock) — that would NPE on `ReentrantLock.lock()`.
+    private val interpLock = ReentrantLock()
+
     init {
         initialize()
     }
@@ -62,8 +69,6 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
             }
         }
     }
-
-    private val interpLock = ReentrantLock()
 
     private fun tryGpuDelegate(options: Interpreter.Options, compatList: CompatibilityList) {
         try {

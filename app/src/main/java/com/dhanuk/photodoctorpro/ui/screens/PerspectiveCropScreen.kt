@@ -290,12 +290,17 @@ class PerspectiveCropViewModel(
     }
 
     /**
-     * Anchor the corner opposite to [index] and rebuild the 4 corners so
-     * the rectangle has the requested [ratio]. The dragged corner snaps to
-     * the user's click position (clamped inside the bitmap), and the
-     * rectangle is recomputed to satisfy the ratio.
+     * Snap the dragged corner to the user's click position. The opposite
+     * corner stays put. The other 2 corners are computed so the 4 corners
+     * form an axis-aligned rectangle (TL/BR diagonal) with horizontal and
+     * vertical edges only.
      *
-     * 0=TL, 1=TR, 2=BR, 3=BL; the opposite corner is at [(index+2) % 4].
+     * The resulting rectangle's aspect ratio may not match the locked ratio;
+     * warpPerspective() normalizes the output to the locked ratio, so the
+     * final saved image has the correct aspect. The visual green overlay
+     * shows a clean rectangle so the user sees what they're going to get.
+     *
+     * 0=TL, 1=TR, 2=BR, 3=BL. Opposite corner is at [(index+2) % 4].
      */
     private fun rectangleForDrag(
         current: List<PointF>,
@@ -306,67 +311,68 @@ class PerspectiveCropViewModel(
         bitmapW: Float,
         bitmapH: Float
     ): List<PointF> {
+        if (current.size != 4) return current
         val oppositeIndex = (index + 2) % 4
         val anchor = current[oppositeIndex]
-        // Choose the rectangle dimensions from the drag vector: the side
-        // perpendicular to the *shorter* direction is adjusted to satisfy
-        // the ratio. This means a corner stays in the same half-plane as
-        // the user's click.
-        val dragW = kotlin.math.abs(newX - anchor.x)
-        val dragH = kotlin.math.abs(newY - anchor.y)
-        if (dragW < 1f || dragH < 1f) return current
-        val dragRatio = dragW / dragH
-        var rectW: Float
-        var rectH: Float
-        if (dragRatio > ratio) {
-            rectW = dragW
-            rectH = rectW / ratio
-        } else {
-            rectH = dragH
-            rectW = rectH * ratio
-        }
-        // Determine which side the drag came from.
+        // The dragged corner lands at the click position, clamped to bitmap.
+        val draggedX = newX.coerceIn(0f, bitmapW)
+        val draggedY = newY.coerceIn(0f, bitmapH)
+        // Build the axis-aligned rectangle from the dragged corner and the
+        // opposite anchor corner. The other 2 corners are the projections
+        // of the dragged corner onto the anchor's vertical and horizontal
+        // lines. If the dragged corner is on the "wrong" side of the anchor
+        // (e.g. user dragged TL below BR), the opposite is automatically
+        // picked so the rectangle is well-formed.
         val leftX: Float
         val rightX: Float
         val topY: Float
         val bottomY: Float
         when (index) {
-            0 -> { // TL dragged: anchor is BR
-                leftX = anchor.x - rectW
-                topY = anchor.y - rectH
+            0 -> { // TL dragged, anchor is BR
+                leftX = draggedX
                 rightX = anchor.x
+                topY = draggedY
                 bottomY = anchor.y
+                // Normalize so left <= right and top <= bottom
+                if (leftX > rightX) { val t = leftX; leftX = rightX; rightX = t }
+                if (topY > bottomY) { val t = topY; topY = bottomY; bottomY = t }
             }
-            1 -> { // TR dragged: anchor is BL
-                rightX = anchor.x + rectW
-                topY = anchor.y - rectH
+            1 -> { // TR dragged, anchor is BL
+                rightX = draggedX
                 leftX = anchor.x
+                topY = draggedY
                 bottomY = anchor.y
+                if (rightX < leftX) { val t = rightX; rightX = leftX; leftX = t }
+                if (topY > bottomY) { val t = topY; topY = bottomY; bottomY = t }
             }
-            2 -> { // BR dragged: anchor is TL
-                rightX = anchor.x + rectW
-                bottomY = anchor.y + rectH
+            2 -> { // BR dragged, anchor is TL
+                rightX = draggedX
                 leftX = anchor.x
+                bottomY = draggedY
                 topY = anchor.y
+                if (rightX < leftX) { val t = rightX; rightX = leftX; leftX = t }
+                if (bottomY < topY) { val t = bottomY; bottomY = topY; topY = t }
             }
-            3 -> { // BL dragged: anchor is TR
-                leftX = anchor.x - rectW
-                bottomY = anchor.y + rectH
+            3 -> { // BL dragged, anchor is TR
+                leftX = draggedX
                 rightX = anchor.x
+                bottomY = draggedY
                 topY = anchor.y
+                if (leftX > rightX) { val t = leftX; leftX = rightX; rightX = t }
+                if (bottomY < topY) { val t = bottomY; bottomY = topY; topY = t }
             }
             else -> return current
         }
-        // Clamp inside the bitmap.
-        val lx = leftX.coerceIn(0f, (bitmapW - 1f).coerceAtLeast(0f))
+        // Clamp to bitmap. The rectangle is always non-degenerate after this.
+        val lx = leftX.coerceIn(0f, bitmapW)
         val rx = rightX.coerceIn(lx + 1f, bitmapW)
-        val ty = topY.coerceIn(0f, (bitmapH - 1f).coerceAtLeast(0f))
+        val ty = topY.coerceIn(0f, bitmapH)
         val by = bottomY.coerceIn(ty + 1f, bitmapH)
         return listOf(
-            PointF(lx, ty),
-            PointF(rx, ty),
-            PointF(rx, by),
-            PointF(lx, by)
+            PointF(lx, ty),  // TL
+            PointF(rx, ty),  // TR
+            PointF(rx, by),  // BR
+            PointF(lx, by)   // BL
         )
     }
 

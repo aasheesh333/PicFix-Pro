@@ -133,6 +133,71 @@ class PerspectiveCropUpdateCornerTest {
         assertEquals(lockedCorners[0].y, freeCorners[0].y, 0.0001f)
     }
 
+    @Test
+    fun `aspect-locked drag snaps dragged corner to click position`() {
+        val vm = PerspectiveCropViewModel(mockk<HistoryRepository>(relaxed = true), SavedStateHandle())
+        val bitmap = Bitmap.createBitmap(2000, 2000, Bitmap.Config.ARGB_8888)
+        // Initial 1000x1000 square in the top-left of the 2000x2000 bitmap.
+        installOriginal(vm, bitmap, w = 2000, h = 2000)
+        // Lock to 4:3. Note: with the new snap-to-click math, the rectangle
+        // will become 1000x750 (using the existing 1000 horizontal side).
+        vm.setAspectRatio(AspectRatioLock.RATIO_4_3)
+        val beforeCorners = vm.uiState.value.corners
+        val brXBefore = beforeCorners[2].x
+        val brYBefore = beforeCorners[2].y
+        // The BR (opposite of TL) must be preserved across the drag.
+        // Now drag TL (index 0) to a specific click point in bitmap space.
+        // Canvas = bitmap (no letterbox), so the click in canvas coords
+        // equals the bitmap coord.
+        val canvasSize = IntSize(2000, 2000)
+        val clickX = 500f
+        val clickY = 300f
+        vm.updateCorner(0, clickX, clickY, canvasSize)
+        val after = vm.uiState.value.corners
+        // The dragged corner (TL, index 0) must land at the click position.
+        assertEquals(clickX, after[0].x, 0.0001f)
+        assertEquals(clickY, after[0].y, 0.0001f)
+        // The opposite corner (BR) must stay at its position.
+        assertEquals(brXBefore, after[2].x, 0.0001f)
+        assertEquals(brYBefore, after[2].y, 0.0001f)
+    }
+
+    @Test
+    fun `aspect-locked drag clamps corner inside bitmap bounds`() {
+        val vm = PerspectiveCropViewModel(mockk<HistoryRepository>(relaxed = true), SavedStateHandle())
+        val bitmap = Bitmap.createBitmap(1000, 1000, Bitmap.Config.ARGB_8888)
+        installOriginal(vm, bitmap, w = 1000, h = 1000)
+        vm.setAspectRatio(AspectRatioLock.SQUARE)
+        val canvasSize = IntSize(1000, 1000)
+        // Try to drag TL outside the bitmap (negative coords and beyond size).
+        vm.updateCorner(0, -200f, -300f, canvasSize)
+        val after = vm.uiState.value.corners
+        // TL is clamped to (0, 0) — the bitmap top-left.
+        assertEquals(0f, after[0].x, 0.0001f)
+        assertEquals(0f, after[0].y, 0.0001f)
+    }
+
+    @Test
+    fun `aspect-locked drag produces an axis-aligned rectangle`() {
+        val vm = PerspectiveCropViewModel(mockk<HistoryRepository>(relaxed = true), SavedStateHandle())
+        val bitmap = Bitmap.createBitmap(2000, 2000, Bitmap.Config.ARGB_8888)
+        installOriginal(vm, bitmap, w = 2000, h = 2000)
+        vm.setAspectRatio(AspectRatioLock.RATIO_16_9)
+        val canvasSize = IntSize(2000, 2000)
+        // Drag TL to a random point.
+        vm.updateCorner(0, 300f, 400f, canvasSize)
+        val c = vm.uiState.value.corners
+        // All 4 corners must form an axis-aligned rectangle (no diagonals).
+        // TL.y == TR.y (top edge is horizontal)
+        assertEquals(c[0].y, c[1].y, 0.0001f)
+        // BL.y == BR.y (bottom edge is horizontal)
+        assertEquals(c[3].y, c[2].y, 0.0001f)
+        // TL.x == BL.x (left edge is vertical)
+        assertEquals(c[0].x, c[3].x, 0.0001f)
+        // TR.x == BR.x (right edge is vertical)
+        assertEquals(c[1].x, c[2].x, 0.0001f)
+    }
+
     /**
      * Use reflection to inject a synthetic image and initial corners into the VM.
      * The VM's onImageSelected() needs a real context; we bypass it here.
