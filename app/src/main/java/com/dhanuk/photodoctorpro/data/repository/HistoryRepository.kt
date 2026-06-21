@@ -5,12 +5,16 @@ import com.dhanuk.photodoctorpro.BuildConfig
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.local.HistoryDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class HistoryRepository(private val historyDao: HistoryDao) {
 
+    private val insertMutex = Mutex()
+
     fun getAllHistory(): Flow<List<History>> = historyDao.getAll()
 
-    suspend fun addHistory(history: History) {
+    suspend fun addHistory(history: History) = insertMutex.withLock {
         val latest = historyDao.getLatest()
         if (latest == null ||
             latest.operationType != history.operationType ||

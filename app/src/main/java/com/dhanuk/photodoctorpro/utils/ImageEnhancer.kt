@@ -35,6 +35,13 @@ object ImageEnhancer {
         }
     }
 
+    fun shutdown() {
+        synchronized(esrganLock) {
+            esrganCache.values.forEach { it.close() }
+            esrganCache.clear()
+        }
+    }
+
     /**
      * Downscale the input bitmap so its long edge is at most [maxDim] pixels.
      * Returns the original bitmap if no scaling is needed, or a new ARGB_8888
@@ -151,9 +158,14 @@ object ImageEnhancer {
                 if (esrganX4.isReady()) esrganX4.enhance(bitmap)
                 else if (esrganX2.isReady()) {
                     val step1 = esrganX2.enhance(bitmap)
-                    val step2 = esrganX2.enhance(step1)
-                    step1.recycle()
-                    step2
+                    try {
+                        val step2 = esrganX2.enhance(step1)
+                        step1.recycle()
+                        step2
+                    } catch (e: Exception) {
+                        step1.recycle()
+                        throw e
+                    }
                 }
                 else OpenCVEnhancerFallback.enhance(bitmap, 4)
             }

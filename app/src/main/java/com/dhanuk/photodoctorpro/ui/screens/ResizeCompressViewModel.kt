@@ -266,8 +266,12 @@ class ResizeCompressViewModel(
     private fun estimateBytes(bitmap: Bitmap?, quality: Float): Long {
         if (bitmap == null) return 0L
         val baos = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt().coerceIn(1, 100), baos)
-        return baos.size().toLong()
+        try {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt().coerceIn(1, 100), baos)
+            return baos.size().toLong()
+        } finally {
+            baos.close()
+        }
     }
 
     private fun resizeBitmap(source: Bitmap, maxDim: Int): Bitmap {

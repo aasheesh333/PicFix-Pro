@@ -12,6 +12,8 @@ import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PhotoDoctorProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.CrashReporter
+import com.dhanuk.photodoctorpro.utils.FaceEnhancer
+import com.dhanuk.photodoctorpro.utils.ImageEnhancer
 import com.dhanuk.photodoctorpro.utils.ThemeController
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +44,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         CrashReporter.unregisterActivity(this)
         AdManager.cleanup()
+        ImageEnhancer.shutdown()
+        FaceEnhancer.shutdown()
     }
 
     private fun requestRequiredPermissions() {

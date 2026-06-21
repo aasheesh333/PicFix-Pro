@@ -39,6 +39,13 @@ class FaceEnhancer private constructor(private val context: Context) {
             }
         }
 
+        fun shutdown() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
+
         private fun logError(msg: String) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("FaceEnhancer", msg)

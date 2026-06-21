@@ -209,8 +209,15 @@ object BitmapUtils {
             counter++
         }
 
-        FileOutputStream(file).use { out ->
-            bitmap.compress(format, 95, out)
+        val file = File(imagesDir, finalName)
+
+        try {
+            FileOutputStream(file).use { out ->
+                bitmap.compress(format, 95, out)
+            }
+        } catch (e: Exception) {
+            if (file.exists()) file.delete()
+            throw e
         }
 
         MediaScannerConnectionWrapper.scan(context, file.absolutePath)
