@@ -54,6 +54,8 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     }
 
     companion object {
+        private const val MAX_INPUT_PIXELS = 2_000_000L
+
         private fun logError(msg: String) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ESRGANHelper", msg)
@@ -116,6 +118,8 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
         if (shape != null && (shape[1] <= 0 || shape[2] <= 0)) {
              interp.resizeInput(0, intArrayOf(1, h, w, 3))
              interp.allocateTensors()
+             // Refresh cached inputShape so subsequent tile inferences don't see stale values.
+             inputShape = interp.getInputTensor(0).shape()
         }
 
         val outputTensor = interp.getOutputTensor(0)
@@ -128,13 +132,26 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     }
 
     fun enhance(bitmap: Bitmap): Bitmap {
-        val interp = interpreter ?: throw IllegalStateException("Model not loaded")
+        // Double-checked locking: re-check interpreter inside the lock so a
+        // concurrent close() can't cause an NPE on the way in.
         return interpLock.withLock {
+            val interp = interpreter ?: throw IllegalStateException("Model not loaded")
             enhanceInternal(interp, bitmap)
         }
     }
 
     private fun enhanceInternal(interp: Interpreter, bitmap: Bitmap): Bitmap {
+        val w = bitmap.width
+        val h = bitmap.height
+
+        // Guard: refuse inputs that would OOM. ImageEnhancer pre-downscales to
+        // 1024×1024 for 6x/8x, but the model itself should also self-protect.
+        if (w.toLong() * h.toLong() > MAX_INPUT_PIXELS) {
+            throw IllegalArgumentException(
+                "ESRGAN input too large: ${w}×${h} = ${w.toLong()*h.toLong()/1_000_000}MP. " +
+                "Max is ${MAX_INPUT_PIXELS/1_000_000}MP."
+            )
+        }
 
         val shape = inputShape
         val modelH = if (shape != null && shape.size > 2 && shape[1] > 0) shape[1] else 0
@@ -143,19 +160,25 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
         val TILE_SIZE = if (isFixed) modelH else 512
         var PADDING = 32
 
-        // Ensure padding isn't too large
         if (TILE_SIZE <= 2 * PADDING) {
             PADDING = TILE_SIZE / 4
         }
 
         val VALID_INPUT_SIZE = TILE_SIZE - 2 * PADDING
 
-        val w = bitmap.width
-        val h = bitmap.height
         val targetScale = if (scaleFactor > 0) scaleFactor else 4
 
         val outputBitmap = Bitmap.createBitmap(w * targetScale, h * targetScale, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(outputBitmap)
+
+        // Resize the model's input tensor *once* per enhance call, not per tile.
+        // This avoids the cost of `allocateTensors()` running hundreds of times
+        // for non-fixed models.
+        if (!isFixed) {
+            interp.resizeInput(0, intArrayOf(1, TILE_SIZE, TILE_SIZE, 3))
+            interp.allocateTensors()
+            inputShape = interp.getInputTensor(0).shape()
+        }
 
         var y = 0
         while (y < h) {
@@ -164,7 +187,6 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
                 val left = x - PADDING
                 val top = y - PADDING
 
-                // Draw Source Tile
                 val inputTile = Bitmap.createBitmap(TILE_SIZE, TILE_SIZE, Bitmap.Config.ARGB_8888)
                 val tileCanvas = Canvas(inputTile)
 
@@ -184,21 +206,15 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
 
                 tileCanvas.drawBitmap(bitmap, srcRect, dstRect, null)
 
-                // Inference
-                val outputTile = runInference(interp, inputTile, isFixed, TILE_SIZE, TILE_SIZE)
+                val outputTile = runInference(interp, inputTile, TILE_SIZE, TILE_SIZE)
 
-                // Crop Valid Region
                 val outPadding = PADDING * targetScale
                 val outValidSize = VALID_INPUT_SIZE * targetScale
-
-                // Ensure we don't crop outside outputTile bounds (if scale mismatch)
-                // (Assumes runInference returns TILE_SIZE * Scale)
 
                 val outSrcRect = Rect(outPadding, outPadding, outPadding + outValidSize, outPadding + outValidSize)
 
                 val outDstX = x * targetScale
                 val outDstY = y * targetScale
-                // We must clip dst rect to image bounds
                 val outDstRect = Rect(outDstX, outDstY, outDstX + outValidSize, outDstY + outValidSize)
 
                 canvas.drawBitmap(outputTile, outSrcRect, outDstRect, null)
@@ -214,12 +230,7 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
         return outputBitmap
     }
 
-    private fun runInference(interp: Interpreter, bitmap: Bitmap, isFixed: Boolean, w: Int, h: Int): Bitmap {
-        if (!isFixed) {
-             interp.resizeInput(0, intArrayOf(1, h, w, 3))
-             interp.allocateTensors()
-        }
-
+    private fun runInference(interp: Interpreter, bitmap: Bitmap, w: Int, h: Int): Bitmap {
         val input = ByteBuffer.allocateDirect(1 * h * w * 3 * 4)
         input.order(ByteOrder.nativeOrder())
 

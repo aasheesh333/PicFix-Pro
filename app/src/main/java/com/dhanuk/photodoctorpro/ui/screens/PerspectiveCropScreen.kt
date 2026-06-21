@@ -221,14 +221,40 @@ class PerspectiveCropViewModel(
 
     fun updateCorner(index: Int, x: Float, y: Float, canvasSize: IntSize) {
         val bitmap = _uiState.value.originalBitmap ?: return
-        val scaleX = bitmap.width.toFloat() / canvasSize.width
-        val scaleY = bitmap.height.toFloat() / canvasSize.height
+        val bitmapW = bitmap.width.toFloat()
+        val bitmapH = bitmap.height.toFloat()
+        if (bitmapW <= 0f || bitmapH <= 0f) return
+        val canvasW = canvasSize.width.toFloat()
+        val canvasH = canvasSize.height.toFloat()
+        if (canvasW <= 0f || canvasH <= 0f) return
+
+        // Match the screen's ContentScale.Fit: compute the displayed image rect
+        // (letterboxed if the image aspect doesn't match the canvas).
+        val viewAspect = canvasW / canvasH
+        val imageAspect = bitmapW / bitmapH
+        val displayedW: Float
+        val displayedH: Float
+        val offsetX: Float
+        val offsetY: Float
+        if (imageAspect > viewAspect) {
+            displayedW = canvasW
+            displayedH = displayedW / imageAspect
+            offsetX = 0f
+            offsetY = (canvasH - displayedH) / 2f
+        } else {
+            displayedH = canvasH
+            displayedW = displayedH * imageAspect
+            offsetX = (canvasW - displayedW) / 2f
+            offsetY = 0f
+        }
+        // Convert the click position (canvas coords) to the displayed image rect,
+        // clamp, then scale to bitmap coordinates.
+        val localX = (x - offsetX).coerceIn(0f, displayedW)
+        val localY = (y - offsetY).coerceIn(0f, displayedH)
+        val scale = displayedW / bitmapW
         val updated = _uiState.value.corners.toMutableList()
         if (index !in updated.indices) return
-        updated[index] = PointF(
-            x.coerceIn(0f, canvasSize.width.toFloat()) * scaleX,
-            y.coerceIn(0f, canvasSize.height.toFloat()) * scaleY
-        )
+        updated[index] = PointF(localX / scale, localY / scale)
         _uiState.update { it.copy(corners = updated) }
     }
 

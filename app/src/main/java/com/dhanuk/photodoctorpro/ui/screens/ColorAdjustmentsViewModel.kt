@@ -16,6 +16,7 @@ import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,9 +56,8 @@ class ColorAdjustmentsViewModel(
     )
     val uiState: StateFlow<ColorAdjustmentsUiState> = _uiState.asStateFlow()
 
-    private val adjustmentTrigger = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
+    private val adjustmentTrigger = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private var adjustmentJob: Job? = null
-    private var originalBitmapCopy: Bitmap? = null
 
     init {
         @OptIn(FlowPreview::class)
@@ -72,7 +72,7 @@ class ColorAdjustmentsViewModel(
 
     fun setOriginal(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
-        _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null, processedBitmap = null)
         viewModelScope.launch(viewModelExceptionHandler("ColorVM") + Dispatchers.IO) {
             try {
                 val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
@@ -90,20 +90,22 @@ class ColorAdjustmentsViewModel(
                     _uiState.update { it.copy(error = "Could not allocate bitmap", isLoading = false) }
                     return@launch
                 }
-                val newOriginal = argb
-                originalBitmapCopy?.takeIf { !it.isRecycled }?.recycle()
                 if (argb != bitmap && !bitmap.isRecycled) bitmap.recycle()
-                originalBitmapCopy = newOriginal
+                val oldOriginal = _uiState.value.originalBitmap
                 val oldProcessed = _uiState.value.processedBitmap
                 _uiState.update {
                     it.copy(
                         selectedImageUri = uri,
-                        originalBitmap = newOriginal,
-                        processedBitmap = newOriginal,
+                        originalBitmap = argb,
+                        processedBitmap = argb,
                         isLoading = false
                     )
                 }
-                if (oldProcessed != null && oldProcessed != newOriginal && !oldProcessed.isRecycled) oldProcessed.recycle()
+                // Recycle only the old *original* if it's no longer referenced; processedBitmap == argb now
+                if (oldOriginal != null && oldOriginal !== argb && !oldOriginal.isRecycled) oldOriginal.recycle()
+                if (oldProcessed != null && oldProcessed !== argb && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
+                    oldProcessed.recycle()
+                }
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ColorVM", "setOriginal failed", e)
@@ -156,13 +158,18 @@ class ColorAdjustmentsViewModel(
     private suspend fun runAdjustment() {
         val state = _uiState.value
         val original = state.originalBitmap ?: return
+        if (original.isRecycled) return
         try {
             val output = withContext(Dispatchers.Default) {
                 applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
             }
             val old = _uiState.value.processedBitmap
             _uiState.update { it.copy(processedBitmap = output) }
-            if (old != null && old != output && !old.isRecycled) old.recycle()
+            // NEVER recycle the original bitmap (it's still in use as the source).
+            // NEVER recycle `output` (it's the current processedBitmap).
+            if (old != null && old !== original && old !== output && !old.isRecycled) {
+                old.recycle()
+            }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             throw ce
         } catch (e: Exception) {
@@ -204,10 +211,16 @@ class ColorAdjustmentsViewModel(
         super.onCleared()
         adjustmentJob?.cancel()
         adjustmentJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.processedBitmap?.takeIf { !it.isRecycled && it != originalBitmapCopy }?.recycle()
-        originalBitmapCopy?.takeIf { !it.isRecycled }?.recycle()
-        originalBitmapCopy = null
+        val original = _uiState.value.originalBitmap
+        val processed = _uiState.value.processedBitmap
+        // Recycle only distinct bitmap instances. originalBitmap and processedBitmap
+        // may be the same reference right after setOriginal() — do not double-recycle.
+        if (processed != null && processed !== original && !processed.isRecycled) {
+            processed.recycle()
+        }
+        if (original != null && !original.isRecycled) {
+            original.recycle()
+        }
     }
 
     companion object {

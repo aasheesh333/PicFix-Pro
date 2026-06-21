@@ -40,18 +40,24 @@ class EnhanceImageViewModel(
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch(viewModelExceptionHandler("EnhanceVM") + Dispatchers.IO) {
-            _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
                 if (bitmap != null) {
                     val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
-                    val old = _uiState.value.originalBitmap
+                    // Free the old bitmaps (if any) before replacing.
+                    val oldOriginal = _uiState.value.originalBitmap
+                    val oldEnhanced = _uiState.value.enhancedBitmap
                     _uiState.value = _uiState.value.copy(
                         originalBitmap = bitmap,
+                        enhancedBitmap = null,
                         isLoading = false,
-                        isLargeImage = isLarge
+                        isLargeImage = isLarge,
+                        progress = 0f,
+                        savedFilePath = null
                     )
-                    if (old != null && old != bitmap && !old.isRecycled) old.recycle()
+                    if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
+                    if (oldEnhanced != null && oldEnhanced !== bitmap && !oldEnhanced.isRecycled) oldEnhanced.recycle()
                 } else {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
                 }
@@ -65,13 +71,15 @@ class EnhanceImageViewModel(
     }
 
     fun enhanceImage(context: Context, scaleFactor: Int) {
-        if (_uiState.value.isLargeImage && scaleFactor > 4) {
-            _uiState.value = _uiState.value.copy(error = "Higher scales disabled for very large images.")
+        val state = _uiState.value
+        if (state.isLargeImage && scaleFactor > 4) {
+            _uiState.value = state.copy(error = "Higher scales disabled for very large images.")
             return
         }
 
-        val original = _uiState.value.originalBitmap ?: return
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null, progress = 0f)
+        val original = state.originalBitmap ?: return
+        if (original.isRecycled) return
+        _uiState.value = state.copy(isLoading = true, error = null, progress = 0f)
 
         enhanceJob?.cancel()
         enhanceJob = viewModelScope.launch(viewModelExceptionHandler("EnhanceVM")) {
@@ -88,7 +96,7 @@ class EnhanceImageViewModel(
                     scaleFactor = scaleFactor,
                     progress = 1f
                 )
-                if (old != null && old != enhanced && !old.isRecycled) old.recycle()
+                if (old != null && old !== original && old != enhanced && !old.isRecycled) old.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -98,7 +106,7 @@ class EnhanceImageViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     progress = 0f,
-                    error = "Error: ${e.localizedMessage ?: "Unknown error"}"
+                    error = "Enhance failed: ${e.localizedMessage ?: e.javaClass.simpleName}"
                 )
             }
         }
