@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.data.local.History
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -60,7 +61,7 @@ class ColorAdjustmentsViewModel(
 
     init {
         @OptIn(FlowPreview::class)
-        adjustmentJob = viewModelScope.launch {
+        adjustmentJob = viewModelScope.launch(viewModelExceptionHandler("ColorVM")) {
             adjustmentTrigger
                 .debounce(50)
                 .collect {
@@ -72,11 +73,9 @@ class ColorAdjustmentsViewModel(
     fun setOriginal(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null)
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ColorVM") + Dispatchers.IO) {
             try {
-                val bitmap = withContext(Dispatchers.IO) {
-                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
-                }
+                val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 if (bitmap == null) {
                     _uiState.update { it.copy(error = "Could not decode image", isLoading = false) }
                     return@launch
@@ -180,7 +179,7 @@ class ColorAdjustmentsViewModel(
     fun saveImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ColorVM") + Dispatchers.IO) {
             try {
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,

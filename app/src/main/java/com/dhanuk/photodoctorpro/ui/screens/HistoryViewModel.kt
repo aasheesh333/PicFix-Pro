@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -11,7 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class HistoryViewModel(
     private val repository: HistoryRepository,
@@ -33,16 +33,24 @@ class HistoryViewModel(
 
     fun clearHistory() {
         if (_isClearing.value) return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("HistoryVM") + Dispatchers.IO) {
             _isClearing.value = true
             try {
-                withContext(Dispatchers.IO) {
-                    repository.clearHistory()
-                }
+                repository.clearHistory()
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
                 _isClearing.value = false
+            }
+        }
+    }
+
+    fun deleteEntry(id: Int) {
+        viewModelScope.launch(viewModelExceptionHandler("HistoryVM") + Dispatchers.IO) {
+            try {
+                repository.deleteHistory(id)
+            } catch (e: Exception) {
+                _error.value = e.message
             }
         }
     }

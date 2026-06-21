@@ -71,4 +71,11 @@ class HistoryRepositoryTest {
         repo.clearHistory()
         coVerify(exactly = 1) { dao.clearAll() }
     }
+
+    @Test
+    fun `deleteHistory delegates to dao by id`() = runTest {
+        val repo = HistoryRepository(dao)
+        repo.deleteHistory(42)
+        coVerify(exactly = 1) { dao.deleteById(42) }
+    }
 }

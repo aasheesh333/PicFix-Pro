@@ -1,16 +1,21 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.content.Intent
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,7 +28,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(navController: NavController) {
     val context = LocalContext.current
@@ -34,6 +39,7 @@ fun HistoryScreen(navController: NavController) {
     val isClearing by viewModel.isClearing.collectAsState()
     val errorMessage by viewModel.error.collectAsState()
     var selectedItem by remember { mutableStateOf<History?>(null) }
+    var pendingDelete by remember { mutableStateOf<History?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(errorMessage) {
@@ -43,22 +49,44 @@ fun HistoryScreen(navController: NavController) {
         }
     }
 
-    if (selectedItem != null) {
-        val item = selectedItem!!
+    selectedItem?.let { item ->
         val isContentUri = item.filePath.startsWith("content://")
         val displayName = if (isContentUri) "Gallery/Selected Folder" else File(item.filePath).name
+        val exists = isContentUri || File(item.filePath).exists()
 
         AlertDialog(
             onDismissRequest = { selectedItem = null },
             title = { Text(item.operationType) },
             text = {
                 Column {
-                     Text(stringResource(R.string.saved_to, displayName))
+                    Text(stringResource(R.string.saved_to, displayName))
+                    if (!exists) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                stringResource(R.string.file_missing),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
+                        if (!exists) {
+                            snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
+                            selectedItem = null
+                            return@Button
+                        }
                         val intent = Intent(Intent.ACTION_VIEW).apply {
                             val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
                             val uri = if (isContentUri) {
@@ -73,36 +101,76 @@ fun HistoryScreen(navController: NavController) {
                         try {
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            // Handle no app found
+                            snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
                         }
                         selectedItem = null
-                    }
+                    },
+                    enabled = exists
                 ) {
                     Text(stringResource(R.string.open))
                 }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                            val uri = if (isContentUri) {
-                                android.net.Uri.parse(item.filePath)
-                            } else {
-                                val file = File(item.filePath)
-                                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                Row {
+                    if (exists) {
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
+                                    val uri = if (isContentUri) {
+                                        android.net.Uri.parse(item.filePath)
+                                    } else {
+                                        val file = File(item.filePath)
+                                        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                                    }
+                                    type = mimeType
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                }
+                                try {
+                                    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
+                                }
+                                selectedItem = null
                             }
-                            type = mimeType
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        ) {
+                            Text(stringResource(R.string.share))
                         }
-                        try {
-                             context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
-                        } catch (e: Exception) {}
-                        selectedItem = null
                     }
-                ) {
-                    Text(stringResource(R.string.share))
+                    TextButton(onClick = {
+                        pendingDelete = item
+                        selectedItem = null
+                    }) {
+                        Text(
+                            stringResource(R.string.action_delete),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.delete_entry)) },
+            text = { Text(stringResource(R.string.delete_entry_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteEntry(item.id)
+                    pendingDelete = null
+                }) {
+                    Text(
+                        stringResource(R.string.action_remove),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -114,14 +182,20 @@ fun HistoryScreen(navController: NavController) {
                 title = { Text(stringResource(R.string.history)) },
                 actions = {
                     if (historyItems.isNotEmpty()) {
-                        Button(onClick = { viewModel.clearHistory() }, enabled = !isClearing) {
+                        Button(
+                            onClick = { viewModel.clearHistory() },
+                            enabled = !isClearing,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Clear all history"
+                            }
+                        ) {
                             Text(stringResource(R.string.clear))
                         }
                     }
                 }
             )
         },
-         snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (historyItems.isEmpty()) {
             Box(
@@ -137,16 +211,37 @@ fun HistoryScreen(navController: NavController) {
                     .padding(padding),
                 contentPadding = PaddingValues(16.dp)
             ) {
-                items(historyItems) { item ->
-                    val displayName = if (item.filePath.startsWith("content://")) "Gallery/Selected Folder" else File(item.filePath).name
+                items(historyItems, key = { it.id }) { item ->
+                    val isContentUri = item.filePath.startsWith("content://")
+                    val displayName = if (isContentUri) "Gallery/Selected Folder" else File(item.filePath).name
+                    val exists = isContentUri || File(item.filePath).exists()
+                    val cardDescription = "${item.operationType}, $displayName, ${if (exists) "available" else "file missing"}"
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
-                            .clickable { selectedItem = item }
+                            .combinedClickable(
+                                onClick = { selectedItem = item },
+                                onLongClick = { pendingDelete = item }
+                            )
+                            .semantics { contentDescription = cardDescription }
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(item.operationType, style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    item.operationType,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (!exists) {
+                                    Icon(
+                                        Icons.Outlined.Warning,
+                                        contentDescription = stringResource(R.string.file_missing),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                             Text(displayName, style = MaterialTheme.typography.bodyMedium)
                             Text(
                                 SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.timestamp)),

@@ -37,6 +37,7 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,10 +74,10 @@ class ExifStripperViewModel(
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
         savedStateHandle["exif_uri"] = uri.toString()
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ExifStripperVM") + Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, selectedUri = uri, error = null) }
             try {
-                val (bitmap, exifInfo) = withContext(Dispatchers.IO) {
+                val (bitmap, exifInfo) = run {
                     val cr = context.contentResolver
                     val bmp = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                     val exif = try {
@@ -120,7 +121,7 @@ class ExifStripperViewModel(
     fun saveCleanImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.previewBitmap ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ExifStripperVM") + Dispatchers.IO) {
             try {
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,

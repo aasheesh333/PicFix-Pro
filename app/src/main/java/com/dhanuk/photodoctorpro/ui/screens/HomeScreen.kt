@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -54,54 +55,65 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.resize_compress), stringResource(R.string.resize_compress_subtitle), Icons.Rounded.Compress, "resize_compress")
     )
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item(span = { GridItemSpan(2) }) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surface),
-                    contentAlignment = Alignment.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        val isLandscape = maxWidth > maxHeight
+        val minCardWidth = 220.dp
+        val columnCount = if (isLandscape) {
+            (maxWidth / minCardWidth).toInt().coerceAtLeast(3)
+        } else {
+            2
+        }
+        val topPadding = if (isLandscape) 12.dp else 24.dp
+        val logoSize = if (isLandscape) 72.dp else 96.dp
+        val internalLogoSize = if (isLandscape) 56.dp else 72.dp
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columnCount),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item(span = { GridItemSpan(columnCount) }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = topPadding, bottom = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_logo),
-                        contentDescription = stringResource(R.string.app_logo),
-                        modifier = Modifier.size(72.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(logoSize)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo),
+                            contentDescription = stringResource(R.string.app_logo),
+                            modifier = Modifier.size(internalLogoSize)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 20.dp))
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = stringResource(R.string.smart_tools_for_your_photos),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = stringResource(R.string.smart_tools_for_your_photos),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            itemsIndexed(features) { _, feature ->
+                LuminaFeatureCard(
+                    title = feature.title,
+                    subtitle = feature.subtitle,
+                    icon = feature.icon,
+                    onClick = { navController.navigate(feature.route) },
+                    modifier = Modifier.fillMaxWidth().aspectRatio(if (isLandscape) 1.1f else 0.85f)
                 )
             }
-        }
-        itemsIndexed(features) { _, feature ->
-            LuminaFeatureCard(
-                title = feature.title,
-                subtitle = feature.subtitle,
-                icon = feature.icon,
-                onClick = { navController.navigate(feature.route) },
-                modifier = Modifier.fillMaxWidth().aspectRatio(0.85f)
-            )
         }
     }
 }

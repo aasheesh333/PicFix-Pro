@@ -152,7 +152,7 @@ fun EnhanceImageScreen(navController: NavController) {
                     IconButton(onClick = {
                         if (hasUnsavedChanges) showUnsavedDialog = true else navController.popBackStack()
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 }
             )

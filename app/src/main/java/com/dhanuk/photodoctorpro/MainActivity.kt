@@ -11,6 +11,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PhotoDoctorProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
+import com.dhanuk.photodoctorpro.utils.CrashReporter
 import com.dhanuk.photodoctorpro.utils.ThemeController
 
 class MainActivity : ComponentActivity() {
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { false }
         AdManager.initialize(this)
+        CrashReporter.registerActivity(this)
 
         requestRequiredPermissions()
 
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        CrashReporter.unregisterActivity(this)
         AdManager.cleanup()
     }
 

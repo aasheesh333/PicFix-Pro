@@ -215,4 +215,12 @@
     <string name="success_resize_saved">Resized image saved</string>
     <string name="success_meme_saved">Meme saved</string>
     <string name="progress_percent" formatted="true">%1$d%%</string>
+    <string name="erasing_progress" formatted="true">Erasing… %1$d%%</string>
+    <string name="file_missing">File missing</string>
+    <string name="delete_entry">Delete entry</string>
+    <string name="delete_entry_confirm">Remove this history entry?</string>
+    <string name="action_remove">Remove</string>
+    <string name="something_went_wrong">Something went wrong</string>
+    <string name="fatal_error_message">An unexpected error occurred. The app will close. Please try again.</string>
+    <string name="fatal_error_restart">Unexpected error. Restart the app.</string>
 </resources>

@@ -12,6 +12,7 @@ import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,7 +57,7 @@ class ImageToPdfViewModel(
 
         _uiState.value = _uiState.value.copy(isCreating = true)
 
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ImageToPdfVM")) {
             try {
                 val pdfDocument = PdfDocument()
                 val pageWidth = 595

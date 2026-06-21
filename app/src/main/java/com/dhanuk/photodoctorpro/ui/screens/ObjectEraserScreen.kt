@@ -180,20 +180,20 @@ fun ObjectEraserScreen(navController: NavController) {
                     IconButton(onClick = {
                         if (hasUnsavedChanges) showUnsavedDialog = true else navController.popBackStack()
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 },
                 actions = {
                     if (uiState.paths.isNotEmpty()) {
                         IconButton(onClick = { viewModel.eraseObjects() }, enabled = uiState.openCvReady && !uiState.isErasing) {
-                            Icon(Icons.Default.Check, contentDescription = "Apply Erase")
+                            Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_done))
                         }
                     }
                     if (uiState.processedBitmap != null) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
                                 Icons.Default.Compare,
-                                contentDescription = "Compare",
+                                contentDescription = stringResource(R.string.compare_with_original),
                                 tint = if (compareMode) MaterialTheme.colorScheme.primary else Color.Gray
                             )
                         }
@@ -218,7 +218,26 @@ fun ObjectEraserScreen(navController: NavController) {
                 contentAlignment = Alignment.Center
             ) {
                 if (uiState.isLoading || uiState.isErasing) {
-                    CircularProgressIndicator()
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator()
+                        if (uiState.isErasing && uiState.progress > 0f) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                stringResource(R.string.erasing_progress, (uiState.progress * 100).toInt()),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { uiState.progress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.6f)
+                                    .height(6.dp)
+                            )
+                        }
+                    }
                 } else if (originalImage != null && compareMode && processedImage != null) {
                     BeforeAfterSlider(
                         beforeImage = originalImage,

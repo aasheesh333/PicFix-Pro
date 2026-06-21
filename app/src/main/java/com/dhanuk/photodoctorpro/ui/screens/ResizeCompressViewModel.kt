@@ -11,6 +11,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -75,9 +76,9 @@ class ResizeCompressViewModel(
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         _uiState.update { it.copy(selectedUri = uri, isLoading = true, error = null) }
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ResizeVM") + Dispatchers.IO) {
             try {
-                val (bitmap, bytes) = withContext(Dispatchers.IO) {
+                val (bitmap, bytes) = run {
                     val realBytes = try {
                         context.contentResolver.openInputStream(uri)?.use { stream ->
                             stream.available().toLong()
@@ -181,7 +182,7 @@ class ResizeCompressViewModel(
         if (width <= 0 || height <= 0) return
         resizeJob?.cancel()
         _uiState.update { it.copy(isProcessing = true) }
-        resizeJob = viewModelScope.launch {
+        resizeJob = viewModelScope.launch(viewModelExceptionHandler("ResizeVM")) {
             try {
                 val processed = withContext(Dispatchers.Default) {
                     Bitmap.createScaledBitmap(original, width, height, true)
@@ -216,7 +217,7 @@ class ResizeCompressViewModel(
         }
         resizeJob?.cancel()
         _uiState.update { it.copy(isProcessing = true) }
-        resizeJob = viewModelScope.launch {
+        resizeJob = viewModelScope.launch(viewModelExceptionHandler("ResizeVM")) {
             try {
                 val processed = withContext(Dispatchers.Default) {
                     resizeBitmap(original, preset.maxDim)
@@ -262,7 +263,7 @@ class ResizeCompressViewModel(
     fun saveImage(context: android.content.Context) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("ResizeVM") + Dispatchers.IO) {
             try {
                 val format = if (state.preset == ResizePreset.ORIGINAL)
                     android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG

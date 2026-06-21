@@ -19,6 +19,7 @@ import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
@@ -59,10 +60,10 @@ class RemoveBackgroundViewModel(
 
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM") + Dispatchers.IO) {
             _uiState.value = RemoveBackgroundUiState(selectedImageUri = uri, isLoading = true)
             try {
-                val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context, 2048) }
+                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
                 if (bitmap != null) {
                     val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                     val old = _uiState.value.originalBitmap
@@ -89,7 +90,7 @@ class RemoveBackgroundViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
         removeBgJob?.cancel()
-        removeBgJob = viewModelScope.launch {
+        removeBgJob = viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM")) {
             try {
                 val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
                 checkActive()
@@ -210,7 +211,7 @@ class RemoveBackgroundViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true)
 
         refinementJob?.cancel()
-        refinementJob = viewModelScope.launch {
+        refinementJob = viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM")) {
              try {
                  val result = applyMaskToOriginal(original, mask)
                  checkActive()

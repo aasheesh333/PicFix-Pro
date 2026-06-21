@@ -68,7 +68,8 @@ android {
         val bannerId = getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111") // Default Test ID
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$bannerId\"")
 
-        // Validate AdMob IDs: real AdMob IDs must start with "ca-app-pub-" and must NOT be the Google test IDs when shipping release builds.
+        // Validate AdMob IDs at config time. Real AdMob IDs must start with "ca-app-pub-" and must NOT be the Google test IDs
+        // when shipping release builds.
         val googleTestAppId = "ca-app-pub-3940256099942544~3347511713"
         val googleTestInterstitialId = "ca-app-pub-3940256099942544/1033173712"
         val googleTestBannerId = "ca-app-pub-3940256099942544/6300978111"
@@ -93,6 +94,24 @@ android {
         }
     }
 
+    buildTypes {
+        debug {
+            // Debug builds always use Google test AdMob IDs so local dev installs serve test ads.
+            // Override via env/local.properties if you need different IDs in a debug build.
+            buildConfigField("String", "ADMOB_APP_ID", "\"${getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")}\"")
+            buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"${getProperty("ADMOB_INTERSTITIAL_ID", "ca-app-pub-3940256099942544/1033173712")}\"")
+            buildConfigField("String", "ADMOB_BANNER_ID", "\"${getProperty("ADMOB_BANNER_ID", "ca-app-pub-3940256099942544/6300978111")}\"")
+        }
+        release {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
     signingConfigs {
         create("release") {
             val keystorePath = getProperty("KEYSTORE_FILE")
@@ -107,16 +126,6 @@ android {
         }
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8

@@ -12,13 +12,13 @@ import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.utils.ImageEnhancer
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class EnhanceImageViewModel(
     private val repository: HistoryRepository,
@@ -39,10 +39,10 @@ class EnhanceImageViewModel(
 
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("EnhanceVM") + Dispatchers.IO) {
             _uiState.value = EnhanceImageUiState(selectedImageUri = uri, isLoading = true)
             try {
-                val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context) }
+                val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
                 if (bitmap != null) {
                     val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
                     val old = _uiState.value.originalBitmap
@@ -74,7 +74,7 @@ class EnhanceImageViewModel(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null, progress = 0f)
 
         enhanceJob?.cancel()
-        enhanceJob = viewModelScope.launch {
+        enhanceJob = viewModelScope.launch(viewModelExceptionHandler("EnhanceVM")) {
             try {
                 val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor) { progress ->
                     _uiState.value = _uiState.value.copy(progress = progress)

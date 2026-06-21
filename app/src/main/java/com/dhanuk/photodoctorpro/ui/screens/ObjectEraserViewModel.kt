@@ -17,6 +17,7 @@ import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -65,14 +66,14 @@ class ObjectEraserViewModel(
 
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val bitmap = withContext(Dispatchers.IO) { BitmapUtils.loadBitmapFromUri(uri, context, 2048) }
+        viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM") + Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(isLoading = true, progress = 0f)
+            val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             undoStack.forEach { if (!it.isRecycled) it.recycle() }
             redoStack.forEach { if (!it.isRecycled) it.recycle() }
             undoStack.clear()
             redoStack.clear()
-            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false)
+            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false, progress = 0f)
         }
     }
 
@@ -139,7 +140,8 @@ class ObjectEraserViewModel(
         _uiState.value = ObjectEraserUiState(
             selectedImageUri = uri,
             originalBitmap = bitmap,
-            resetPerformed = true
+            resetPerformed = true,
+            progress = 0f
         )
     }
 
@@ -160,8 +162,8 @@ class ObjectEraserViewModel(
         }
 
         eraseJob?.cancel()
-        eraseJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isErasing = true, error = null)
+        eraseJob = viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM")) {
+            _uiState.value = _uiState.value.copy(isErasing = true, error = null, progress = 0f)
 
             pushToStack(undoStack, sourceBitmap)
             redoStack.clear()
@@ -175,14 +177,16 @@ class ObjectEraserViewModel(
                     sourceBitmap
                 }
                 if (workingBitmap == null) {
-                    _uiState.value = _uiState.value.copy(isErasing = false, error = "Could not allocate bitmap")
+                    _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = "Could not allocate bitmap")
                     return@launch
                 }
                 checkActive()
+                _uiState.value = _uiState.value.copy(progress = 0.2f)
 
                 val safeWorking = workingBitmap!!
                 softMask = createMask(safeWorking.width, safeWorking.height, paths)
                 checkActive()
+                _uiState.value = _uiState.value.copy(progress = 0.5f)
 
                 val maxStroke = paths.maxOfOrNull { it.strokeWidth } ?: 20f
                 val maxSoftness = paths.maxOfOrNull { it.softness } ?: 0f
@@ -190,6 +194,7 @@ class ObjectEraserViewModel(
 
                 val resultBitmap = applyInpainting(safeWorking, softMask!!, dynamicRadius)
                 checkActive()
+                _uiState.value = _uiState.value.copy(progress = 0.95f)
 
                 softMask = null
                 if (safeWorking != sourceBitmap) safeWorking.recycle()
@@ -201,7 +206,8 @@ class ObjectEraserViewModel(
                     processedBitmap = resultBitmap,
                     paths = emptyList(),
                     canUndo = true,
-                    canRedo = false
+                    canRedo = false,
+                    progress = 1f
                 )
                 if (oldProcessed != null && oldProcessed != resultBitmap && !oldProcessed.isRecycled) {
                     oldProcessed.recycle()
@@ -209,6 +215,7 @@ class ObjectEraserViewModel(
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 softMask?.recycle()
                 if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
+                _uiState.value = _uiState.value.copy(progress = 0f)
                 throw ce
             } catch (ule: UnsatisfiedLinkError) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
@@ -219,6 +226,7 @@ class ObjectEraserViewModel(
                 if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
                 _uiState.value = _uiState.value.copy(
                     isErasing = false,
+                    progress = 0f,
                     error = "Image processing engine failed to load. Please restart the app."
                 )
             } catch (e: Exception) {
@@ -226,7 +234,7 @@ class ObjectEraserViewModel(
                     android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
                 }
                 if (undoStack.isNotEmpty()) undoStack.pop()
-                _uiState.value = _uiState.value.copy(isErasing = false, error = "Error: ${e.message}")
+                _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = "Error: ${e.message}")
             }
         }
     }
@@ -398,7 +406,8 @@ data class ObjectEraserUiState(
     val resetPerformed: Boolean = false,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
-    val openCvReady: Boolean = PhotoDoctorApplication.OpenCVInitialized
+    val openCvReady: Boolean = PhotoDoctorApplication.OpenCVInitialized,
+    val progress: Float = 0f
 )
 
 private const val KEY_URI = "selectedImageUri"

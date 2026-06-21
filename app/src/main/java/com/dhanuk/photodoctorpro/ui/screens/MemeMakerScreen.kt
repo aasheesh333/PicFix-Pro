@@ -45,6 +45,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
@@ -85,12 +86,10 @@ class MemeMakerViewModel(
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
         savedStateHandle["meme_uri"] = uri.toString()
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("MemeMakerVM") + Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val bitmap = withContext(Dispatchers.IO) {
-                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
-                }
+                val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 if (bitmap != null) {
                     val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                     val oldOriginal = _uiState.value.originalBitmap
@@ -133,7 +132,7 @@ class MemeMakerViewModel(
         val state = _uiState.value
         val original = state.originalBitmap ?: return
         renderJob?.cancel()
-        renderJob = viewModelScope.launch(Dispatchers.Default) {
+        renderJob = viewModelScope.launch(viewModelExceptionHandler("MemeMakerVM") + Dispatchers.Default) {
             val result = drawMeme(original, state.topText, state.bottomText)
             if (!isActive) {
                 if (result != original && !result.isRecycled) result.recycle()
@@ -194,7 +193,7 @@ class MemeMakerViewModel(
 
     fun saveImage(context: android.content.Context) {
         val bitmap = _uiState.value.processedBitmap ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("MemeMakerVM") + Dispatchers.IO) {
             try {
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,

@@ -178,20 +178,20 @@ fun RemoveBackgroundScreen(navController: NavController) {
                         IconButton(onClick = {
                             viewModel.applyRefinement()
                         }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                         }
                     } else {
                          IconButton(onClick = {
                             if (hasUnsavedChanges) showUnsavedDialog = true else navController.popBackStack()
                         }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                         }
                     }
                 },
                 actions = {
                     if (uiState.isRefining) {
                         IconButton(onClick = { viewModel.applyRefinement() }) {
-                            Icon(Icons.Default.Check, contentDescription = "Apply")
+                            Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_done))
                         }
                     }
                 }
@@ -260,14 +260,21 @@ fun RemoveBackgroundScreen(navController: NavController) {
                     }
                 } else {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        OutlinedButton(onClick = { viewModel.startRefining() }) {
+                        OutlinedButton(onClick = { viewModel.startRefining() }, enabled = !uiState.isLoading) {
                             Text(stringResource(R.string.refine_edges))
                         }
-                        Button(onClick = { scope.launch { viewModel.saveImage(activity) } }) {
+                        Button(
+                            onClick = { scope.launch { viewModel.saveImage(activity) } },
+                            enabled = !uiState.isLoading
+                        ) {
                             Text(stringResource(R.string.save_png))
                         }
                     }
-                    OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { viewModel.reset() },
+                        enabled = !uiState.isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(stringResource(R.string.reset))
                     }
                 }

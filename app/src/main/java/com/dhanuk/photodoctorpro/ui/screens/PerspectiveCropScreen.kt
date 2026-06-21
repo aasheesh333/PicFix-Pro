@@ -57,6 +57,7 @@ import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
+import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -99,12 +100,10 @@ class PerspectiveCropViewModel(
 
     fun onImageSelected(uri: Uri, context: android.content.Context) {
         savedStateHandle["pcrop_uri"] = uri.toString()
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val bitmap = withContext(Dispatchers.IO) {
-                    com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
-                }
+                val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 if (bitmap == null) {
                     _uiState.update { it.copy(isLoading = false, error = "Could not decode image") }
                     return@launch
@@ -129,7 +128,7 @@ class PerspectiveCropViewModel(
 
     private fun autoDetectEdges(bitmap: Bitmap) {
         autoDetectJob?.cancel()
-        autoDetectJob = viewModelScope.launch(Dispatchers.Default) {
+        autoDetectJob = viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.Default) {
             val src = Mat()
             val gray = Mat()
             val edges = Mat()
@@ -244,7 +243,7 @@ class PerspectiveCropViewModel(
         val corners = state.corners
         if (corners.size != 4) return
         applyCropJob?.cancel()
-        applyCropJob = viewModelScope.launch {
+        applyCropJob = viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM")) {
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val result = withContext(Dispatchers.Default) {
@@ -302,7 +301,7 @@ class PerspectiveCropViewModel(
 
     fun saveImage(context: android.content.Context) {
         val bitmap = _uiState.value.processedBitmap ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.IO) {
             try {
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
@@ -431,7 +430,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
                                 Icons.Default.Compare,
-                                contentDescription = "Compare",
+                                contentDescription = stringResource(R.string.compare_with_original),
                                 tint = if (compareMode) MaterialTheme.colorScheme.primary else ComposeColor.Gray
                             )
                         }
