@@ -136,37 +136,41 @@ class RemoveBackgroundViewModel(
             .build()
         val segmenter = SubjectSegmentation.getClient(options)
 
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
-        val result = segmenter.process(inputImage).await()
+        try {
+            val inputImage = InputImage.fromBitmap(bitmap, 0)
+            val result = segmenter.process(inputImage).await()
 
-        val maskBuffer = result.foregroundConfidenceMask
-            ?: throw Exception("Could not generate mask.")
+            val maskBuffer = result.foregroundConfidenceMask
+                ?: throw Exception("Could not generate mask.")
 
-        val width = bitmap.width
-        val height = bitmap.height
-        val totalPixels = width * height
+            val width = bitmap.width
+            val height = bitmap.height
+            val totalPixels = width * height
 
-        val threshold = 0.4f
-        val pixels = ByteArray(totalPixels)
+            val threshold = 0.4f
+            val pixels = ByteArray(totalPixels)
 
-        if (maskBuffer.hasArray()) {
-             val floatArray = maskBuffer.array()
-             for (i in 0 until totalPixels) {
-                pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
-             }
-        } else {
-             val floatArray = FloatArray(totalPixels)
-             maskBuffer.rewind()
-             maskBuffer.get(floatArray)
-             for (i in 0 until totalPixels) {
-                 pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
-             }
+            if (maskBuffer.hasArray()) {
+                 val floatArray = maskBuffer.array()
+                 for (i in 0 until totalPixels) {
+                    pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
+                 }
+            } else {
+                 val floatArray = FloatArray(totalPixels)
+                 maskBuffer.rewind()
+                 maskBuffer.get(floatArray)
+                 for (i in 0 until totalPixels) {
+                     pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
+                 }
+            }
+
+            val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+            safeMask.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
+
+            return@withContext safeMask
+        } finally {
+            segmenter.close()
         }
-
-        val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
-        safeMask.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
-
-        return@withContext safeMask
     }
 
     private suspend fun applyMaskToOriginal(original: Bitmap, mask: Bitmap): Bitmap = withContext(Dispatchers.Default) {
@@ -235,8 +239,16 @@ class RemoveBackgroundViewModel(
 
     fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float, brushSoftness: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
+        val safeMask = if (currentMask.config == Bitmap.Config.ALPHA_8) {
+            val copy = currentMask.copy(Bitmap.Config.ARGB_8888, true) ?: return
+            _uiState.value.maskBitmap?.takeIf { it !== currentMask }?.recycle()
+            _uiState.value = _uiState.value.copy(maskBitmap = copy)
+            copy
+        } else {
+            currentMask
+        }
 
-        val canvas = Canvas(currentMask)
+        val canvas = Canvas(safeMask)
         val paint = Paint().apply {
             style = Paint.Style.STROKE
             this.strokeWidth = strokeWidth
@@ -250,13 +262,9 @@ class RemoveBackgroundViewModel(
             }
 
             if (isAdd) {
-                // To ADD to the mask (Keep area), we paint 255 (Opaque)
-                // SRC mode replaces correctly.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                color = Color.WHITE // Alpha 255
+                color = Color.WHITE
             } else {
-                // To REMOVE from mask (Erase area), we paint 0 (Transparent)
-                // CLEAR mode sets alpha to 0.
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
                 color = Color.TRANSPARENT
             }

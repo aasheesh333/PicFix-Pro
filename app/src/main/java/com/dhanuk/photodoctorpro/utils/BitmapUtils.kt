@@ -93,12 +93,7 @@ object BitmapUtils {
         var inSampleSize = 1
 
         if (height > reqHeight || width > reqWidth) {
-            val halfHeight: Int = height / 2
-            val halfWidth: Int = width / 2
-
-            // Calculate the largest inSampleSize value that is a power of 2 and keeps both
-            // height and width larger than the requested height and width.
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+            while ((height / inSampleSize) > reqHeight && (width / inSampleSize) > reqWidth) {
                 inSampleSize *= 2
             }
         }
@@ -218,10 +213,13 @@ object BitmapUtils {
             bitmap.compress(format, 95, out)
         }
 
-        // Scan the file so it shows up in gallery
         MediaScannerConnectionWrapper.scan(context, file.absolutePath)
 
-        return@withContext Uri.fromFile(file).toString()
+        return@withContext FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            file
+        ).toString()
     }
 }
 
@@ -249,10 +247,10 @@ fun resolveFileUri(path: String, context: Context): Uri {
     }
 }
 
-fun createShareIntent(path: String, context: Context, packageName: String? = null): Intent {
+fun createShareIntent(path: String, context: Context, packageName: String? = null, mimeType: String = "image/*"): Intent {
     val uri = resolveFileUri(path, context)
     return Intent(Intent.ACTION_SEND).apply {
-        type = "image/png"
+        type = mimeType
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         if (packageName != null) setPackage(packageName)

@@ -21,7 +21,6 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable("exif_stripper") { ExifStripperScreen(navController) }
         composable("perspective_crop") { PerspectiveCropScreen(navController) }
         composable("resize_compress") { ResizeCompressScreen(navController) }
-        composable("meme_maker") { MemeMakerScreen(navController) }
         composable("privacy_policy") { PrivacyPolicyScreen(navController) }
         composable("terms_and_conditions") { TermsAndConditionsScreen(navController) }
     }

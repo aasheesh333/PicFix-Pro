@@ -67,8 +67,6 @@
     <string name="privacy_doctor_subtitle">Strip hidden EXIF metadata</string>
     <string name="document_scanner">Document Scanner</string>
     <string name="document_scanner_subtitle">Auto-crop &amp; perspective fix</string>
-    <string name="meme_maker">Meme Maker</string>
-    <string name="meme_maker_subtitle">Add text &amp; share memes</string>
     <string name="dark_mode">Dark Mode</string>
     <string name="about">About</string>
     <string name="app_version">App Version</string>
@@ -122,9 +120,6 @@
     <string name="date_time_fmt">Date/Time: %1$s</string>
     <string name="camera_fmt">Camera: %1$s %2$s</string>
     <string name="exif_metadata_header">EXIF Metadata</string>
-    <string name="top_text_hint">Top text</string>
-    <string name="bottom_text_hint">Bottom text</string>
-    <string name="meme_share">Share Meme</string>
     <string name="whatsapp_not_installed">WhatsApp not installed</string>
     <string name="telegram_not_installed">Telegram not installed</string>
     <string name="color_adjust_screen_subtitle">Adjust brightness, contrast, saturation &amp; warmth</string>
@@ -139,7 +134,6 @@
     <string name="select_image_doc_first">Select an image to auto-flatten.</string>
     <string name="select_image_bg_first">Select an image to remove the background.</string>
     <string name="select_image_color_first">Select an image to adjust colors.</string>
-    <string name="select_image_meme_first">Select an image to make a meme.</string>
     <string name="select_image_exif_first">Select an image to strip metadata.</string>
     <string name="select_image_resize_first">Select an image to resize.</string>
     <string name="auto_detect_failed">Auto-detect failed, using padded rectangle.</string>
@@ -213,7 +207,6 @@
     <string name="success_history_cleared">History cleared</string>
     <string name="success_colour_adjustments">Color adjustments saved</string>
     <string name="success_resize_saved">Resized image saved</string>
-    <string name="success_meme_saved">Meme saved</string>
     <string name="progress_percent" formatted="true">%1$d%%</string>
     <string name="erasing_progress" formatted="true">Erasing… %1$d%%</string>
     <string name="file_missing">File missing</string>
@@ -223,8 +216,6 @@
     <string name="something_went_wrong">Something went wrong</string>
     <string name="fatal_error_message">An unexpected error occurred. The app will close. Please try again.</string>
     <string name="fatal_error_restart">Unexpected error. Restart the app.</string>
-    <string name="meme_default_top">TOP TEXT</string>
-    <string name="meme_default_bottom">BOTTOM TEXT</string>
     <string name="action_reset">Reset</string>
     <string name="cd_image_thumbnail">Selected image thumbnail</string>
     <string name="enhance_failed_fmt">Enhance failed: %1$s</string>

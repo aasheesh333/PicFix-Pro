@@ -140,6 +140,8 @@ class ColorAdjustmentsViewModel(
     }
 
     fun reset() {
+        val oldProcessed = _uiState.value.processedBitmap
+        val original = _uiState.value.originalBitmap
         savedStateHandle[KEY_BRIGHT] = 0f
         savedStateHandle[KEY_CONTRAST] = 1f
         savedStateHandle[KEY_SAT] = 1f
@@ -149,9 +151,11 @@ class ColorAdjustmentsViewModel(
                 brightness = 0f,
                 contrast = 1f,
                 saturation = 1f,
-                warmth = 0f
+                warmth = 0f,
+                processedBitmap = original
             )
         }
+        if (oldProcessed != null && oldProcessed !== original && !oldProcessed.isRecycled) oldProcessed.recycle()
         adjustmentTrigger.tryEmit(Unit)
     }
 

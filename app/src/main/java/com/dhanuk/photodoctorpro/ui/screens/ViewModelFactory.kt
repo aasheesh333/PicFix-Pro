@@ -32,8 +32,6 @@ class ViewModelFactory(
                 PerspectiveCropViewModel(repository, handle) as T
             modelClass.isAssignableFrom(ExifStripperViewModel::class.java) ->
                 ExifStripperViewModel(repository, handle) as T
-            modelClass.isAssignableFrom(MemeMakerViewModel::class.java) ->
-                MemeMakerViewModel(repository, handle) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

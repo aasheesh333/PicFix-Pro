@@ -48,6 +48,7 @@ class ImageToPdfViewModel(
         val adjustedTo = if (from < to) to - 1 else to
         val target = adjustedTo.coerceIn(0, currentList.size)
         currentList.add(target, item)
+        savedStateHandle[KEY_URIS] = currentList.map { it.toString() }
         _uiState.value = _uiState.value.copy(selectedImageUris = currentList)
     }
 
@@ -58,8 +59,9 @@ class ImageToPdfViewModel(
         _uiState.value = _uiState.value.copy(isCreating = true)
 
         viewModelScope.launch(viewModelExceptionHandler("ImageToPdfVM")) {
+            var pdfDocument: PdfDocument? = null
             try {
-                val pdfDocument = PdfDocument()
+                pdfDocument = PdfDocument()
                 val pageWidth = 595
                 val pageHeight = 842
                 val pageMargin = 24
@@ -67,11 +69,12 @@ class ImageToPdfViewModel(
                 val drawableHeight = (pageHeight - 2 * pageMargin).toFloat()
 
                 uris.forEachIndexed { index, uri ->
-                    val bitmap = BitmapUtils.loadBitmapFromUri(uri, activity)
+                    val bitmap = BitmapUtils.loadBitmapFromUri(uri, activity, 2048)
                     if (bitmap != null) {
+                        var page: PdfDocument.Page? = null
                         try {
                             val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
-                            val page = pdfDocument.startPage(pageInfo)
+                            page = pdfDocument.startPage(pageInfo)
                             val pageCanvas = page.canvas
 
                             val sourceRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
@@ -88,15 +91,14 @@ class ImageToPdfViewModel(
 
                             val destRect = android.graphics.RectF(left, top, left + scaledW, top + scaledH)
                             pageCanvas.drawBitmap(bitmap, null, destRect, null)
-                            pdfDocument.finishPage(page)
                         } finally {
+                            page?.let { pdfDocument.finishPage(it) }
                             if (!bitmap.isRecycled) bitmap.recycle()
                         }
                     }
                 }
 
                 val filePath = savePdf(activity, pdfDocument)
-                pdfDocument.close()
 
                 repository.addHistory(
                     History(
@@ -110,6 +112,8 @@ class ImageToPdfViewModel(
                 AdManager.showInterstitialAd(activity)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isCreating = false, error = e.message)
+            } finally {
+                pdfDocument?.close()
             }
         }
     }

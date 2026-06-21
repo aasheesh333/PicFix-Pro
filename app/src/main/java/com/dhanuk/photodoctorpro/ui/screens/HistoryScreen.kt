@@ -17,15 +17,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
+import com.dhanuk.photodoctorpro.utils.BitmapUtils
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import kotlinx.coroutines.launch
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -92,12 +91,7 @@ fun HistoryScreen(navController: NavController) {
                         }
                         val intent = Intent(Intent.ACTION_VIEW).apply {
                             val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                            val uri = if (isContentUri) {
-                                android.net.Uri.parse(item.filePath)
-                            } else {
-                                val file = File(item.filePath)
-                                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                            }
+                            val uri = BitmapUtils.resolveFileUri(item.filePath, context)
                             setDataAndType(uri, mimeType)
                             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                         }
@@ -120,12 +114,7 @@ fun HistoryScreen(navController: NavController) {
                             onClick = {
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                                    val uri = if (isContentUri) {
-                                        android.net.Uri.parse(item.filePath)
-                                    } else {
-                                        val file = File(item.filePath)
-                                        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                                    }
+                                    val uri = BitmapUtils.resolveFileUri(item.filePath, context)
                                     type = mimeType
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION

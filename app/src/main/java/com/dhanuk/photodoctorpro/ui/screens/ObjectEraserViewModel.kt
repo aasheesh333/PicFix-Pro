@@ -231,18 +231,6 @@ class ObjectEraserViewModel(
             if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
             _uiState.value = _uiState.value.copy(progress = 0f)
             throw ce
-        } catch (ule: UnsatisfiedLinkError) {
-            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
-                android.util.Log.e("ObjectEraserVM", "OpenCV native library not loaded", ule)
-            }
-            if (undoStack.isNotEmpty()) undoStack.pop()
-            softMask?.recycle()
-            if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
-            _uiState.value = _uiState.value.copy(
-                isErasing = false,
-                progress = 0f,
-                error = "Image processing engine failed to load. Please restart the app."
-            )
         } catch (e: Exception) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)

@@ -129,13 +129,6 @@ class EnhanceImageViewModel(
                 }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
-            } catch (e: OutOfMemoryError) {
-                System.gc()
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    progress = 0f,
-                    error = "Not enough memory for this scale factor. Try a lower scale."
-                )
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("EnhanceVM", "enhanceImage failed", e)
@@ -186,8 +179,12 @@ class EnhanceImageViewModel(
     fun reset() {
         val oldState = _uiState.value
         val fullRes = oldState.fullResBitmap
-        if (fullRes != null && fullRes != oldState.enhancedBitmap && !fullRes.isRecycled) fullRes.recycle()
-        _uiState.value = EnhanceImageUiState()
+        val enhanced = oldState.enhancedBitmap
+        val original = oldState.originalBitmap
+        if (fullRes != null && fullRes !== enhanced && !fullRes.isRecycled) fullRes.recycle()
+        if (enhanced != null && enhanced !== original && enhanced !== fullRes && !enhanced.isRecycled) enhanced.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
+        _uiState.value = EnhanceImageUiState(selectedImageUri = oldState.selectedImageUri, scaleFactor = oldState.scaleFactor)
     }
 
     fun onErrorShown() {
