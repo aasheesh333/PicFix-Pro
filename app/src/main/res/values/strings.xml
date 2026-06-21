@@ -223,4 +223,11 @@
     <string name="something_went_wrong">Something went wrong</string>
     <string name="fatal_error_message">An unexpected error occurred. The app will close. Please try again.</string>
     <string name="fatal_error_restart">Unexpected error. Restart the app.</string>
+    <string name="meme_default_top">TOP TEXT</string>
+    <string name="meme_default_bottom">BOTTOM TEXT</string>
+    <string name="action_reset">Reset</string>
+    <string name="cd_image_thumbnail">Selected image thumbnail</string>
+    <string name="enhance_failed_fmt">Enhance failed: %1$s</string>
+    <string name="enhance_oom">Not enough memory to enhance at this scale. Try a smaller image or a lower scale.</string>
+    <string name="enhance_input_too_large_fmt">Input image is too large (%1$d×%2$d). Max allowed is %3$d MP.</string>
 </resources>

@@ -73,6 +73,18 @@ class ResizeCompressViewModel(
     )
     val uiState: StateFlow<ResizeUiState> = _uiState.asStateFlow()
 
+    init {
+        // If we restored a CUSTOM preset with width/height, kick off a render so
+        // the preview isn't blank until the user nudges a slider.
+        val restored = _uiState.value
+        if (restored.selectedUri != null && restored.originalBitmap != null &&
+            restored.preset == ResizePreset.CUSTOM &&
+            restored.customWidth > 0 && restored.customHeight > 0
+        ) {
+            applyCustomResize(restored.customWidth, restored.customHeight)
+        }
+    }
+
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         _uiState.update { it.copy(selectedUri = uri, isLoading = true, error = null) }
@@ -106,7 +118,10 @@ class ResizeCompressViewModel(
                         isLoading = false
                     )
                 }
-                if (oldOriginal != null && oldOriginal != bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
+                if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
+                if (oldProcessed != null && oldProcessed !== bitmap && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
+                    oldProcessed.recycle()
+                }
                 if (oldProcessed != null && oldProcessed != bitmap && !oldProcessed.isRecycled) oldProcessed.recycle()
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
@@ -179,9 +194,11 @@ class ResizeCompressViewModel(
 
     private fun applyCustomResize(width: Int, height: Int) {
         val original = _uiState.value.originalBitmap ?: return
+        if (original.isRecycled) return
         if (width <= 0 || height <= 0) return
+        // Cancel any in-flight resize; the in-flight processed bitmap is already
+        // superseded (we never expose it to state) so recycling is safe.
         resizeJob?.cancel()
-        _uiState.update { it.copy(isProcessing = true) }
         resizeJob = viewModelScope.launch(viewModelExceptionHandler("ResizeVM")) {
             try {
                 val processed = withContext(Dispatchers.Default) {
@@ -193,7 +210,10 @@ class ResizeCompressViewModel(
                 _uiState.update {
                     it.copy(processedBitmap = processed, processedSizeBytes = processedBytes, isProcessing = false)
                 }
-                if (old != null && old != processed && old != original && !old.isRecycled) old.recycle()
+                // Never recycle the original; never recycle the just-published bitmap.
+                if (old != null && old !== processed && old !== original && !old.isRecycled) {
+                    old.recycle()
+                }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -228,7 +248,9 @@ class ResizeCompressViewModel(
                 _uiState.update {
                     it.copy(processedBitmap = processed, processedSizeBytes = processedBytes, isProcessing = false)
                 }
-                if (old != null && old != processed && old != original && !old.isRecycled) old.recycle()
+                if (old != null && old !== processed && old !== original && !old.isRecycled) {
+                    old.recycle()
+                }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -290,8 +312,10 @@ class ResizeCompressViewModel(
         super.onCleared()
         resizeJob?.cancel()
         resizeJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        val original = _uiState.value.originalBitmap
+        val processed = _uiState.value.processedBitmap
+        if (processed != null && processed !== original && !processed.isRecycled) processed.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
     }
 }
 

@@ -141,7 +141,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 },
                 actions = {
@@ -149,14 +149,14 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
                                 Icons.Outlined.Compare,
-                                contentDescription = "Compare",
+                                contentDescription = stringResource(R.string.compare_with_original),
                                 tint = if (compareMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     if (uiState.originalBitmap != null) {
                         IconButton(onClick = { viewModel.reset() }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Reset")
+                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.action_reset))
                         }
                     }
                 },

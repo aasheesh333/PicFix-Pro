@@ -110,7 +110,7 @@ fun ImageToPdfScreen(navController: NavController) {
                 title = { Text(stringResource(R.string.image_to_pdf)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 }
             )
@@ -185,7 +185,7 @@ fun ImageRow(
         ) {
             Image(
                 painter = rememberAsyncImagePainter(uri),
-                contentDescription = "Selected image thumbnail",
+                contentDescription = stringResource(R.string.cd_image_thumbnail),
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))

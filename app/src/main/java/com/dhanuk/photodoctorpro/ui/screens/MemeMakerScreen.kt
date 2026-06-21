@@ -47,6 +47,10 @@ import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.BitmapSaver
 import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,9 +71,7 @@ data class MemeMakerUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null
-)
-
-class MemeMakerViewModel(
+)class MemeMakerViewModel(
     private val repository: com.dhanuk.photodoctorpro.data.repository.HistoryRepository,
     private val savedStateHandle: androidx.lifecycle.SavedStateHandle
 ) : ViewModel() {
@@ -116,19 +118,38 @@ class MemeMakerViewModel(
         }
     }
 
+    private val textChangeTrigger = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 8,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    private var textChangeJob: kotlinx.coroutines.Job? = null
+
+    init {
+        textChangeJob = viewModelScope.launch(viewModelExceptionHandler("MemeMakerVM")) {
+            textChangeTrigger
+                .debounce(150)
+                .collect { renderMemeImmediate() }
+        }
+    }
+
     fun setTopText(text: String) {
         savedStateHandle["meme_top"] = text
         _uiState.update { it.copy(topText = text) }
-        renderMeme()
+        textChangeTrigger.tryEmit(Unit)
     }
 
     fun setBottomText(text: String) {
         savedStateHandle["meme_bottom"] = text
         _uiState.update { it.copy(bottomText = text) }
-        renderMeme()
+        textChangeTrigger.tryEmit(Unit)
     }
 
     fun renderMeme() {
+        textChangeTrigger.tryEmit(Unit)
+    }
+
+    private fun renderMemeImmediate() {
         val state = _uiState.value
         val original = state.originalBitmap ?: return
         renderJob?.cancel()
@@ -141,7 +162,7 @@ class MemeMakerViewModel(
             withContext(Dispatchers.Main) {
                 val old = _uiState.value.processedBitmap
                 _uiState.update { it.copy(processedBitmap = result) }
-                if (old != null && old != result && !old.isRecycled) old.recycle()
+                if (old != null && old !== original && old != result && !old.isRecycled) old.recycle()
             }
         }
     }
@@ -218,8 +239,12 @@ class MemeMakerViewModel(
         super.onCleared()
         renderJob?.cancel()
         renderJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        textChangeJob?.cancel()
+        textChangeJob = null
+        val original = _uiState.value.originalBitmap
+        val processed = _uiState.value.processedBitmap
+        if (processed != null && processed !== original && !processed.isRecycled) processed.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
     }
 }
 

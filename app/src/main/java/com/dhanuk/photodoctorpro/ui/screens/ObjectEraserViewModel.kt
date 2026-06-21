@@ -60,8 +60,8 @@ class ObjectEraserViewModel(
     )
     val uiState = _uiState.asStateFlow()
 
-    private val undoStack = Stack<Bitmap>()
-    private val redoStack = Stack<Bitmap>()
+    private val undoStack = Stack<Pair<Bitmap, List<EraserPath>>>()
+    private val redoStack = Stack<Pair<Bitmap, List<EraserPath>>>()
     private val MAX_STACK_SIZE = 10
 
     fun onImageSelected(uri: Uri, context: Context) {
@@ -69,8 +69,8 @@ class ObjectEraserViewModel(
         viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM") + Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true, progress = 0f)
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
-            undoStack.forEach { if (!it.isRecycled) it.recycle() }
-            redoStack.forEach { if (!it.isRecycled) it.recycle() }
+            undoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
+            redoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
             undoStack.clear()
             redoStack.clear()
             _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false, progress = 0f)
@@ -98,43 +98,47 @@ class ObjectEraserViewModel(
 
     fun undo() {
         if (undoStack.isNotEmpty()) {
-            val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
-            if (current != null) {
-                redoStack.push(current)
+            val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
+            val currentPaths = _uiState.value.paths
+            if (currentBitmap != null) {
+                redoStack.push(currentBitmap to currentPaths)
             }
-            val prev = undoStack.pop()
+            val (prevBitmap, prevPaths) = undoStack.pop()
             val old = _uiState.value.processedBitmap
             _uiState.value = _uiState.value.copy(
-                processedBitmap = prev,
+                processedBitmap = prevBitmap,
+                paths = prevPaths,
                 canUndo = undoStack.isNotEmpty(),
                 canRedo = true
             )
-            if (old != null && old != prev && !old.isRecycled) old.recycle()
+            if (old != null && old != prevBitmap && !old.isRecycled) old.recycle()
         }
     }
 
     fun redo() {
         if (redoStack.isNotEmpty()) {
-            val current = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
-            if (current != null) {
-                pushToStack(undoStack, current)
+            val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
+            val currentPaths = _uiState.value.paths
+            if (currentBitmap != null) {
+                pushToStack(undoStack, currentBitmap to currentPaths)
             }
-            val next = redoStack.pop()
+            val (nextBitmap, nextPaths) = redoStack.pop()
             val old = _uiState.value.processedBitmap
             _uiState.value = _uiState.value.copy(
-                processedBitmap = next,
+                processedBitmap = nextBitmap,
+                paths = nextPaths,
                 canUndo = true,
                 canRedo = redoStack.isNotEmpty()
             )
-            if (old != null && old != next && !old.isRecycled) old.recycle()
+            if (old != null && old != nextBitmap && !old.isRecycled) old.recycle()
         }
     }
 
     fun reset() {
         val uri = _uiState.value.selectedImageUri
         val bitmap = _uiState.value.originalBitmap
-        undoStack.forEach { if (!it.isRecycled) it.recycle() }
-        redoStack.forEach { if (!it.isRecycled) it.recycle() }
+        undoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
+        redoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
         undoStack.clear()
         redoStack.clear()
         _uiState.value = ObjectEraserUiState(
@@ -165,7 +169,7 @@ class ObjectEraserViewModel(
         eraseJob = viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM")) {
             _uiState.value = _uiState.value.copy(isErasing = true, error = null, progress = 0f)
 
-            pushToStack(undoStack, sourceBitmap)
+            pushToStack(undoStack, sourceBitmap to paths)
             redoStack.clear()
 
             var workingBitmap: Bitmap? = null
@@ -243,11 +247,11 @@ class ObjectEraserViewModel(
 
     private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
-    private fun pushToStack(stack: Stack<Bitmap>, bitmap: Bitmap) {
+    private fun pushToStack(stack: Stack<Pair<Bitmap, List<EraserPath>>>, item: Pair<Bitmap, List<EraserPath>>) {
         if (stack.size >= MAX_STACK_SIZE) {
             stack.removeAt(0)
         }
-        stack.push(bitmap)
+        stack.push(item)
     }
 
     private suspend fun createMask(width: Int, height: Int, paths: List<EraserPath>): Bitmap = withContext(Dispatchers.Default) {
@@ -383,10 +387,12 @@ class ObjectEraserViewModel(
         super.onCleared()
         eraseJob?.cancel()
         eraseJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
-        undoStack.forEach { if (!it.isRecycled) it.recycle() }
-        redoStack.forEach { if (!it.isRecycled) it.recycle() }
+        val original = _uiState.value.originalBitmap
+        val processed = _uiState.value.processedBitmap
+        if (processed != null && processed !== original && !processed.isRecycled) processed.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
+        undoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
+        redoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
         undoStack.clear()
         redoStack.clear()
     }

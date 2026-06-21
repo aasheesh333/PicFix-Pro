@@ -142,7 +142,7 @@ fun ResizeCompressScreen(navController: NavController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
                 },
                 actions = {
@@ -150,14 +150,14 @@ fun ResizeCompressScreen(navController: NavController) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
                                 Icons.Outlined.Compare,
-                                contentDescription = "Compare",
+                                contentDescription = stringResource(R.string.compare_with_original),
                                 tint = if (compareMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     if (uiState.originalBitmap != null) {
                         IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "New Image")
+                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.new_image))
                         }
                     }
                 },
