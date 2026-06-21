@@ -24,6 +24,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -41,6 +42,8 @@ fun HistoryScreen(navController: NavController) {
     var selectedItem by remember { mutableStateOf<History?>(null) }
     var pendingDelete by remember { mutableStateOf<History?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val fileMissingMsg = stringResource(R.string.file_not_found)
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -83,7 +86,7 @@ fun HistoryScreen(navController: NavController) {
                 Button(
                     onClick = {
                         if (!exists) {
-                            snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
+                            scope.launch { snackbarHostState.showSnackbar(fileMissingMsg) }
                             selectedItem = null
                             return@Button
                         }
@@ -101,7 +104,7 @@ fun HistoryScreen(navController: NavController) {
                         try {
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
+                            scope.launch { snackbarHostState.showSnackbar(fileMissingMsg) }
                         }
                         selectedItem = null
                     },
@@ -130,7 +133,7 @@ fun HistoryScreen(navController: NavController) {
                                 try {
                                     context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
                                 } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar(context.getString(R.string.file_not_found))
+                                    scope.launch { snackbarHostState.showSnackbar(fileMissingMsg) }
                                 }
                                 selectedItem = null
                             }

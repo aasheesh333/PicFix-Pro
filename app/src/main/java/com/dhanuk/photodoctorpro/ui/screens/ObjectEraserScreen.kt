@@ -231,7 +231,7 @@ fun ObjectEraserScreen(navController: NavController) {
                             )
                             Spacer(Modifier.height(8.dp))
                             LinearProgressIndicator(
-                                progress = { uiState.progress.coerceIn(0f, 1f) },
+                                progress = uiState.progress.coerceIn(0f, 1f),
                                 modifier = Modifier
                                     .fillMaxWidth(0.6f)
                                     .height(6.dp)
