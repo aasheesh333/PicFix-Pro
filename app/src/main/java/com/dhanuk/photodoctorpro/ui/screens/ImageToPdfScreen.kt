@@ -31,6 +31,7 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.utils.resolveFileUri
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 
@@ -83,10 +84,10 @@ fun ImageToPdfScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try {
-                    val uri = BitmapUtils.resolveFileUri(path, context)
+                    val uri = resolveFileUri(path, context)
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
                         setPackage("com.whatsapp")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
@@ -95,10 +96,10 @@ fun ImageToPdfScreen(navController: NavController) {
             },
             onShareOther = {
                 try {
-                    val uri = BitmapUtils.resolveFileUri(path, context)
+                    val uri = resolveFileUri(path, context)
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
-                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(Intent.createChooser(intent, context.getString(R.string.share)))
@@ -106,7 +107,7 @@ fun ImageToPdfScreen(navController: NavController) {
             },
             onOpen = {
                 try {
-                    val uri = BitmapUtils.resolveFileUri(path, context)
+                    val uri = resolveFileUri(path, context)
                     val intent = Intent(Intent.ACTION_VIEW).apply {
                         setDataAndType(uri, "application/pdf")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -196,6 +197,7 @@ fun ImageRow(
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?
 ) {
+    val context = LocalContext.current
     Card(
         modifier = modifier
             .fillMaxWidth()

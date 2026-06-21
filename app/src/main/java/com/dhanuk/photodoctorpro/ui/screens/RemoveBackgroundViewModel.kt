@@ -209,7 +209,7 @@ class RemoveBackgroundViewModel(
         _uiState.value = _uiState.value.copy(isRefining = true)
     }
 
-    fun applyRefinement() {
+    fun applyRefinement(context: Context) {
         val original = _uiState.value.originalBitmap ?: return
         val mask = _uiState.value.maskBitmap ?: return
         _uiState.value = _uiState.value.copy(isLoading = true)

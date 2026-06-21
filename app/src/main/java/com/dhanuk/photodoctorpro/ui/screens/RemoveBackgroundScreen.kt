@@ -176,7 +176,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 navigationIcon = {
                     if (uiState.isRefining) {
                         IconButton(onClick = {
-                            viewModel.applyRefinement()
+             viewModel.applyRefinement(context)
                         }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                         }
@@ -190,7 +190,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 },
                 actions = {
                     if (uiState.isRefining) {
-                        IconButton(onClick = { viewModel.applyRefinement() }) {
+                        IconButton(onClick = { viewModel.applyRefinement(context) }) {
                             Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_done))
                         }
                     }

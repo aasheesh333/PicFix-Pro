@@ -21,10 +21,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.utils.BitmapUtils
+import com.dhanuk.photodoctorpro.utils.resolveFileUri
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -53,7 +55,7 @@ fun HistoryScreen(navController: NavController) {
 
     selectedItem?.let { item ->
         val isContentUri = item.filePath.startsWith("content://")
-        val displayName = if (isContentUri) "context.getString(R.string.gallery_selected_folder)" else File(item.filePath).name
+                    val displayName = if (isContentUri) context.getString(R.string.gallery_selected_folder) else File(item.filePath).name
         val exists = isContentUri || File(item.filePath).exists()
 
         AlertDialog(
@@ -91,7 +93,7 @@ fun HistoryScreen(navController: NavController) {
                         }
                         val intent = Intent(Intent.ACTION_VIEW).apply {
                             val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                            val uri = BitmapUtils.resolveFileUri(item.filePath, context)
+                            val uri = resolveFileUri(item.filePath, context)
                             setDataAndType(uri, mimeType)
                             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                         }
@@ -114,9 +116,9 @@ fun HistoryScreen(navController: NavController) {
                             onClick = {
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     val mimeType = if (item.filePath.endsWith(".pdf")) "application/pdf" else "image/*"
-                                    val uri = BitmapUtils.resolveFileUri(item.filePath, context)
+                                    val uri = resolveFileUri(item.filePath, context)
                                     type = mimeType
-                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
                                     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                                 }
                                 try {
@@ -205,7 +207,7 @@ fun HistoryScreen(navController: NavController) {
             ) {
                 items(historyItems, key = { it.id }) { item ->
                     val isContentUri = item.filePath.startsWith("content://")
-                    val displayName = if (isContentUri) "context.getString(R.string.gallery_selected_folder)" else File(item.filePath).name
+        val displayName = if (isContentUri) context.getString(R.string.gallery_selected_folder) else File(item.filePath).name
                     val exists = isContentUri || File(item.filePath).exists()
                     val cardDescription = "${item.operationType}, $displayName, ${if (exists) context.getString(R.string.available) else context.getString(R.string.file_missing)}"
                     Card(

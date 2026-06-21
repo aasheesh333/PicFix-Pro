@@ -258,7 +258,7 @@ fun createShareIntent(path: String, context: Context, packageName: String? = nul
     val uri = resolveFileUri(path, context)
     return Intent(Intent.ACTION_SEND).apply {
         type = mimeType
-        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         if (packageName != null) setPackage(packageName)
     }
