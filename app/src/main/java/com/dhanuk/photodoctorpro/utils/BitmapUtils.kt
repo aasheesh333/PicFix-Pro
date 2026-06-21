@@ -209,8 +209,6 @@ object BitmapUtils {
             counter++
         }
 
-        val file = File(imagesDir, finalName)
-
         try {
             FileOutputStream(file).use { out ->
                 bitmap.compress(format, 95, out)

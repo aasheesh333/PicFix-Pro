@@ -84,7 +84,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     BackHandler(enabled = hasUnsavedChanges || uiState.isRefining) {
         if (uiState.isRefining) {
-             viewModel.applyRefinement()
+             viewModel.applyRefinement(context)
         } else {
             showUnsavedDialog = true
         }

@@ -180,7 +180,7 @@ fun HistoryScreen(navController: NavController) {
                             onClick = { viewModel.clearHistory() },
                             enabled = !isClearing,
                             modifier = Modifier.semantics {
-                                contentDescription = stringResource(R.string.cd_clear_history)
+                                contentDescription = context.getString(R.string.cd_clear_history)
                             }
                         ) {
                             Text(stringResource(R.string.clear))
