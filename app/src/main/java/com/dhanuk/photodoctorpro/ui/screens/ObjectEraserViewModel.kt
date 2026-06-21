@@ -25,13 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.CvType
 import org.opencv.core.Mat
-import org.opencv.core.Scalar
-import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import java.util.Stack
@@ -320,15 +315,6 @@ class ObjectEraserViewModel(
             val resultBitmap = Bitmap.createBitmap(inpaintedMat.cols(), inpaintedMat.rows(), Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(inpaintedMat, resultBitmap)
 
-            // If the mask has soft edges (softness > 0), check if there are
-            // intermediate grey values (soft edges) in the mask.
-            val maskMinMax = Core.MinMaxLocResult()
-            Core.minMaxLoc(softMaskMat, maskMinMax, maskMinMax)
-            val hasSoftEdges = maskMinMax.maxVal > 1 && maskMinMax.maxVal < 255
-            if (hasSoftEdges) {
-                return@withContext blendWithSoftMask(original, resultBitmap, softMask)
-            }
-
             return@withContext resultBitmap
         } finally {
             src.release()
@@ -336,27 +322,6 @@ class ObjectEraserViewModel(
             hardMaskMat.release()
             inpaintedMat.release()
         }
-    }
-
-    private fun blendWithSoftMask(original: Bitmap, inpainted: Bitmap, softMask: Bitmap): Bitmap {
-        val result = Bitmap.createBitmap(original.width, original.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        // Draw original as base
-        canvas.drawBitmap(original, 0f, 0f, null)
-        // Draw soft-masked inpainted over it using PorterDuff
-        // Create a temporary bitmap for the masked inpainted
-        val maskedInpainted = Bitmap.createBitmap(inpainted.width, inpainted.height, Bitmap.Config.ARGB_8888)
-        val maskedCanvas = Canvas(maskedInpainted)
-        maskedCanvas.drawBitmap(inpainted, 0f, 0f, null)
-        // Apply soft mask as alpha using DST_IN
-        val alphaPaint = Paint().apply {
-            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN)
-        }
-        maskedCanvas.drawBitmap(softMask, 0f, 0f, alphaPaint)
-        // Draw masked inpainted over original using SRC_OVER (default)
-        canvas.drawBitmap(maskedInpainted, 0f, 0f, null)
-        maskedInpainted.recycle()
-        return result
     }
 
     suspend fun saveImage(activity: Activity): Boolean {
