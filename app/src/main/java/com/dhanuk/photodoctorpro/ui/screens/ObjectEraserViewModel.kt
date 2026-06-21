@@ -245,7 +245,7 @@ class ObjectEraserViewModel(
                 android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
             }
             if (synchronized(stackLock) { undoStack.isNotEmpty() }) synchronized(stackLock) { undoStack.removeLast() }
-            _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = "Error: ${e.message}")
+            _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = e.message)
         }
     }
 

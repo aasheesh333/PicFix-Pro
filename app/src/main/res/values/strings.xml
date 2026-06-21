@@ -229,4 +229,20 @@
     <string name="aspect_ratio_16_9">16:9</string>
     <string name="aspect_ratio_a4">A4</string>
     <string name="cd_aspect_ratio">Aspect ratio</string>
+    <string name="cd_selected_image">Selected image</string>
+    <string name="cd_cropped_image">Cropped image</string>
+    <string name="cd_document">Document</string>
+    <string name="keep">Keep</string>
+    <string name="dark_mode_on">On</string>
+    <string name="dark_mode_off">Off</string>
+    <string name="gallery_selected_folder">Gallery/Selected Folder</string>
+    <string name="available">available</string>
+    <string name="error_sharing">Error sharing: %1$s</string>
+    <string name="error_opening">Error opening: %1$s</string>
+    <string name="image">Image</string>
+    <string name="share_image">Share Image</string>
+    <string name="width_label">W</string>
+    <string name="height_label">H</string>
+    <string name="refinement_failed_fmt">Refinement failed: %1$s</string>
+    <string name="save_failed_fmt">Failed to save image: %1$s</string>
 </resources>

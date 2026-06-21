@@ -46,14 +46,14 @@ fun HistoryScreen(navController: NavController) {
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
 
     selectedItem?.let { item ->
         val isContentUri = item.filePath.startsWith("content://")
-        val displayName = if (isContentUri) "Gallery/Selected Folder" else File(item.filePath).name
+        val displayName = if (isContentUri) "context.getString(R.string.gallery_selected_folder)" else File(item.filePath).name
         val exists = isContentUri || File(item.filePath).exists()
 
         AlertDialog(
@@ -178,7 +178,7 @@ fun HistoryScreen(navController: NavController) {
                             onClick = { viewModel.clearHistory() },
                             enabled = !isClearing,
                             modifier = Modifier.semantics {
-                                contentDescription = "Clear all history"
+                                contentDescription = stringResource(R.string.cd_clear_history)
                             }
                         ) {
                             Text(stringResource(R.string.clear))
@@ -205,9 +205,9 @@ fun HistoryScreen(navController: NavController) {
             ) {
                 items(historyItems, key = { it.id }) { item ->
                     val isContentUri = item.filePath.startsWith("content://")
-                    val displayName = if (isContentUri) "Gallery/Selected Folder" else File(item.filePath).name
+                    val displayName = if (isContentUri) "context.getString(R.string.gallery_selected_folder)" else File(item.filePath).name
                     val exists = isContentUri || File(item.filePath).exists()
-                    val cardDescription = "${item.operationType}, $displayName, ${if (exists) "available" else "file missing"}"
+                    val cardDescription = "${item.operationType}, $displayName, ${if (exists) context.getString(R.string.available) else context.getString(R.string.file_missing)}"
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()

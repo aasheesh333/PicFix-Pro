@@ -126,7 +126,7 @@ class PerspectiveCropViewModel(
             try {
                 val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 if (bitmap == null) {
-                    _uiState.update { it.copy(isLoading = false, error = "Could not decode image") }
+                    _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.error_decoding_image)) }
                     return@launch
                 }
                 val old = _uiState.value.originalBitmap
@@ -142,7 +142,7 @@ class PerspectiveCropViewModel(
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("PerspectiveCropVM", "onImageSelected failed", e)
                 }
-                _uiState.update { it.copy(error = e.message ?: "Failed to load", isLoading = false) }
+                _uiState.update { it.copy(error = context.getString(R.string.error_loading_image, e.message), isLoading = false) }
             }
         }
     }
@@ -593,7 +593,7 @@ fun PerspectiveCropScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -611,10 +611,10 @@ fun PerspectiveCropScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image")) }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image))) }
                 catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("PerspectiveCropVM", "operation failed", e) }
             },
             onOpen = {
@@ -669,7 +669,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                     if (processedImage != null && !compareMode) {
                         Image(
                             bitmap = processedImage,
-                            contentDescription = "Cropped",
+                            contentDescription = stringResource(R.string.cd_cropped_image),
                             modifier = Modifier.fillMaxSize().padding(8.dp),
                             contentScale = ContentScale.Fit
                         )
@@ -677,16 +677,18 @@ fun PerspectiveCropScreen(navController: NavController) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             Image(
                                 bitmap = originalImage,
-                                contentDescription = "Document",
+                                contentDescription = stringResource(R.string.cd_document),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
 if (processedImage == null) {
+                                val originalBitmap = uiState.originalBitmap
+                                if (originalBitmap != null) {
                                 Canvas(modifier = Modifier.fillMaxSize()) {
                                     val w = size.width
                                     val h = size.height
-                                    val bitmapW = uiState.originalBitmap!!.width.toFloat()
-                                    val bitmapH = uiState.originalBitmap!!.height.toFloat()
+                                    val bitmapW = originalBitmap.width.toFloat()
+                                    val bitmapH = originalBitmap.height.toFloat()
                                     val scale = minOf(w / bitmapW, h / bitmapH)
                                     val drawW = bitmapW * scale
                                     val drawH = bitmapH * scale
@@ -727,8 +729,10 @@ if (processedImage == null) {
                                 }
 
                                 if (canvasSize.width > 0) {
-                                    val bitmapW = uiState.originalBitmap!!.width.toFloat()
-                                    val bitmapH = uiState.originalBitmap!!.height.toFloat()
+                                    val obmp = uiState.originalBitmap
+                                    if (obmp != null) {
+                                    val bitmapW = obmp.width.toFloat()
+                                    val bitmapH = obmp.height.toFloat()
                                     val scale = minOf(canvasSize.width.toFloat() / bitmapW, canvasSize.height.toFloat() / bitmapH)
                                     val drawW = bitmapW * scale
                                     val drawH = bitmapH * scale
@@ -760,6 +764,8 @@ if (processedImage == null) {
                                                 }
                                         )
                                     }
+                                    }
+                                }
                                 }
                             }
                         }

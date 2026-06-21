@@ -145,7 +145,7 @@ fun SettingsScreen(navController: NavController) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isDarkTheme) "On" else "Off",
+                        text = if (isDarkTheme) stringResource(R.string.dark_mode_on) else stringResource(R.string.dark_mode_off),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -109,12 +109,12 @@ fun EnhanceImageScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                  try { context.startActivity(com.dhanuk.photodoctorpro.utils.createShareIntent(path, context, "com.whatsapp")) }
-                 catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                 catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
                 try {
                     context.startActivity(Intent.createChooser(
-                        com.dhanuk.photodoctorpro.utils.createShareIntent(path, context), "Share Image"))
+                        com.dhanuk.photodoctorpro.utils.createShareIntent(path, context), context.getString(R.string.share_image)))
                 } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("EnhanceImageVM", "operation failed", e) }
             },
             onOpen = {
@@ -132,7 +132,7 @@ fun EnhanceImageScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }

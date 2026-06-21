@@ -77,7 +77,7 @@ class ColorAdjustmentsViewModel(
             try {
                 val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)
                 if (bitmap == null) {
-                    _uiState.update { it.copy(error = "Could not decode image", isLoading = false) }
+                    _uiState.update { it.copy(error = context.getString(com.dhanuk.photodoctorpro.R.string.error_decoding_image), isLoading = false) }
                     return@launch
                 }
                 val argb = if (bitmap.config != Bitmap.Config.ARGB_8888 || !bitmap.isMutable) {
@@ -87,7 +87,7 @@ class ColorAdjustmentsViewModel(
                 }
                 if (argb == null) {
                     bitmap.takeIf { !it.isRecycled }?.recycle()
-                    _uiState.update { it.copy(error = "Could not allocate bitmap", isLoading = false) }
+                    _uiState.update { it.copy(error = context.getString(com.dhanuk.photodoctorpro.R.string.error_could_not_allocate_bitmap), isLoading = false) }
                     return@launch
                 }
                 if (argb != bitmap && !bitmap.isRecycled) bitmap.recycle()

@@ -98,7 +98,7 @@ fun ResizeCompressScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -116,10 +116,10 @@ fun ResizeCompressScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (_: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                catch (_: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share")) }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share))) }
                 catch (_: Exception) { }
             },
             onOpen = {
@@ -306,7 +306,7 @@ fun ResizeCompressScreen(navController: NavController) {
                             OutlinedTextField(
                                 value = uiState.customWidthText,
                                 onValueChange = { viewModel.onCustomWidthChanged(it) },
-                                label = { Text("W", style = MaterialTheme.typography.labelSmall) },
+                                label = { Text(stringResource(R.string.width_label), style = MaterialTheme.typography.labelSmall) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -327,7 +327,7 @@ fun ResizeCompressScreen(navController: NavController) {
                             OutlinedTextField(
                                 value = uiState.customHeightText,
                                 onValueChange = { viewModel.onCustomHeightChanged(it) },
-                                label = { Text("H", style = MaterialTheme.typography.labelSmall) },
+                                label = { Text(stringResource(R.string.height_label), style = MaterialTheme.typography.labelSmall) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -102,7 +102,7 @@ class ResizeCompressViewModel(
                 val oldOriginal = _uiState.value.originalBitmap
                 val oldProcessed = _uiState.value.processedBitmap
                 if (bitmap == null) {
-                    _uiState.update { it.copy(error = "Could not decode image", isLoading = false) }
+                    _uiState.update { it.copy(error = context.getString(com.dhanuk.photodoctorpro.R.string.error_decoding_image), isLoading = false) }
                     return@launch
                 }
                 _uiState.update {

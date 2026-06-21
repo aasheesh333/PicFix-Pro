@@ -127,15 +127,15 @@ fun RemoveBackgroundScreen(navController: NavController) {
                  try {
                      context.startActivity(createShareIntent(path, context, "com.whatsapp"))
                  } catch (e: Exception) {
-                     Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                     Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show()
                  }
             },
             onShareOther = {
                  try {
-                     context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image"))
+                     context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image)))
                  } catch (e: Exception) {
                      if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                     Toast.makeText(context, "Error sharing: ${e.message}", Toast.LENGTH_SHORT).show()
+                     Toast.makeText(context, "context.getString(R.string.error_sharing, e.message)", Toast.LENGTH_SHORT).show()
                  }
             },
             onOpen = {
@@ -143,7 +143,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                     context.startActivity(createOpenIntent(path, context))
                 } catch (e: Exception) {
                     if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                    Toast.makeText(context, "Error opening: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "context.getString(R.string.error_opening, e.message)", Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -157,7 +157,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -172,7 +172,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isRefining) "Refine Edges" else stringResource(R.string.remove_background)) },
+                title = { Text(if (uiState.isRefining) stringResource(R.string.refine_edges) else stringResource(R.string.remove_background)) },
                 navigationIcon = {
                     if (uiState.isRefining) {
                         IconButton(onClick = {
@@ -234,7 +234,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
                          ZoomableBox {
                             Image(
                                 painter = rememberAsyncImagePainter(uiState.selectedImageUri),
-                                contentDescription = "Selected",
+                                contentDescription = stringResource(R.string.cd_selected_image),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
@@ -380,14 +380,14 @@ fun RefineEditor(
 
         Column(modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp).background(MaterialTheme.colorScheme.surface)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                IconButton(onClick = { viewModel.undo() }) { Icon(Icons.Default.ArrowBack, "Undo") }
+                IconButton(onClick = { viewModel.undo() }) { Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.undo)) }
                 Row {
                     FilledTonalIconToggleButton(checked = isAddMode, onCheckedChange = { isAddMode = true }) {
-                        Icon(Icons.Default.Add, "Keep")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.keep))
                     }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalIconToggleButton(checked = !isAddMode, onCheckedChange = { isAddMode = false }) {
-                        Icon(Icons.Default.Remove, "Erase")
+                        Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.erase))
                     }
                 }
                 IconButton(onClick = { viewModel.redo() }) { Icon(Icons.Default.ArrowForward, stringResource(R.string.action_redo)) }

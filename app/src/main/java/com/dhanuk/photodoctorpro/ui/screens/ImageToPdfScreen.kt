@@ -65,7 +65,7 @@ fun ImageToPdfScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -211,7 +211,7 @@ fun ImageRow(
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
-            Text(uri.lastPathSegment ?: "Image", modifier = Modifier.weight(1f))
+            Text(uri.lastPathSegment ?: context.getString(R.string.image), modifier = Modifier.weight(1f))
 
             Column {
                 IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {

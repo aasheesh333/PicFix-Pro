@@ -137,11 +137,11 @@ fun ObjectEraserScreen(navController: NavController) {
             onShareWhatsApp = {
                  try {
                      context.startActivity(createShareIntent(path, context, "com.whatsapp"))
-                 } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                 } catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
                  try {
-                     context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image"))
+                     context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image)))
                  } catch (e: Exception) { if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ObjectEraserVM", "operation failed", e) }
             },
             onOpen = {
@@ -160,7 +160,7 @@ fun ObjectEraserScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -252,7 +252,7 @@ fun ObjectEraserScreen(navController: NavController) {
                     ZoomableBox {
                          Image(
                             painter = rememberAsyncImagePainter(uiState.selectedImageUri),
-                            contentDescription = "Selected",
+                            contentDescription = stringResource(R.string.cd_selected_image),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit
                         )

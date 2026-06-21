@@ -97,7 +97,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            snackbarHostState.showSnackbar("Error: $it")
+            snackbarHostState.showSnackbar(context.getString(R.string.error_prefix, it))
             viewModel.onErrorShown()
         }
     }
@@ -115,10 +115,10 @@ fun ColorAdjustmentsScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (_: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                catch (_: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
             },
             onShareOther = {
-                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), "Share Image")) }
+                try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image))) }
                 catch (_: Exception) { }
             },
             onOpen = {

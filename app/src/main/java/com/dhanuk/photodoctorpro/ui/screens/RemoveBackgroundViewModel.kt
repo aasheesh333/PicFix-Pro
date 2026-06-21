@@ -11,7 +11,6 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.net.Uri
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -49,7 +48,8 @@ class RemoveBackgroundViewModel(
     )
     val uiState = _uiState.asStateFlow()
 
-    val maskVersion = mutableStateOf(0)
+    private val _maskVersion = MutableStateFlow(0)
+    val maskVersion = _maskVersion.asStateFlow()
 
     private val undoStack = ArrayDeque<Bitmap>()
     private val redoStack = ArrayDeque<Bitmap>()
@@ -74,13 +74,13 @@ class RemoveBackgroundViewModel(
                     if (old != null && old != argbBitmap && !old.isRecycled) old.recycle()
                     if (bitmap != argbBitmap && !bitmap.isRecycled) bitmap.recycle()
                 } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed))
                 }
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("RemoveBGVM", "onImageSelected failed", e)
                 }
-                _uiState.value = _uiState.value.copy(isLoading = false, error = "Load failed: ${e.message}")
+                _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed_with_reason, e.message))
             }
         }
     }
@@ -123,7 +123,7 @@ class RemoveBackgroundViewModel(
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("RemoveBGVM", "removeBackground failed", e)
                 }
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Unknown error")
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: context.getString(com.dhanuk.photodoctorpro.R.string.error_unknown))
             }
         }
     }
@@ -232,7 +232,7 @@ class RemoveBackgroundViewModel(
                  if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                      android.util.Log.e("RemoveBGVM", "applyRefinement failed", e)
                  }
-                 _uiState.value = _uiState.value.copy(isLoading = false, error = "Refinement failed: ${e.message}")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.refinement_failed_fmt, e.message))
              }
         }
     }
@@ -270,7 +270,7 @@ class RemoveBackgroundViewModel(
             }
         }
         canvas.drawPath(path, paint)
-        maskVersion.value += 1
+        _maskVersion.value += 1
     }
 
     fun saveMaskStateForUndo() {
@@ -292,7 +292,7 @@ class RemoveBackgroundViewModel(
             if (current != null) redoStack.addLast(current)
             val prev = undoStack.removeLast()
             _uiState.value = _uiState.value.copy(maskBitmap = prev)
-            maskVersion.value += 1
+            _maskVersion.value += 1
         }
     }
 
@@ -302,7 +302,7 @@ class RemoveBackgroundViewModel(
             if (current != null) pushToUndo(current)
             val next = redoStack.removeLast()
             _uiState.value = _uiState.value.copy(maskBitmap = next)
-            maskVersion.value += 1
+            _maskVersion.value += 1
         }
     }
 
@@ -329,7 +329,7 @@ class RemoveBackgroundViewModel(
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("RemoveBGVM", "saveImage failed", e)
             }
-            _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
+            _uiState.value = _uiState.value.copy(error = activity.getString(com.dhanuk.photodoctorpro.R.string.save_failed_fmt, e.message))
             false
         } finally {
             _uiState.value = _uiState.value.copy(isLoading = false)
