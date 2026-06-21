@@ -421,6 +421,7 @@ class RemoveBackgroundViewModel(
             redoStack.clear()
         }
     }
+}
 
 data class RemoveBackgroundUiState(
     val selectedImageUri: Uri? = null,
