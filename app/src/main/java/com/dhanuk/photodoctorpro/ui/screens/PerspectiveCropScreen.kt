@@ -801,10 +801,10 @@ if (processedImage == null) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
-                    androidx.compose.foundation.lazy.LazyRow(
+                    LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        androidx.compose.foundation.lazy.items(AspectRatioLock.values()) { lock ->
+                        items(AspectRatioLock.values()) { lock ->
                             FilterChip(
                                 selected = uiState.aspectRatio == lock,
                                 onClick = { viewModel.setAspectRatio(lock) },
