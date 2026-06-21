@@ -329,37 +329,41 @@ class PerspectiveCropViewModel(
         val bottomY: Float
         when (index) {
             0 -> { // TL dragged, anchor is BR
-                leftX = draggedX
-                rightX = anchor.x
-                topY = draggedY
-                bottomY = anchor.y
+                var lxL = draggedX
+                var rxL = anchor.x
+                var tyL = draggedY
+                var byL = anchor.y
                 // Normalize so left <= right and top <= bottom
-                if (leftX > rightX) { val t = leftX; leftX = rightX; rightX = t }
-                if (topY > bottomY) { val t = topY; topY = bottomY; bottomY = t }
+                if (lxL > rxL) { val t = lxL; lxL = rxL; rxL = t }
+                if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
+                leftX = lxL; rightX = rxL; topY = tyL; bottomY = byL
             }
             1 -> { // TR dragged, anchor is BL
-                rightX = draggedX
-                leftX = anchor.x
-                topY = draggedY
-                bottomY = anchor.y
-                if (rightX < leftX) { val t = rightX; rightX = leftX; leftX = t }
-                if (topY > bottomY) { val t = topY; topY = bottomY; bottomY = t }
+                var rxL = draggedX
+                var lxL = anchor.x
+                var tyL = draggedY
+                var byL = anchor.y
+                if (rxL < lxL) { val t = rxL; rxL = lxL; lxL = t }
+                if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
+                rightX = rxL; leftX = lxL; topY = tyL; bottomY = byL
             }
             2 -> { // BR dragged, anchor is TL
-                rightX = draggedX
-                leftX = anchor.x
-                bottomY = draggedY
-                topY = anchor.y
-                if (rightX < leftX) { val t = rightX; rightX = leftX; leftX = t }
-                if (bottomY < topY) { val t = bottomY; bottomY = topY; topY = t }
+                var rxL = draggedX
+                var lxL = anchor.x
+                var byL = draggedY
+                var tyL = anchor.y
+                if (rxL < lxL) { val t = rxL; rxL = lxL; lxL = t }
+                if (byL < tyL) { val t = byL; byL = tyL; tyL = t }
+                rightX = rxL; leftX = lxL; bottomY = byL; topY = tyL
             }
             3 -> { // BL dragged, anchor is TR
-                leftX = draggedX
-                rightX = anchor.x
-                bottomY = draggedY
-                topY = anchor.y
-                if (leftX > rightX) { val t = leftX; leftX = rightX; rightX = t }
-                if (bottomY < topY) { val t = bottomY; bottomY = topY; topY = t }
+                var lxL = draggedX
+                var rxL = anchor.x
+                var byL = draggedY
+                var tyL = anchor.y
+                if (lxL > rxL) { val t = lxL; lxL = rxL; rxL = t }
+                if (byL < tyL) { val t = byL; byL = tyL; tyL = t }
+                leftX = lxL; rightX = rxL; bottomY = byL; topY = tyL
             }
             else -> return current
         }
