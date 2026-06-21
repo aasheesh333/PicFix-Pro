@@ -40,7 +40,7 @@ class EnhanceImageViewModel(
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch(viewModelExceptionHandler("EnhanceVM") + Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, selectedImageUri = uri)
             try {
                 val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
                 if (bitmap != null) {
@@ -54,18 +54,19 @@ class EnhanceImageViewModel(
                         isLoading = false,
                         isLargeImage = isLarge,
                         progress = 0f,
-                        savedFilePath = null
+                        savedFilePath = null,
+                        selectedImageUri = uri
                     )
                     if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
                     if (oldEnhanced != null && oldEnhanced !== bitmap && !oldEnhanced.isRecycled) oldEnhanced.recycle()
                 } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to load image", selectedImageUri = uri)
                 }
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("EnhanceVM", "onImageSelected failed", e)
                 }
-                _uiState.value = _uiState.value.copy(isLoading = false, error = "Load failed: ${e.message}")
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Load failed: ${e.message}", selectedImageUri = uri)
             }
         }
     }

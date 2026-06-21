@@ -16,6 +16,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +75,21 @@ import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import java.io.File
 
+/**
+ * Aspect ratio lock for the cropped output. FREE = use the actual selected
+ * region (no lock). All other values force the output to that ratio.
+ *
+ * A4 is the standard ISO 216 paper size (210×297mm) → ratio ≈ 0.707.
+ */
+enum class AspectRatioLock(val displayName: String, val ratio: Float?) {
+    FREE("Free", null),
+    SQUARE("1:1", 1f),
+    RATIO_4_3("4:3", 4f / 3f),
+    RATIO_3_2("3:2", 3f / 2f),
+    RATIO_16_9("16:9", 16f / 9f),
+    A4("A4", 210f / 297f)
+}
+
 data class PerspectiveCropUiState(
     val selectedImageUri: Uri? = null,
     val originalBitmap: Bitmap? = null,
@@ -79,7 +97,8 @@ data class PerspectiveCropUiState(
     val corners: List<PointF> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val savedFilePath: String? = null
+    val savedFilePath: String? = null,
+    val aspectRatio: AspectRatioLock = AspectRatioLock.FREE
 )
 
 class PerspectiveCropViewModel(
@@ -252,10 +271,103 @@ class PerspectiveCropViewModel(
         val localX = (x - offsetX).coerceIn(0f, displayedW)
         val localY = (y - offsetY).coerceIn(0f, displayedH)
         val scale = displayedW / bitmapW
+        val bitmapX = (localX / scale).coerceIn(0f, bitmapW)
+        val bitmapY = (localY / scale).coerceIn(0f, bitmapH)
         val updated = _uiState.value.corners.toMutableList()
         if (index !in updated.indices) return
-        updated[index] = PointF(localX / scale, localY / scale)
-        _uiState.update { it.copy(corners = updated) }
+        // When the aspect ratio is locked, treat the user's drag as a
+        // resize of the rectangle: anchor the opposite corner and rebuild
+        // the four points to satisfy the locked ratio. This prevents the
+        // "stretched" output the user reported.
+        val lock = _uiState.value.aspectRatio
+        if (lock.ratio != null && updated.size == 4) {
+            val newRect = rectangleForDrag(updated, index, bitmapX, bitmapY, lock.ratio, bitmapW, bitmapH)
+            _uiState.update { it.copy(corners = newRect) }
+        } else {
+            updated[index] = PointF(bitmapX, bitmapY)
+            _uiState.update { it.copy(corners = updated) }
+        }
+    }
+
+    /**
+     * Anchor the corner opposite to [index] and rebuild the 4 corners so
+     * the rectangle has the requested [ratio]. The dragged corner snaps to
+     * the user's click position (clamped inside the bitmap), and the
+     * rectangle is recomputed to satisfy the ratio.
+     *
+     * 0=TL, 1=TR, 2=BR, 3=BL; the opposite corner is at [(index+2) % 4].
+     */
+    private fun rectangleForDrag(
+        current: List<PointF>,
+        index: Int,
+        newX: Float,
+        newY: Float,
+        ratio: Float,
+        bitmapW: Float,
+        bitmapH: Float
+    ): List<PointF> {
+        val oppositeIndex = (index + 2) % 4
+        val anchor = current[oppositeIndex]
+        // Choose the rectangle dimensions from the drag vector: the side
+        // perpendicular to the *shorter* direction is adjusted to satisfy
+        // the ratio. This means a corner stays in the same half-plane as
+        // the user's click.
+        val dragW = kotlin.math.abs(newX - anchor.x)
+        val dragH = kotlin.math.abs(newY - anchor.y)
+        if (dragW < 1f || dragH < 1f) return current
+        val dragRatio = dragW / dragH
+        var rectW: Float
+        var rectH: Float
+        if (dragRatio > ratio) {
+            rectW = dragW
+            rectH = rectW / ratio
+        } else {
+            rectH = dragH
+            rectW = rectH * ratio
+        }
+        // Determine which side the drag came from.
+        val leftX: Float
+        val rightX: Float
+        val topY: Float
+        val bottomY: Float
+        when (index) {
+            0 -> { // TL dragged: anchor is BR
+                leftX = anchor.x - rectW
+                topY = anchor.y - rectH
+                rightX = anchor.x
+                bottomY = anchor.y
+            }
+            1 -> { // TR dragged: anchor is BL
+                rightX = anchor.x + rectW
+                topY = anchor.y - rectH
+                leftX = anchor.x
+                bottomY = anchor.y
+            }
+            2 -> { // BR dragged: anchor is TL
+                rightX = anchor.x + rectW
+                bottomY = anchor.y + rectH
+                leftX = anchor.x
+                topY = anchor.y
+            }
+            3 -> { // BL dragged: anchor is TR
+                leftX = anchor.x - rectW
+                bottomY = anchor.y + rectH
+                rightX = anchor.x
+                topY = anchor.y
+            }
+            else -> return current
+        }
+        // Clamp inside the bitmap.
+        val lx = leftX.coerceIn(0f, (bitmapW - 1f).coerceAtLeast(0f))
+        val rx = rightX.coerceIn(lx + 1f, bitmapW)
+        val ty = topY.coerceIn(0f, (bitmapH - 1f).coerceAtLeast(0f))
+        val by = bottomY.coerceIn(ty + 1f, bitmapH)
+        return listOf(
+            PointF(lx, ty),
+            PointF(rx, ty),
+            PointF(rx, by),
+            PointF(lx, by)
+        )
     }
 
     fun autoDetect() {
@@ -300,19 +412,36 @@ class PerspectiveCropViewModel(
         val widthB = distance(src[2], src[3], src[6], src[7])
         val heightA = distance(src[0], src[1], src[2], src[3])
         val heightB = distance(src[4], src[5], src[6], src[7])
-        val maxW = maxOf(widthA, widthB).toInt()
-        val maxH = maxOf(heightA, heightB).toInt()
+        val rawW = maxOf(widthA, widthB)
+        val rawH = maxOf(heightA, heightB)
+        val lock = _uiState.value.aspectRatio
+        val (finalW, finalH) = if (lock.ratio != null) {
+            // Force the output to the locked aspect ratio. Use the longer
+            // of the two dimensions as the limiting side; derive the other
+            // from the ratio. This stops the "stretched" output the user
+            // reported when auto-detect produced a non-rectangular region.
+            val currentRatio = if (rawH > 0) rawW / rawH else lock.ratio
+            if (currentRatio > lock.ratio) {
+                rawW to (rawW / lock.ratio)
+            } else {
+                (rawH * lock.ratio) to rawH
+            }
+        } else {
+            rawW to rawH
+        }
+        val outW = finalW.toInt().coerceAtLeast(1)
+        val outH = finalH.toInt().coerceAtLeast(1)
 
         val dst = floatArrayOf(
             0f, 0f,
-            maxW.toFloat(), 0f,
-            maxW.toFloat(), maxH.toFloat(),
-            0f, maxH.toFloat()
+            outW.toFloat(), 0f,
+            outW.toFloat(), outH.toFloat(),
+            0f, outH.toFloat()
         )
 
         val matrix = Matrix()
         matrix.setPolyToPoly(src, 0, dst, 0, 4)
-        val output = Bitmap.createBitmap(maxW.coerceAtLeast(1), maxH.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val output = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         val paint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
         canvas.drawBitmap(source, matrix, paint)
@@ -336,7 +465,9 @@ class PerspectiveCropViewModel(
                     operationType = "Document Scan",
                     inputUriString = "",
                     repository = repository,
-                    format = android.graphics.Bitmap.CompressFormat.JPEG,
+                    // Save as PNG so any transparent areas in the warped output
+                    // are preserved (JPEG would flatten them to white).
+                    format = android.graphics.Bitmap.CompressFormat.PNG,
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (e: Exception) {
@@ -350,6 +481,64 @@ class PerspectiveCropViewModel(
 
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
+
+    /**
+     * Set (or clear) the aspect-ratio lock. When set, the four corners are
+     * forced to form an axis-aligned rectangle whose width/height matches the
+     * locked ratio. Switching ratios re-snaps the existing corners using the
+     * same center and area.
+     */
+    fun setAspectRatio(lock: AspectRatioLock) {
+        _uiState.update { state ->
+            val newCorners = if (lock.ratio == null) {
+                state.corners
+            } else if (state.corners.size == 4) {
+                snapToRectangle(state.corners, lock.ratio)
+            } else {
+                state.corners
+            }
+            state.copy(aspectRatio = lock, corners = newCorners)
+        }
+    }
+
+    /**
+     * Given 4 corner points (in any order, possibly a non-rectangle), produce
+     * 4 corner points that form an axis-aligned rectangle with the requested
+     * width/height ratio [ratio]. The rectangle is the *minimum-area* rectangle
+     * covering the original four points, scaled so the ratio matches.
+     */
+    private fun snapToRectangle(corners: List<PointF>, ratio: Float): List<PointF> {
+        if (corners.size != 4) return corners
+        val minX = corners.minOf { it.x }
+        val maxX = corners.maxOf { it.x }
+        val minY = corners.minOf { it.y }
+        val maxY = corners.maxOf { it.y }
+        val cx = (minX + maxX) / 2f
+        val cy = (minY + maxY) / 2f
+        val currentW = maxX - minX
+        val currentH = maxY - minY
+        // Keep the area, adjust to match the requested ratio.
+        val currentRatio = if (currentH > 0) currentW / currentH else ratio
+        val newW: Float
+        val newH: Float
+        if (currentRatio > ratio) {
+            // currently wider than ratio → reduce width
+            newH = currentH
+            newW = newH * ratio
+        } else {
+            // currently taller than ratio → reduce height
+            newW = currentW
+            newH = newW / ratio
+        }
+        val halfW = newW / 2f
+        val halfH = newH / 2f
+        return listOf(
+            PointF(cx - halfW, cy - halfH), // TL
+            PointF(cx + halfW, cy - halfH), // TR
+            PointF(cx + halfW, cy + halfH), // BR
+            PointF(cx - halfW, cy + halfH)  // BL
+        )
+    }
 
     override fun onCleared() {
         super.onCleared()
@@ -598,6 +787,44 @@ if (processedImage == null) {
             }
 
             if (originalImage != null) {
+                // Aspect-ratio lock chips. Tapping a chip constrains the
+                // four corners to form an axis-aligned rectangle with that
+                // ratio. Tap "Free" to remove the lock.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.aspect_ratio),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        androidx.compose.foundation.lazy.items(AspectRatioLock.values()) { lock ->
+                            FilterChip(
+                                selected = uiState.aspectRatio == lock,
+                                onClick = { viewModel.setAspectRatio(lock) },
+                                label = {
+                                    Text(
+                                        when (lock) {
+                                            AspectRatioLock.FREE -> stringResource(R.string.aspect_ratio_free)
+                                            AspectRatioLock.SQUARE -> stringResource(R.string.aspect_ratio_1_1)
+                                            AspectRatioLock.RATIO_4_3 -> stringResource(R.string.aspect_ratio_4_3)
+                                            AspectRatioLock.RATIO_3_2 -> stringResource(R.string.aspect_ratio_3_2)
+                                            AspectRatioLock.RATIO_16_9 -> stringResource(R.string.aspect_ratio_16_9)
+                                            AspectRatioLock.A4 -> stringResource(R.string.aspect_ratio_a4)
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

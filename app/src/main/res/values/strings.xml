@@ -230,4 +230,12 @@
     <string name="enhance_failed_fmt">Enhance failed: %1$s</string>
     <string name="enhance_oom">Not enough memory to enhance at this scale. Try a smaller image or a lower scale.</string>
     <string name="enhance_input_too_large_fmt">Input image is too large (%1$d×%2$d). Max allowed is %3$d MP.</string>
+    <string name="aspect_ratio">Aspect ratio</string>
+    <string name="aspect_ratio_free">Free</string>
+    <string name="aspect_ratio_1_1">1:1</string>
+    <string name="aspect_ratio_4_3">4:3</string>
+    <string name="aspect_ratio_3_2">3:2</string>
+    <string name="aspect_ratio_16_9">16:9</string>
+    <string name="aspect_ratio_a4">A4</string>
+    <string name="cd_aspect_ratio">Aspect ratio</string>
 </resources>

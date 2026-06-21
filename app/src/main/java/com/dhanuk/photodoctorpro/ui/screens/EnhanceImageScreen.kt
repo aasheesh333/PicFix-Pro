@@ -191,11 +191,23 @@ fun EnhanceImageScreen(navController: NavController) {
                             afterImage = enhancedImage,
                             modifier = Modifier.fillMaxSize()
                         )
+                    } else if (originalImage != null) {
+                        // Show the loaded bitmap directly (selectedImageUri is also
+                        // set, but the bitmap is the source of truth — works even
+                        // if the URI permission is transiently unavailable).
+                        ZoomableBox {
+                            Image(
+                                bitmap = originalImage,
+                                contentDescription = stringResource(R.string.cd_image_preview),
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     } else if (uiState.selectedImageUri != null) {
-                         ZoomableBox {
-                             Image(
+                        ZoomableBox {
+                            Image(
                                 painter = rememberAsyncImagePainter(uiState.selectedImageUri),
-                                contentDescription = "Selected",
+                                contentDescription = stringResource(R.string.cd_image_preview),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )

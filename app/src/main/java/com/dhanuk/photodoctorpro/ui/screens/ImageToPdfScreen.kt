@@ -5,6 +5,7 @@ import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -47,10 +48,20 @@ fun ImageToPdfScreen(navController: NavController) {
 
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+    // Multi-image picker:
+    //   * On API 33+ (Android 13+): uses the system Photo Picker via
+    //     PickMultipleVisualMedia — true multi-select with thumbnails.
+    //   * On older Android: falls back to ACTION_OPEN_DOCUMENT with
+    //     EXTRA_ALLOW_MULTIPLE so the system file picker returns a list.
+    val multiImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20)
     ) { uris: List<Uri> ->
-        viewModel.onImagesSelected(uris)
+        if (uris.isNotEmpty()) viewModel.onImagesSelected(uris)
+    }
+    val fallbackMultiPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) viewModel.onImagesSelected(uris)
     }
 
     LaunchedEffect(uiState.error) {
@@ -124,7 +135,15 @@ fun ImageToPdfScreen(navController: NavController) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+            Button(onClick = {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    multiImagePicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                } else {
+                    fallbackMultiPicker.launch(arrayOf("image/*"))
+                }
+            }) {
                 Text(stringResource(R.string.select_images))
             }
 
@@ -153,16 +172,17 @@ fun ImageToPdfScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (uiState.isCreating) {
-                CircularProgressIndicator()
-            } else {
-                Button(
-                    onClick = { viewModel.createPdf(activity) },
-                    enabled = uiState.selectedImageUris.isNotEmpty()
-                ) {
-                    Text(stringResource(R.string.create_pdf))
-                }
+        if (uiState.isCreating) {
+            CircularProgressIndicator()
+        } else {
+            Button(
+                onClick = { viewModel.createPdf(activity) },
+                enabled = uiState.selectedImageUris.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.create_pdf))
             }
+        }
         }
     }
 }
