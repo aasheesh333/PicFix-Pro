@@ -112,7 +112,7 @@ class RemoveBackgroundViewModel(
                     redoStack.forEach { if (!it.isRecycled) it.recycle() }
                     undoStack.clear()
                     redoStack.clear()
-                    val maskCopy = mask.copy(mask.config, true)
+                    val maskCopy = mask.copy(mask.config ?: Bitmap.Config.ALPHA_8, true)
                     if (maskCopy != null) pushToUndoLocked(maskCopy)
                 }
 
@@ -290,7 +290,7 @@ class RemoveBackgroundViewModel(
     fun saveMaskStateForUndo() {
         val currentMask = _uiState.value.maskBitmap ?: return
         synchronized(stackLock) {
-            pushToUndoLocked(currentMask.copy(currentMask.config, true))
+            pushToUndoLocked(currentMask.copy(currentMask.config ?: Bitmap.Config.ALPHA_8, true))
             redoStack.clear()
         }
     }
