@@ -139,8 +139,9 @@ object ImageEnhancer {
         } finally {
             // Recycle the intermediate downscale (if we created one) since the
             // model has finished with it. The caller's `bitmap` is never touched.
-            if (workingBitmap != null && !workingBitmap.isRecycled) {
-                workingBitmap.recycle()
+            val wb = workingBitmap
+            if (wb != null && !wb.isRecycled) {
+                wb.recycle()
             }
         }
     }
