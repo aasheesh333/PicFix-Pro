@@ -165,20 +165,21 @@ class ColorAdjustmentsViewModel(
         val state = _uiState.value
         val original = state.originalBitmap ?: return
         if (original.isRecycled) return
+        var output: Bitmap? = null
         try {
-            val output = withContext(Dispatchers.Default) {
+            output = withContext(Dispatchers.Default) {
                 applyColorMatrix(original, state.brightness, state.contrast, state.saturation, state.warmth)
             }
             val old = _uiState.value.processedBitmap
             _uiState.update { it.copy(processedBitmap = output) }
-            // NEVER recycle the original bitmap (it's still in use as the source).
-            // NEVER recycle `output` (it's the current processedBitmap).
             if (old != null && old !== original && old !== output && !old.isRecycled) {
                 old.recycle()
             }
         } catch (ce: kotlinx.coroutines.CancellationException) {
+            if (output != null && output !== original && !output.isRecycled) output.recycle()
             throw ce
         } catch (e: Exception) {
+            if (output != null && output !== original && !output.isRecycled) output.recycle()
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ColorVM", "applyAdjustments failed", e)
             }

@@ -431,10 +431,8 @@ class PerspectiveCropViewModel(
 
         val lock = _uiState.value.aspectRatio
         val (warpW, warpH) = if (lock.ratio != null) {
-            // When locked, we want to preserve the content's natural aspect ratio
-            // as much as possible. First compute the content's aspect ratio.
             val contentRatio = if (naturalH > 0) naturalW / naturalH else lock.ratio
-            val targetRatio = lock.ratio!!
+            val targetRatio = lock.ratio
             // Fit the content into the target ratio with letterboxing.
             // Determine which dimension is the limiting factor.
             if (contentRatio > targetRatio) {

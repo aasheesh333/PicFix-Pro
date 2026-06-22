@@ -268,14 +268,17 @@ fun ResizeCompressScreen(navController: NavController) {
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
-                    SizeSummaryRow(
-                        originalBytes = uiState.originalSizeBytes,
-                        processedBytes = uiState.processedSizeBytes,
-                        originalW = uiState.originalBitmap!!.width,
-                        originalH = uiState.originalBitmap!!.height,
-                        processedW = uiState.processedBitmap?.width ?: uiState.originalBitmap!!.width,
-                        processedH = uiState.processedBitmap?.height ?: uiState.originalBitmap!!.height
-                    )
+                    val ob = uiState.originalBitmap
+                    if (ob != null) {
+                        SizeSummaryRow(
+                            originalBytes = uiState.originalSizeBytes,
+                            processedBytes = uiState.processedSizeBytes,
+                            originalW = ob.width,
+                            originalH = ob.height,
+                            processedW = uiState.processedBitmap?.width ?: ob.width,
+                            processedH = uiState.processedBitmap?.height ?: ob.height
+                        )
+                    }
 
                     Spacer(Modifier.height(8.dp))
 

@@ -111,7 +111,8 @@ class RemoveBackgroundViewModel(
                     redoStack.forEach { if (!it.isRecycled) it.recycle() }
                     undoStack.clear()
                     redoStack.clear()
-                    pushToUndoLocked(mask.copy(mask.config, true))
+                    val maskCopy = mask.copy(mask.config, true)
+                    if (maskCopy != null) pushToUndoLocked(maskCopy)
                 }
 
                 _uiState.value = _uiState.value.copy(
@@ -244,9 +245,9 @@ class RemoveBackgroundViewModel(
 
     fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float, brushSoftness: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
+        val oldAlpha8 = if (currentMask.config == Bitmap.Config.ALPHA_8) currentMask else null
         val safeMask = if (currentMask.config == Bitmap.Config.ALPHA_8) {
             val copy = currentMask.copy(Bitmap.Config.ARGB_8888, true) ?: return
-            _uiState.value.maskBitmap?.takeIf { it !== currentMask }?.recycle()
             _uiState.value = _uiState.value.copy(maskBitmap = copy)
             copy
         } else {
@@ -276,6 +277,13 @@ class RemoveBackgroundViewModel(
         }
         canvas.drawPath(path, paint)
         _maskVersion.value += 1
+
+        if (oldAlpha8 != null) {
+            synchronized(stackLock) {
+                val inStack = undoStack.any { it === oldAlpha8 } || redoStack.any { it === oldAlpha8 }
+                if (!inStack && !oldAlpha8.isRecycled) oldAlpha8.recycle()
+            }
+        }
     }
 
     fun saveMaskStateForUndo() {
@@ -288,7 +296,9 @@ class RemoveBackgroundViewModel(
 
     private fun pushToUndoLocked(bitmap: Bitmap) {
         if (undoStack.size >= MAX_STACK_SIZE) {
-            undoStack.removeFirst()
+            val evicted = undoStack.removeFirst()
+            val currentMask = _uiState.value.maskBitmap
+            if (evicted !== currentMask && !evicted.isRecycled) evicted.recycle()
         }
         undoStack.addLast(bitmap)
     }
@@ -297,7 +307,10 @@ class RemoveBackgroundViewModel(
         synchronized(stackLock) {
             if (undoStack.isNotEmpty()) {
                 val current = _uiState.value.maskBitmap
-                if (current != null) redoStack.addLast(current)
+                if (current != null) {
+                    val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
+                    if (copy != null) redoStack.addLast(copy)
+                }
                 val prev = undoStack.removeLast()
                 val original = _uiState.value.originalBitmap
                 val newProcessed = if (original != null && !original.isRecycled && !prev.isRecycled) {
@@ -317,7 +330,10 @@ class RemoveBackgroundViewModel(
         synchronized(stackLock) {
             if (redoStack.isNotEmpty()) {
                 val current = _uiState.value.maskBitmap
-                if (current != null) pushToUndoLocked(current)
+                if (current != null) {
+                    val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
+                    if (copy != null) pushToUndoLocked(copy)
+                }
                 val next = redoStack.removeLast()
                 val original = _uiState.value.originalBitmap
                 val newProcessed = if (original != null && !original.isRecycled && !next.isRecycled) {

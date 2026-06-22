@@ -100,7 +100,8 @@ class ObjectEraserViewModel(
             val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             val currentPaths = _uiState.value.paths
             if (currentBitmap != null) {
-                pushToStackLocked(redoStack, currentBitmap to currentPaths)
+                val copy = currentBitmap.copy(currentBitmap.config ?: Bitmap.Config.ARGB_8888, true)
+                if (copy != null) pushToStackLocked(redoStack, copy to currentPaths)
             }
             val (prevBitmap, prevPaths) = undoStack.removeLast()
             val canUndo = undoStack.isNotEmpty()
@@ -121,7 +122,8 @@ class ObjectEraserViewModel(
             val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
             val currentPaths = _uiState.value.paths
             if (currentBitmap != null) {
-                pushToStackLocked(undoStack, currentBitmap to currentPaths)
+                val copy = currentBitmap.copy(currentBitmap.config ?: Bitmap.Config.ARGB_8888, true)
+                if (copy != null) pushToStackLocked(undoStack, copy to currentPaths)
             }
             val (nextBitmap, nextPaths) = redoStack.removeLast()
             val canRedo = redoStack.isNotEmpty()
@@ -188,8 +190,11 @@ class ObjectEraserViewModel(
 
         _uiState.value = _uiState.value.copy(isErasing = true, error = null, progress = 0f)
 
-        synchronized(stackLock) { pushToStackLocked(undoStack, sourceBitmap to paths) }
-        synchronized(stackLock) { redoStack.clear() }
+        val sourceForStack = synchronized(stackLock) {
+            val copy = sourceBitmap.copy(sourceBitmap.config ?: Bitmap.Config.ARGB_8888, true)
+            if (copy != null) pushToStackLocked(undoStack, copy to paths)
+            redoStack.clear()
+        }
 
         var workingBitmap: Bitmap? = null
         var softMask: Bitmap? = null
@@ -252,7 +257,11 @@ class ObjectEraserViewModel(
     private fun pushToStackLocked(stack: ArrayDeque<Pair<Bitmap, List<EraserPath>>>, item: Pair<Bitmap, List<EraserPath>>) {
         if (stack.size >= MAX_STACK_SIZE) {
             val evicted = stack.removeFirst()
-            if (!evicted.first.isRecycled) evicted.first.recycle()
+            val currentProcessed = _uiState.value.processedBitmap
+            val currentOriginal = _uiState.value.originalBitmap
+            if (evicted.first !== currentProcessed && evicted.first !== currentOriginal && !evicted.first.isRecycled) {
+                evicted.first.recycle()
+            }
         }
         stack.addLast(item)
     }

@@ -215,7 +215,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator()
-                } else if (uiState.isRefining) {
+                } else if (uiState.isRefining && uiState.originalBitmap != null && uiState.maskBitmap != null) {
                     RefineEditor(
                         viewModel = viewModel,
                         original = uiState.originalBitmap!!,
