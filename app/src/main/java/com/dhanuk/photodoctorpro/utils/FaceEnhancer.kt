@@ -1,5 +1,10 @@
 package com.dhanuk.photodoctorpro.utils
 
+// WARNING: assets/models/gfpgan.tflite is an intentional 1-byte
+// placeholder. Replace with a real GFPGAN TF-Lite model before
+// shipping a release build. Without a valid model, face enhancement
+// will fail at runtime.
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas

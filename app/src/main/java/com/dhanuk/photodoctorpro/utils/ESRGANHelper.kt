@@ -1,5 +1,10 @@
 package com.dhanuk.photodoctorpro.utils
 
+// WARNING: assets/models/esrgan_x2.tflite and esrgan_x4.tflite are
+// intentional 1-byte placeholders. Replace with real TF-Lite ESRGAN
+// models before shipping a release build. Without valid models,
+// inference will fail at runtime.
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas

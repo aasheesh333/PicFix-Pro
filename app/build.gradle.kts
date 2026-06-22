@@ -37,12 +37,12 @@ fun getProperty(key: String, defaultValue: String = ""): String {
 
 android {
     namespace = "com.dhanuk.photodoctorpro"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.dhanuk.photodoctorpro"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
 
         val vCode = getProperty("VERSION_CODE", "1").toIntOrNull() ?: 1
         val vName = getProperty("VERSION_NAME", "1.0")
