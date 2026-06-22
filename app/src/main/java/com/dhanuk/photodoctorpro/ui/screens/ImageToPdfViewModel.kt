@@ -16,6 +16,7 @@ import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.dhanuk.photodoctorpro.utils.UserPreferences
@@ -38,7 +39,7 @@ class ImageToPdfViewModel(
 
     fun onImagesSelected(uris: List<Uri>) {
         savedStateHandle[KEY_URIS] = uris.map { it.toString() }
-        _uiState.value = _uiState.value.copy(selectedImageUris = uris)
+        _uiState.update { it.copy(selectedImageUris = uris) }
     }
 
     fun onImageReordered(from: Int, to: Int) {
@@ -49,14 +50,14 @@ class ImageToPdfViewModel(
         val target = adjustedTo.coerceIn(0, currentList.size)
         currentList.add(target, item)
         savedStateHandle[KEY_URIS] = currentList.map { it.toString() }
-        _uiState.value = _uiState.value.copy(selectedImageUris = currentList)
+        _uiState.update { it.copy(selectedImageUris = currentList) }
     }
 
     fun createPdf(activity: Activity) {
         val uris = _uiState.value.selectedImageUris
         if (uris.isEmpty()) return
 
-        _uiState.value = _uiState.value.copy(isCreating = true)
+        _uiState.update { it.copy(isCreating = true) }
 
         viewModelScope.launch(viewModelExceptionHandler("ImageToPdfVM")) {
             var pdfDocument: PdfDocument? = null
@@ -108,12 +109,12 @@ class ImageToPdfViewModel(
                         timestamp = System.currentTimeMillis()
                     )
                 )
-                _uiState.value = _uiState.value.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = filePath)
+                _uiState.update { it.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = filePath) }
                 AdManager.showInterstitialAd(activity)
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isCreating = false, error = e.message)
+                _uiState.update { it.copy(isCreating = false, error = e.message) }
             } finally {
                 pdfDocument?.close()
             }
@@ -151,11 +152,11 @@ class ImageToPdfViewModel(
     }
 
     fun onErrorShown() {
-         _uiState.value = _uiState.value.copy(error = null)
+         _uiState.update { it.copy(error = null) }
     }
 
     fun onSavedMessageShown() {
-        _uiState.value = _uiState.value.copy(savedFilePath = null, pdfCreationSuccess = false)
+        _uiState.update { it.copy(savedFilePath = null, pdfCreationSuccess = false) }
     }
 
     override fun onCleared() {

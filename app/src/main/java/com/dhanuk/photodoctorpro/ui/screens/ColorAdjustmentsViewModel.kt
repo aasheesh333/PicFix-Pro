@@ -72,7 +72,7 @@ class ColorAdjustmentsViewModel(
 
     fun setOriginal(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
-        _uiState.value = _uiState.value.copy(selectedImageUri = uri, isLoading = true, error = null, processedBitmap = null)
+        _uiState.update { it.copy(selectedImageUri = uri, isLoading = true, error = null, processedBitmap = null) }
         viewModelScope.launch(viewModelExceptionHandler("ColorVM") + Dispatchers.IO) {
             try {
                 val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 3000)

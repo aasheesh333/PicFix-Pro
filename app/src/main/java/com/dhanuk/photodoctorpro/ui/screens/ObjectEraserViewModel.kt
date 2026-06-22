@@ -23,6 +23,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
@@ -63,7 +64,7 @@ class ObjectEraserViewModel(
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
         viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM") + Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isLoading = true, progress = 0f)
+            _uiState.update { it.copy(isLoading = true, progress = 0f) }
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
             synchronized(stackLock) {
                 undoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
@@ -77,21 +78,21 @@ class ObjectEraserViewModel(
 
     fun onBrushSizeChanged(newSize: Float) {
         savedStateHandle[KEY_BRUSH] = newSize
-        _uiState.value = _uiState.value.copy(brushSize = newSize)
+        _uiState.update { it.copy(brushSize = newSize) }
     }
 
     fun onBrushSoftnessChanged(newSoftness: Float) {
         savedStateHandle[KEY_SOFT] = newSoftness
-        _uiState.value = _uiState.value.copy(brushSoftness = newSoftness)
+        _uiState.update { it.copy(brushSoftness = newSoftness) }
     }
 
     fun onPathsChanged(newPaths: List<EraserPath>) {
-        _uiState.value = _uiState.value.copy(paths = newPaths)
+        _uiState.update { it.copy(paths = newPaths) }
     }
 
     fun addPath(path: EraserPath) {
         val currentPaths = _uiState.value.paths
-        _uiState.value = _uiState.value.copy(paths = currentPaths + path)
+        _uiState.update { it.copy(paths = currentPaths + path) }
     }
 
     fun undo() {
@@ -106,12 +107,12 @@ class ObjectEraserViewModel(
             val (prevBitmap, prevPaths) = undoStack.removeLast()
             val canUndo = undoStack.isNotEmpty()
             val old = _uiState.value.processedBitmap
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 processedBitmap = prevBitmap,
                 paths = prevPaths,
                 canUndo = canUndo,
                 canRedo = true
-            )
+            ) }
             if (old != null && old != prevBitmap && !old.isRecycled) old.recycle()
         }
     }
@@ -128,12 +129,12 @@ class ObjectEraserViewModel(
             val (nextBitmap, nextPaths) = redoStack.removeLast()
             val canRedo = redoStack.isNotEmpty()
             val old = _uiState.value.processedBitmap
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 processedBitmap = nextBitmap,
                 paths = nextPaths,
                 canUndo = true,
                 canRedo = canRedo
-            )
+            ) }
             if (old != null && old != nextBitmap && !old.isRecycled) old.recycle()
         }
     }
@@ -156,7 +157,7 @@ class ObjectEraserViewModel(
     }
 
     fun onResetMessageShown() {
-        _uiState.value = _uiState.value.copy(resetPerformed = false)
+        _uiState.update { it.copy(resetPerformed = false) }
     }
 
     fun eraseObjects() {
@@ -182,13 +183,13 @@ class ObjectEraserViewModel(
         if (paths.isEmpty()) return
 
         if (!PhotoDoctorApplication.OpenCVInitialized) {
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 error = "Image processing engine is not ready yet. Please try again in a moment."
-            )
+            ) }
             return
         }
 
-        _uiState.value = _uiState.value.copy(isErasing = true, error = null, progress = 0f)
+        _uiState.update { it.copy(isErasing = true, error = null, progress = 0f) }
 
         val sourceForStack = synchronized(stackLock) {
             val copy = sourceBitmap.copy(sourceBitmap.config ?: Bitmap.Config.ARGB_8888, true)
@@ -205,16 +206,16 @@ class ObjectEraserViewModel(
                 sourceBitmap
             }
             if (workingBitmap == null) {
-                _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = "Could not allocate bitmap")
+                _uiState.update { it.copy(isErasing = false, progress = 0f, error = "Could not allocate bitmap") }
                 return
             }
             checkActive()
-            _uiState.value = _uiState.value.copy(progress = 0.2f)
+            _uiState.update { it.copy(progress = 0.2f) }
 
             val safeWorking = workingBitmap!!
             softMask = createMask(safeWorking.width, safeWorking.height, paths)
             checkActive()
-            _uiState.value = _uiState.value.copy(progress = 0.5f)
+            _uiState.update { it.copy(progress = 0.5f) }
 
             val maxStroke = paths.maxOfOrNull { it.strokeWidth } ?: 20f
             val maxSoftness = paths.maxOfOrNull { it.softness } ?: 0f
@@ -222,35 +223,35 @@ class ObjectEraserViewModel(
 
             val resultBitmap = applyInpainting(safeWorking, softMask!!, dynamicRadius)
             checkActive()
-            _uiState.value = _uiState.value.copy(progress = 0.95f)
+            _uiState.update { it.copy(progress = 0.95f) }
 
             softMask = null
             if (safeWorking != sourceBitmap) safeWorking.recycle()
             workingBitmap = null
 
             val oldProcessed = _uiState.value.processedBitmap
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 isErasing = false,
                 processedBitmap = resultBitmap,
                 paths = emptyList(),
                 canUndo = true,
                 canRedo = false,
                 progress = 1f
-            )
+            ) }
             if (oldProcessed != null && oldProcessed != resultBitmap && !oldProcessed.isRecycled) {
                 oldProcessed.recycle()
             }
         } catch (ce: kotlinx.coroutines.CancellationException) {
             softMask?.recycle()
             if (workingBitmap != null && workingBitmap != sourceBitmap) workingBitmap.recycle()
-            _uiState.value = _uiState.value.copy(progress = 0f)
+            _uiState.update { it.copy(progress = 0f) }
             throw ce
         } catch (e: Exception) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
             }
             if (synchronized(stackLock) { undoStack.isNotEmpty() }) synchronized(stackLock) { undoStack.removeLast() }
-            _uiState.value = _uiState.value.copy(isErasing = false, progress = 0f, error = e.message)
+            _uiState.update { it.copy(isErasing = false, progress = 0f, error = e.message) }
         }
     }
 
@@ -334,7 +335,7 @@ class ObjectEraserViewModel(
     suspend fun saveImage(activity: Activity): Boolean {
         val bitmap = _uiState.value.processedBitmap ?: return false
         val uri = _uiState.value.selectedImageUri ?: return false
-        _uiState.value = _uiState.value.copy(isLoading = true)
+        _uiState.update { it.copy(isLoading = true) }
 
         return try {
             val fileName = "PhotoDoctorPro_Erased_${System.currentTimeMillis()}"
@@ -348,7 +349,7 @@ class ObjectEraserViewModel(
                 )
             )
             AdManager.showInterstitialAd(activity)
-            _uiState.value = _uiState.value.copy(savedFilePath = filePath)
+            _uiState.update { it.copy(savedFilePath = filePath) }
             true
         } catch (ce: kotlinx.coroutines.CancellationException) {
             throw ce
@@ -356,19 +357,19 @@ class ObjectEraserViewModel(
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ObjectEraserVM", "saveImage failed", e)
             }
-            _uiState.value = _uiState.value.copy(error = "Failed to save image: ${e.message}")
+            _uiState.update { it.copy(error = "Failed to save image: ${e.message}") }
             false
         } finally {
-            _uiState.value = _uiState.value.copy(isLoading = false)
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
     fun onErrorShown() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 
     fun onSavedMessageShown() {
-        _uiState.value = _uiState.value.copy(savedFilePath = null)
+        _uiState.update { it.copy(savedFilePath = null) }
     }
 
     override fun onCleared() {

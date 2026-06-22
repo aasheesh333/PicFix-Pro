@@ -27,6 +27,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -68,14 +69,14 @@ class RemoveBackgroundViewModel(
                 if (bitmap != null) {
                     val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                     val old = _uiState.value.originalBitmap
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.update { it.copy(
                         originalBitmap = argbBitmap,
                         isLoading = false
-                    )
+                    ) }
                     if (old != null && old != argbBitmap && !old.isRecycled) old.recycle()
                     if (bitmap != argbBitmap && !bitmap.isRecycled) bitmap.recycle()
                 } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed))
+                    _uiState.update { it.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed)) }
                 }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
@@ -83,14 +84,14 @@ class RemoveBackgroundViewModel(
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("RemoveBGVM", "onImageSelected failed", e)
                 }
-                _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed_with_reason, e.message))
+                _uiState.update { it.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed_with_reason, e.message)) }
             }
         }
     }
 
     fun removeBackground(context: Context) {
         val rawBitmap = _uiState.value.originalBitmap ?: return
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.update { it.copy(isLoading = true, error = null) }
 
         removeBgJob?.cancel()
         removeBgJob = viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM")) {
@@ -115,12 +116,12 @@ class RemoveBackgroundViewModel(
                     if (maskCopy != null) pushToUndoLocked(maskCopy)
                 }
 
-                _uiState.value = _uiState.value.copy(
+                _uiState.update { it.copy(
                     isLoading = false,
                     processedBitmap = result,
                     maskBitmap = mask,
                     isRefining = false
-                )
+                ) }
                 if (oldProcessed != null && oldProcessed != result && !oldProcessed.isRecycled) oldProcessed.recycle()
                 if (oldMask != null && oldMask != mask && !oldMask.isRecycled) oldMask.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -129,7 +130,7 @@ class RemoveBackgroundViewModel(
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("RemoveBGVM", "removeBackground failed", e)
                 }
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: context.getString(com.dhanuk.photodoctorpro.R.string.error_unknown))
+                _uiState.update { it.copy(isLoading = false, error = e.message ?: context.getString(com.dhanuk.photodoctorpro.R.string.error_unknown)) }
             }
         }
     }
@@ -212,13 +213,13 @@ class RemoveBackgroundViewModel(
     }
 
     fun startRefining() {
-        _uiState.value = _uiState.value.copy(isRefining = true)
+        _uiState.update { it.copy(isRefining = true) }
     }
 
     fun applyRefinement(context: Context) {
         val original = _uiState.value.originalBitmap ?: return
         val mask = _uiState.value.maskBitmap ?: return
-        _uiState.value = _uiState.value.copy(isLoading = true)
+        _uiState.update { it.copy(isLoading = true) }
 
         refinementJob?.cancel()
         refinementJob = viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM")) {
@@ -226,11 +227,11 @@ class RemoveBackgroundViewModel(
                  val result = applyMaskToOriginal(original, mask)
                  checkActive()
                  val old = _uiState.value.processedBitmap
-                 _uiState.value = _uiState.value.copy(
+                 _uiState.update { it.copy(
                      processedBitmap = result,
                      isRefining = false,
                      isLoading = false
-                 )
+                 ) }
                  if (old != null && old != result && !old.isRecycled) old.recycle()
              } catch (ce: kotlinx.coroutines.CancellationException) {
                  throw ce
@@ -238,7 +239,7 @@ class RemoveBackgroundViewModel(
                  if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                      android.util.Log.e("RemoveBGVM", "applyRefinement failed", e)
                  }
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.refinement_failed_fmt, e.message))
+                    _uiState.update { it.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.refinement_failed_fmt, e.message)) }
              }
         }
     }
@@ -248,7 +249,7 @@ class RemoveBackgroundViewModel(
         val oldAlpha8 = if (currentMask.config == Bitmap.Config.ALPHA_8) currentMask else null
         val safeMask = if (currentMask.config == Bitmap.Config.ALPHA_8) {
             val copy = currentMask.copy(Bitmap.Config.ARGB_8888, true) ?: return
-            _uiState.value = _uiState.value.copy(maskBitmap = copy)
+            _uiState.update { it.copy(maskBitmap = copy) }
             copy
         } else {
             currentMask
@@ -319,7 +320,7 @@ class RemoveBackgroundViewModel(
                     _uiState.value.processedBitmap
                 }
                 val oldProcessed = _uiState.value.processedBitmap
-                _uiState.value = _uiState.value.copy(maskBitmap = prev, processedBitmap = newProcessed)
+                _uiState.update { it.copy(maskBitmap = prev, processedBitmap = newProcessed) }
                 if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
                 _maskVersion.value += 1
             }
@@ -342,7 +343,7 @@ class RemoveBackgroundViewModel(
                     _uiState.value.processedBitmap
                 }
                 val oldProcessed = _uiState.value.processedBitmap
-                _uiState.value = _uiState.value.copy(maskBitmap = next, processedBitmap = newProcessed)
+                _uiState.update { it.copy(maskBitmap = next, processedBitmap = newProcessed) }
                 if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
                 _maskVersion.value += 1
             }
@@ -371,7 +372,7 @@ class RemoveBackgroundViewModel(
     suspend fun saveImage(activity: Activity): Boolean {
         val bitmap = _uiState.value.processedBitmap ?: return false
         val uri = _uiState.value.selectedImageUri ?: return false
-        _uiState.value = _uiState.value.copy(isLoading = true)
+        _uiState.update { it.copy(isLoading = true) }
 
         return try {
             val fileName = "PhotoDoctorPro_BG_${System.currentTimeMillis()}"
@@ -385,7 +386,7 @@ class RemoveBackgroundViewModel(
                 )
             )
             AdManager.showInterstitialAd(activity)
-            _uiState.value = _uiState.value.copy(savedFilePath = filePath)
+            _uiState.update { it.copy(savedFilePath = filePath) }
             true
         } catch (ce: kotlinx.coroutines.CancellationException) {
             throw ce
@@ -393,10 +394,10 @@ class RemoveBackgroundViewModel(
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("RemoveBGVM", "saveImage failed", e)
             }
-            _uiState.value = _uiState.value.copy(error = activity.getString(com.dhanuk.photodoctorpro.R.string.save_failed_fmt, e.message))
+            _uiState.update { it.copy(error = activity.getString(com.dhanuk.photodoctorpro.R.string.save_failed_fmt, e.message)) }
             false
         } finally {
-            _uiState.value = _uiState.value.copy(isLoading = false)
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -414,11 +415,11 @@ class RemoveBackgroundViewModel(
     }
 
     fun onErrorShown() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 
     fun onSavedMessageShown() {
-         _uiState.value = _uiState.value.copy(savedFilePath = null)
+         _uiState.update { it.copy(savedFilePath = null) }
     }
 
     override fun onCleared() {
