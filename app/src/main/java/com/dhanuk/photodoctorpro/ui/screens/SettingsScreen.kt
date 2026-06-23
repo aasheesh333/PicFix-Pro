@@ -153,6 +153,7 @@ fun SettingsScreen(navController: NavController) {
                 Switch(
                     checked = isDarkTheme,
                     onCheckedChange = { ThemeController.setDarkTheme(context, it) }
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
