@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import kotlinx.coroutines.launch
 

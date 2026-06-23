@@ -15,26 +15,24 @@ private const val ANIM_DURATION = 300
 
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
-    val enterTransition = fadeIn(animationSpec = tween(ANIM_DURATION)) +
-            androidx.compose.animation.slideInVertically(
-                animationSpec = tween(ANIM_DURATION),
-                initialOffsetY = { it / 20 }
-            )
-    val exitTransition = fadeOut(animationSpec = tween(ANIM_DURATION / 2)) +
-            androidx.compose.animation.slideOutVertically(
-                animationSpec = tween(ANIM_DURATION / 2),
-                targetOffsetY = { -it / 20 }
-            )
-    val popEnterTransition = fadeIn(animationSpec = tween(ANIM_DURATION)) +
-            androidx.compose.animation.slideInVertically(
-                animationSpec = tween(ANIM_DURATION),
-                initialOffsetY = { -it / 20 }
-            )
-    val popExitTransition = fadeOut(animationSpec = tween(ANIM_DURATION / 2)) +
-            androidx.compose.animation.slideOutVertically(
-                animationSpec = tween(ANIM_DURATION / 2),
-                targetOffsetY = { it / 20 }
-            )
+    val slideEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+        slideIntoContainer(
+            AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = tween(ANIM_DURATION)
+        ) + fadeIn(tween(ANIM_DURATION))
+    }
+    val slidePopExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+        slideOutOfContainer(
+            AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = tween(ANIM_DURATION / 2)
+        ) + fadeOut(tween(ANIM_DURATION / 2))
+    }
+    val fadeExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+        fadeOut(tween(ANIM_DURATION / 2))
+    }
+    val fadePopEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+        fadeIn(tween(ANIM_DURATION))
+    }
 
     NavHost(navController = navController, startDestination = "home", modifier = modifier) {
         composable(
@@ -43,106 +41,64 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) }
         ) { HomeScreen(navController) }
 
-        composable(
-            "history",
-            enterTransition = { enterTransition },
-            exitTransition = { exitTransition },
-            popEnterTransition = { popEnterTransition },
-            popExitTransition = { popExitTransition }
+        composable("history",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { HistoryScreen(navController) }
 
-        composable(
-            "settings",
-            enterTransition = { enterTransition },
-            exitTransition = { exitTransition },
-            popEnterTransition = { popEnterTransition },
-            popExitTransition = { popExitTransition }
+        composable("settings",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { SettingsScreen(navController) }
 
-        composable(
-            "remove_background",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("remove_background",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { RemoveBackgroundScreen(navController) }
 
-        composable(
-            "object_eraser",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("object_eraser",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ObjectEraserScreen(navController) }
 
-        composable(
-            "enhance_image",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("enhance_image",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { EnhanceImageScreen(navController) }
 
-        composable(
-            "image_to_pdf",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("image_to_pdf",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ImageToPdfScreen(navController) }
 
-        composable(
-            "color_adjustments",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("color_adjustments",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ColorAdjustmentsScreen(navController) }
 
-        composable(
-            "exif_stripper",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("exif_stripper",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ExifStripperScreen(navController) }
 
-        composable(
-            "perspective_crop",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("perspective_crop",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { PerspectiveCropScreen(navController) }
 
-        composable(
-            "resize_compress",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("resize_compress",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ResizeCompressScreen(navController) }
 
-        composable(
-            "privacy_policy",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("privacy_policy",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { PrivacyPolicyScreen(navController) }
 
-        composable(
-            "terms_and_conditions",
-            enterTransition = { AnimatedContentTransitionScope.SlideDirection.Left slideInto tween(ANIM_DURATION) + fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            popExitTransition = { AnimatedContentTransitionScope.SlideDirection.Right slideOut tween(ANIM_DURATION / 2) + fadeOut(tween(ANIM_DURATION / 2)) }
+        composable("terms_and_conditions",
+            enterTransition = slideEnter, exitTransition = fadeExit,
+            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { TermsAndConditionsScreen(navController) }
     }
 }
-
-private infix fun AnimatedContentTransitionScope.SlideDirection.slideInto(duration: Int) =
-    slideIntoContainer(this, animationSpec = tween(duration))
-
-private infix fun AnimatedContentTransitionScope.SlideDirection.slideOut(duration: Int) =
-    slideOutOfContainer(this, animationSpec = tween(duration))

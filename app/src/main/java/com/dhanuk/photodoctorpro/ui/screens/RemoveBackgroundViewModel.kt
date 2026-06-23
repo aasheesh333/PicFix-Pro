@@ -160,9 +160,11 @@ class RemoveBackgroundViewModel(
             maskBuffer.rewind()
             if (maskBuffer.hasArray()) {
                 val rawArray = maskBuffer.array()
-                val floatBuffer = maskBuffer.asFloatBuffer()
                 for (i in 0 until totalPixels) {
-                    val f = if (i < floatBuffer.limit()) floatBuffer.get(i) else 0f
+                    val byteIdx = i * 4
+                    val f = if (byteIdx + 3 < rawArray.size) {
+                        java.nio.ByteBuffer.wrap(rawArray, byteIdx, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).float
+                    } else 0f
                     pixels[i] = if (f > threshold) 255.toByte() else 0
                 }
             } else {
