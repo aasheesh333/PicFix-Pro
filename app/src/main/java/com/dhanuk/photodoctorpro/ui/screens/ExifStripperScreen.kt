@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -32,6 +31,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -159,11 +161,13 @@ fun ExifStripperScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: ExifStripperViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: ExifStripperViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
 
     val previewImage = rememberBitmap(uiState.previewBitmap)
 
@@ -191,7 +195,7 @@ fun ExifStripperScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
+                catch (e: Exception) { snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR }
             },
             onShareOther = {
                 try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image))) }
@@ -224,7 +228,9 @@ fun ExifStripperScreen(navController: NavController) {
                 modifier = Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (previewImage != null) {
+                if (uiState.isLoading) {
+                    AnimatedLoadingIndicator(message = stringResource(R.string.loading))
+                } else if (previewImage != null) {
                     Image(
                         bitmap = previewImage,
                         contentDescription = stringResource(R.string.cd_image_preview),
@@ -288,6 +294,19 @@ fun ExifStripperScreen(navController: NavController) {
                             Text(stringResource(R.string.strip_save))
                         }
                     }
+                }
+            }
+
+            AnimatedSnackbar(
+                message = snackbarMessage ?: "",
+                type = snackbarType,
+                visible = snackbarMessage != null,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (snackbarMessage != null) {
+                LaunchedEffect(snackbarMessage) {
+                    kotlinx.coroutines.delay(3000)
+                    snackbarMessage = null
                 }
             }
         }

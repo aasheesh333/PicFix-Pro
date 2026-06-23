@@ -119,7 +119,8 @@ object ImageEnhancer {
             // bitmap (which is much larger and slower to scan).
             val faceEnhancer = FaceEnhancer.getInstance(context)
             val faceEnhanced = try {
-                faceEnhancer.enhanceFaces(bitmap, upscaled, scaleFactor)
+                val faceSource = if (inputForModel !== bitmap) inputForModel else bitmap
+                faceEnhancer.enhanceFaces(faceSource, upscaled, scaleFactor)
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("ImageEnhancer", "Face enhancement failed, using upscaled", e)
@@ -198,6 +199,9 @@ object ImageEnhancer {
     }
 
     private fun applyPostProcessing(bitmap: Bitmap): Bitmap {
+        if (!com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+            return bitmap
+        }
         val src = Mat()
         val dst = Mat()
         val blurred = Mat()

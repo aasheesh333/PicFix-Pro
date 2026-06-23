@@ -1,7 +1,6 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
 import android.app.Activity
-import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,6 +28,8 @@ import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
@@ -47,6 +48,8 @@ fun ImageToPdfScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
 
     // Multi-image picker:
     //   * On API 33+ (Android 13+): uses the system Photo Picker via
@@ -92,7 +95,7 @@ fun ImageToPdfScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
-                } catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
+                } catch (e: Exception) { snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR }
             },
             onShareOther = {
                 try {
@@ -113,7 +116,7 @@ fun ImageToPdfScreen(navController: NavController) {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
-                } catch (e: Exception) { Toast.makeText(context, context.getString(R.string.file_not_found), Toast.LENGTH_SHORT).show() }
+                } catch (e: Exception) { snackbarMessage = context.getString(R.string.file_not_found); snackbarType = SnackbarType.ERROR }
             }
         )
     }
@@ -186,6 +189,19 @@ fun ImageToPdfScreen(navController: NavController) {
                 Text(stringResource(R.string.create_pdf))
             }
         }
+
+            AnimatedSnackbar(
+                message = snackbarMessage ?: "",
+                type = snackbarType,
+                visible = snackbarMessage != null,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (snackbarMessage != null) {
+                LaunchedEffect(snackbarMessage) {
+                    kotlinx.coroutines.delay(3000)
+                    snackbarMessage = null
+                }
+            }
         }
     }
 }

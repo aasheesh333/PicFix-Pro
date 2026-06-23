@@ -13,6 +13,7 @@ import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.FileInputStream
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
@@ -93,6 +94,9 @@ class ESRGANHelper(private val context: Context, private val modelFilename: Stri
     private fun loadModelFile(path: String): MappedByteBuffer {
         val fileDescriptor = context.assets.openFd("models/$path")
         return fileDescriptor.use { fd ->
+            if (fd.declaredLength <= 0) {
+                throw IOException("Model file $path is empty")
+            }
             FileInputStream(fd.fileDescriptor).use { stream ->
                 stream.channel.map(
                     FileChannel.MapMode.READ_ONLY,

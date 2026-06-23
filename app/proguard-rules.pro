@@ -63,6 +63,17 @@
 # Room
 -keep class androidx.room.** { *; }
 -dontwarn androidx.room.**
+-keep class com.dhanuk.photodoctorpro.data.local.** { *; }
 
 # FileProvider
 -keep class androidx.core.content.FileProvider { *; }
+
+# TensorFlow Lite GPU Delegate
+-keep class org.tensorflow.lite.gpu.** { *; }
+
+# Kotlin Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile **;
+}

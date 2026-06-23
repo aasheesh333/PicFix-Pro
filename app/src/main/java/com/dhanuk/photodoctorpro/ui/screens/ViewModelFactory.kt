@@ -7,7 +7,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.createSavedStateHandle
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 
-class ViewModelFactory(
+class ViewModelFactory private constructor(
     private val repository: HistoryRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
@@ -40,5 +40,15 @@ class ViewModelFactory(
         throw IllegalArgumentException(
             "Use create(modelClass, extras) so SavedStateHandle can be provided."
         )
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: ViewModelFactory? = null
+
+        fun getInstance(repository: HistoryRepository): ViewModelFactory =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: ViewModelFactory(repository).also { INSTANCE = it }
+            }
     }
 }

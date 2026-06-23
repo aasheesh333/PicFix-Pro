@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,6 +53,8 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -84,6 +85,8 @@ fun ObjectEraserScreen(navController: NavController) {
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     val hasUnsavedChanges = (uiState.processedBitmap != null || uiState.paths.isNotEmpty()) && uiState.savedFilePath == null
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
 
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
@@ -135,11 +138,11 @@ fun ObjectEraserScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShareWhatsApp = {
+             onShareWhatsApp = {
                  try {
                      context.startActivity(createShareIntent(path, context, "com.whatsapp"))
-                 } catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
-            },
+                 } catch (e: Exception) { snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR }
+             },
             onShareOther = {
                  try {
                      context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image)))
@@ -298,6 +301,19 @@ fun ObjectEraserScreen(navController: NavController) {
                         OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.reset))
                         }
+                    }
+                }
+
+                AnimatedSnackbar(
+                    message = snackbarMessage ?: "",
+                    type = snackbarType,
+                    visible = snackbarMessage != null,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                if (snackbarMessage != null) {
+                    LaunchedEffect(snackbarMessage) {
+                        kotlinx.coroutines.delay(3000)
+                        snackbarMessage = null
                     }
                 }
             }

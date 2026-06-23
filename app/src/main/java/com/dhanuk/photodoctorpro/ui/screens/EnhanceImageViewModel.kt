@@ -83,6 +83,11 @@ class EnhanceImageViewModel(
 
         val original = state.originalBitmap ?: return
         if (original.isRecycled) return
+        if (state.isLargeImage && scaleFactor > 4) {
+            _uiState.value = state.copy(error = com.dhanuk.photodoctorpro.utils.getHigherScalesDisabledMessage())
+            return
+        }
+
         _uiState.value = state.copy(isLoading = true, error = null, progress = 0f)
 
         enhanceJob?.cancel()
@@ -189,7 +194,7 @@ class EnhanceImageViewModel(
         if (fullRes != null && fullRes !== enhanced && !fullRes.isRecycled) fullRes.recycle()
         if (enhanced != null && enhanced !== original && enhanced !== fullRes && !enhanced.isRecycled) enhanced.recycle()
         if (original != null && !original.isRecycled) original.recycle()
-        _uiState.value = EnhanceImageUiState(selectedImageUri = oldState.selectedImageUri, scaleFactor = oldState.scaleFactor)
+        _uiState.value = EnhanceImageUiState(scaleFactor = oldState.scaleFactor)
     }
 
     fun onErrorShown() {

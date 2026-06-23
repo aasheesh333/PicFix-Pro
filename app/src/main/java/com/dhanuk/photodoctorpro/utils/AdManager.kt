@@ -57,7 +57,8 @@ object AdManager {
     }
 
     fun showInterstitialAd(activity: Activity) {
-        if (interstitialAd == null) {
+        val ad: InterstitialAd? = interstitialAd
+        if (ad == null) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Ad is null, attempting to reload")
             loadInterstitialAd(activity)
         }
@@ -65,12 +66,14 @@ object AdManager {
         val actions = majorActionCount.incrementAndGet()
         val currentTime = System.currentTimeMillis()
         val lastShow = lastAdShowTime
-        if (interstitialAd != null &&
+        if (ad != null &&
             currentTime - lastShow >= AD_FREQUENCY_CAP_MS &&
             actions >= MAJOR_ACTION_COUNT_CAP
         ) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Showing Interstitial Ad")
-            interstitialAd?.show(activity)
+            try {
+                ad.show(activity)
+            } catch (_: Exception) {}
             lastAdShowTime = currentTime
             majorActionCount.set(0)
             loadInterstitialAd(activity)

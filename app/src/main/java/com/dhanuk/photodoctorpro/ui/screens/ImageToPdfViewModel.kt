@@ -59,7 +59,7 @@ class ImageToPdfViewModel(
 
         _uiState.update { it.copy(isCreating = true) }
 
-        viewModelScope.launch(viewModelExceptionHandler("ImageToPdfVM")) {
+        viewModelScope.launch(viewModelExceptionHandler("ImageToPdfVM") + Dispatchers.Default) {
             var pdfDocument: PdfDocument? = null
             try {
                 pdfDocument = PdfDocument()

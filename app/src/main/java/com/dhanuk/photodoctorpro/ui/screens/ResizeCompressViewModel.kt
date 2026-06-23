@@ -73,11 +73,41 @@ class ResizeCompressViewModel(
     )
     val uiState: StateFlow<ResizeUiState> = _uiState.asStateFlow()
 
-    init {
-        // If we restored a CUSTOM preset with width/height, kick off a render so
-        // the preview isn't blank until the user nudges a slider.
+    private var restoreJob: kotlinx.coroutines.Job? = null
+
+    fun restoreIfNeeded(context: Context) {
         val restored = _uiState.value
-        if (restored.selectedUri != null && restored.originalBitmap != null &&
+        if (restored.selectedUri != null && restored.originalBitmap == null) {
+            restoreJob?.cancel()
+            restoreJob = viewModelScope.launch(viewModelExceptionHandler("ResizeVM") + Dispatchers.IO) {
+                _uiState.update { it.copy(isLoading = true) }
+                try {
+                    val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(restored.selectedUri!!, context, 4000)
+                    if (bitmap != null) {
+                        val bytes = try {
+                            context.contentResolver.openInputStream(restored.selectedUri!!)?.use { it.available().toLong() } ?: 0L
+                        } catch (_: Exception) { 0L }
+                        _uiState.update {
+                            it.copy(
+                                originalBitmap = bitmap,
+                                processedBitmap = bitmap,
+                                originalSizeBytes = bytes,
+                                customWidth = bitmap.width,
+                                customHeight = bitmap.height,
+                                customWidthText = bitmap.width.toString(),
+                                customHeightText = bitmap.height.toString(),
+                                isLoading = false
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
+                } catch (e: Exception) {
+                    if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("ResizeVM", "restore failed", e)
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        } else if (restored.selectedUri != null && restored.originalBitmap != null &&
             restored.preset == ResizePreset.CUSTOM &&
             restored.customWidth > 0 && restored.customHeight > 0
         ) {
@@ -110,13 +140,16 @@ class ResizeCompressViewModel(
                         originalBitmap = bitmap,
                         processedBitmap = bitmap,
                         originalSizeBytes = bytes,
-                        processedSizeBytes = estimateBytes(bitmap, _uiState.value.quality),
                         customWidth = bitmap.width,
                         customHeight = bitmap.height,
                         customWidthText = bitmap.width.toString(),
                         customHeightText = bitmap.height.toString(),
                         isLoading = false
                     )
+                }
+                viewModelScope.launch(Dispatchers.Default) {
+                    val estimatedSize = estimateBytesSuspended(bitmap, _uiState.value.quality)
+                    _uiState.update { it.copy(processedSizeBytes = estimatedSize) }
                 }
                 if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
                 if (oldProcessed != null && oldProcessed !== bitmap && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) {
@@ -206,7 +239,7 @@ class ResizeCompressViewModel(
                     Bitmap.createScaledBitmap(original, width, height, true)
                 }
                 checkActive()
-                val processedBytes = estimateBytes(processed, _uiState.value.quality)
+                val processedBytes = estimateBytesSuspended(processed, _uiState.value.quality)
                 val old = _uiState.value.processedBitmap
                 _uiState.update {
                     it.copy(processedBitmap = processed, processedSizeBytes = processedBytes, isProcessing = false)
@@ -244,7 +277,7 @@ class ResizeCompressViewModel(
                     resizeBitmap(original, preset.maxDim)
                 }
                 checkActive()
-                val processedBytes = estimateBytes(processed, quality)
+                val processedBytes = estimateBytesSuspended(processed, quality)
                 val old = _uiState.value.processedBitmap
                 _uiState.update {
                     it.copy(processedBitmap = processed, processedSizeBytes = processedBytes, isProcessing = false)
@@ -264,6 +297,21 @@ class ResizeCompressViewModel(
     }
 
     private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
+
+    private var estimateJob: kotlinx.coroutines.Job? = null
+
+    private suspend fun estimateBytesSuspended(bitmap: Bitmap?, quality: Float): Long {
+        if (bitmap == null) return 0L
+        return withContext(Dispatchers.Default) {
+            val baos = ByteArrayOutputStream()
+            try {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt().coerceIn(1, 100), baos)
+                baos.size().toLong()
+            } finally {
+                baos.close()
+            }
+        }
+    }
 
     private fun estimateBytes(bitmap: Bitmap?, quality: Float): Long {
         if (bitmap == null) return 0L

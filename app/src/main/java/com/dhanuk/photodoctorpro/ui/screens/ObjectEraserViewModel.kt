@@ -63,6 +63,8 @@ class ObjectEraserViewModel(
 
     fun onImageSelected(uri: Uri, context: Context) {
         savedStateHandle[KEY_URI] = uri.toString()
+        eraseJob?.cancel()
+        eraseJob = null
         viewModelScope.launch(viewModelExceptionHandler("ObjectEraserVM") + Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, progress = 0f) }
             val bitmap = BitmapUtils.loadBitmapFromUri(uri, context, 2048)
@@ -71,8 +73,12 @@ class ObjectEraserViewModel(
                 redoStack.forEach { (bmp, _) -> if (!bmp.isRecycled) bmp.recycle() }
                 undoStack.clear()
                 redoStack.clear()
+                val oldOriginal = _uiState.value.originalBitmap
+                val oldProcessed = _uiState.value.processedBitmap
+                _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false, progress = 0f)
+                if (oldProcessed != null && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) oldProcessed.recycle()
+                if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
             }
-            _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false, progress = 0f)
         }
     }
 
@@ -96,6 +102,9 @@ class ObjectEraserViewModel(
     }
 
     fun undo() {
+        val prevBitmap: Bitmap
+        val prevPaths: List<EraserPath>
+        val canUndo: Boolean
         synchronized(stackLock) {
             if (undoStack.isEmpty()) return
             val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
@@ -104,20 +113,25 @@ class ObjectEraserViewModel(
                 val copy = currentBitmap.copy(currentBitmap.config ?: Bitmap.Config.ARGB_8888, true)
                 if (copy != null) pushToStackLocked(redoStack, copy to currentPaths)
             }
-            val (prevBitmap, prevPaths) = undoStack.removeLast()
-            val canUndo = undoStack.isNotEmpty()
-            val old = _uiState.value.processedBitmap
-            _uiState.update { it.copy(
-                processedBitmap = prevBitmap,
-                paths = prevPaths,
-                canUndo = canUndo,
-                canRedo = true
-            ) }
-            if (old != null && old != prevBitmap && !old.isRecycled) old.recycle()
+            val prev = undoStack.removeLast()
+            prevBitmap = prev.first
+            prevPaths = prev.second
+            canUndo = undoStack.isNotEmpty()
         }
+        val old = _uiState.value.processedBitmap
+        _uiState.update { it.copy(
+            processedBitmap = prevBitmap,
+            paths = prevPaths,
+            canUndo = canUndo,
+            canRedo = true
+        ) }
+        if (old != null && old != prevBitmap && !old.isRecycled) old.recycle()
     }
 
     fun redo() {
+        val nextBitmap: Bitmap
+        val nextPaths: List<EraserPath>
+        val canRedo: Boolean
         synchronized(stackLock) {
             if (redoStack.isEmpty()) return
             val currentBitmap = _uiState.value.processedBitmap ?: _uiState.value.originalBitmap
@@ -126,17 +140,19 @@ class ObjectEraserViewModel(
                 val copy = currentBitmap.copy(currentBitmap.config ?: Bitmap.Config.ARGB_8888, true)
                 if (copy != null) pushToStackLocked(undoStack, copy to currentPaths)
             }
-            val (nextBitmap, nextPaths) = redoStack.removeLast()
-            val canRedo = redoStack.isNotEmpty()
-            val old = _uiState.value.processedBitmap
-            _uiState.update { it.copy(
-                processedBitmap = nextBitmap,
-                paths = nextPaths,
-                canUndo = true,
-                canRedo = canRedo
-            ) }
-            if (old != null && old != nextBitmap && !old.isRecycled) old.recycle()
+            val next = redoStack.removeLast()
+            nextBitmap = next.first
+            nextPaths = next.second
+            canRedo = redoStack.isNotEmpty()
         }
+        val old = _uiState.value.processedBitmap
+        _uiState.update { it.copy(
+            processedBitmap = nextBitmap,
+            paths = nextPaths,
+            canUndo = true,
+            canRedo = canRedo
+        ) }
+        if (old != null && old != nextBitmap && !old.isRecycled) old.recycle()
     }
 
     fun reset() {
@@ -184,7 +200,7 @@ class ObjectEraserViewModel(
 
         if (!PhotoDoctorApplication.OpenCVInitialized) {
             _uiState.update { it.copy(
-                error = "Image processing engine is not ready yet. Please try again in a moment."
+                error = com.dhanuk.photodoctorpro.utils.getOpenCvNotReadyMessage()
             ) }
             return
         }
@@ -206,7 +222,7 @@ class ObjectEraserViewModel(
                 sourceBitmap
             }
             if (workingBitmap == null) {
-                _uiState.update { it.copy(isErasing = false, progress = 0f, error = "Could not allocate bitmap") }
+                _uiState.update { it.copy(isErasing = false, progress = 0f, error = com.dhanuk.photodoctorpro.utils.getBitmapAllocFailedMessage()) }
                 return
             }
             checkActive()
@@ -403,7 +419,6 @@ data class ObjectEraserUiState(
     val resetPerformed: Boolean = false,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
-    val openCvReady: Boolean = PhotoDoctorApplication.OpenCVInitialized,
     val progress: Float = 0f
 )
 

@@ -8,9 +8,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class HistoryRepository(private val historyDao: HistoryDao) {
+class HistoryRepository private constructor(private val historyDao: HistoryDao) {
 
     private val insertMutex = Mutex()
+
+    companion object {
+        @Volatile
+        private var INSTANCE: HistoryRepository? = null
+
+        fun getInstance(historyDao: HistoryDao): HistoryRepository =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: HistoryRepository(historyDao).also { INSTANCE = it }
+            }
+    }
 
     fun getAllHistory(): Flow<List<History>> = historyDao.getAll()
 

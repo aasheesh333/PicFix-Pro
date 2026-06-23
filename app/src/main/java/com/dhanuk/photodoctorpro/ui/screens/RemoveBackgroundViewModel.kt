@@ -157,18 +157,21 @@ class RemoveBackgroundViewModel(
             val threshold = 0.4f
             val pixels = ByteArray(totalPixels)
 
+            maskBuffer.rewind()
             if (maskBuffer.hasArray()) {
-                 val floatArray = maskBuffer.array()
-                 for (i in 0 until totalPixels) {
-                    pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
-                 }
+                val rawArray = maskBuffer.array()
+                val floatBuffer = maskBuffer.asFloatBuffer()
+                for (i in 0 until totalPixels) {
+                    val f = if (i < floatBuffer.limit()) floatBuffer.get(i) else 0f
+                    pixels[i] = if (f > threshold) 255.toByte() else 0
+                }
             } else {
-                 val floatArray = FloatArray(totalPixels)
-                 maskBuffer.rewind()
-                 maskBuffer.get(floatArray)
-                 for (i in 0 until totalPixels) {
-                     pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
-                 }
+                val floatArray = FloatArray(totalPixels)
+                maskBuffer.rewind()
+                maskBuffer.get(floatArray)
+                for (i in 0 until totalPixels) {
+                    pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
+                }
             }
 
             val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
@@ -246,8 +249,9 @@ class RemoveBackgroundViewModel(
 
     fun updateMask(path: Path, isAdd: Boolean, strokeWidth: Float, brushSoftness: Float) {
         val currentMask = _uiState.value.maskBitmap ?: return
-        val oldAlpha8 = if (currentMask.config == Bitmap.Config.ALPHA_8) currentMask else null
-        val safeMask = if (currentMask.config == Bitmap.Config.ALPHA_8) {
+        val config = currentMask.config ?: Bitmap.Config.ALPHA_8
+        val needsConversion = currentMask.config == Bitmap.Config.ALPHA_8
+        val safeMask = if (needsConversion) {
             val copy = currentMask.copy(Bitmap.Config.ARGB_8888, true) ?: return
             _uiState.update { it.copy(maskBitmap = copy) }
             copy
@@ -255,31 +259,34 @@ class RemoveBackgroundViewModel(
             currentMask
         }
 
-        val canvas = Canvas(safeMask)
-        val paint = Paint().apply {
-            style = Paint.Style.STROKE
-            this.strokeWidth = strokeWidth
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-            isAntiAlias = true
+        viewModelScope.launch(Dispatchers.Default) {
+            val canvas = Canvas(safeMask)
+            val paint = Paint().apply {
+                style = Paint.Style.STROKE
+                this.strokeWidth = strokeWidth
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                isAntiAlias = true
 
-            if (brushSoftness > 0) {
-                val radius = brushSoftness + 0.1f
-                maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
-            }
+                if (brushSoftness > 0) {
+                    val radius = brushSoftness + 0.1f
+                    maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
+                }
 
-            if (isAdd) {
-                xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                color = Color.WHITE
-            } else {
-                xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-                color = Color.TRANSPARENT
+                if (isAdd) {
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+                    color = Color.WHITE
+                } else {
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                    color = Color.TRANSPARENT
+                }
             }
+            canvas.drawPath(path, paint)
+            _maskVersion.value += 1
         }
-        canvas.drawPath(path, paint)
-        _maskVersion.value += 1
 
-        if (oldAlpha8 != null) {
+        if (needsConversion) {
+            val oldAlpha8 = currentMask
             synchronized(stackLock) {
                 val inStack = undoStack.any { it === oldAlpha8 } || redoStack.any { it === oldAlpha8 }
                 if (!inStack && !oldAlpha8.isRecycled) oldAlpha8.recycle()
@@ -305,49 +312,55 @@ class RemoveBackgroundViewModel(
     }
 
     fun undo() {
+        val prev: Bitmap
+        val newProcessed: Bitmap?
         synchronized(stackLock) {
-            if (undoStack.isNotEmpty()) {
-                val current = _uiState.value.maskBitmap
-                if (current != null) {
-                    val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
-                    if (copy != null) redoStack.addLast(copy)
-                }
-                val prev = undoStack.removeLast()
-                val original = _uiState.value.originalBitmap
-                val newProcessed = if (original != null && !original.isRecycled && !prev.isRecycled) {
-                    applyMaskToOriginalSync(original, prev)
-                } else {
-                    _uiState.value.processedBitmap
-                }
-                val oldProcessed = _uiState.value.processedBitmap
-                _uiState.update { it.copy(maskBitmap = prev, processedBitmap = newProcessed) }
-                if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
-                _maskVersion.value += 1
+            if (undoStack.isEmpty()) return
+            val current = _uiState.value.maskBitmap
+            if (current != null) {
+                val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
+                if (copy != null) redoStack.addLast(copy)
             }
+            prev = undoStack.removeLast()
         }
+        val original = _uiState.value.originalBitmap
+        newProcessed = if (original != null && !original.isRecycled && !prev.isRecycled) {
+            applyMaskToOriginalSync(original, prev)
+        } else {
+            _uiState.value.processedBitmap
+        }
+        val oldProcessed = _uiState.value.processedBitmap
+        synchronized(stackLock) {
+            _uiState.update { it.copy(maskBitmap = prev, processedBitmap = newProcessed) }
+        }
+        if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
+        _maskVersion.value += 1
     }
 
     fun redo() {
+        val next: Bitmap
+        val newProcessed: Bitmap?
         synchronized(stackLock) {
-            if (redoStack.isNotEmpty()) {
-                val current = _uiState.value.maskBitmap
-                if (current != null) {
-                    val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
-                    if (copy != null) pushToUndoLocked(copy)
-                }
-                val next = redoStack.removeLast()
-                val original = _uiState.value.originalBitmap
-                val newProcessed = if (original != null && !original.isRecycled && !next.isRecycled) {
-                    applyMaskToOriginalSync(original, next)
-                } else {
-                    _uiState.value.processedBitmap
-                }
-                val oldProcessed = _uiState.value.processedBitmap
-                _uiState.update { it.copy(maskBitmap = next, processedBitmap = newProcessed) }
-                if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
-                _maskVersion.value += 1
+            if (redoStack.isEmpty()) return
+            val current = _uiState.value.maskBitmap
+            if (current != null) {
+                val copy = current.copy(current.config ?: Bitmap.Config.ALPHA_8, true)
+                if (copy != null) pushToUndoLocked(copy)
             }
+            next = redoStack.removeLast()
         }
+        val original = _uiState.value.originalBitmap
+        newProcessed = if (original != null && !original.isRecycled && !next.isRecycled) {
+            applyMaskToOriginalSync(original, next)
+        } else {
+            _uiState.value.processedBitmap
+        }
+        val oldProcessed = _uiState.value.processedBitmap
+        synchronized(stackLock) {
+            _uiState.update { it.copy(maskBitmap = next, processedBitmap = newProcessed) }
+        }
+        if (oldProcessed != null && oldProcessed != newProcessed && !oldProcessed.isRecycled) oldProcessed.recycle()
+        _maskVersion.value += 1
     }
 
     private fun applyMaskToOriginalSync(original: Bitmap, mask: Bitmap): Bitmap {

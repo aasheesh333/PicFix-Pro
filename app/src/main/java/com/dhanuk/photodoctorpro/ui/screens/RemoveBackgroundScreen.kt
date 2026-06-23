@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +42,8 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -68,6 +69,8 @@ fun RemoveBackgroundScreen(navController: NavController) {
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
 
     val originalImage = rememberBitmap(uiState.originalBitmap)
     val processedImage = rememberBitmap(uiState.processedBitmap)
@@ -123,29 +126,29 @@ fun RemoveBackgroundScreen(navController: NavController) {
         SaveSuccessDialog(
             filePath = path,
             onDismiss = { showSaveSuccessDialog = null },
-            onShareWhatsApp = {
+             onShareWhatsApp = {
                  try {
                      context.startActivity(createShareIntent(path, context, "com.whatsapp"))
                  } catch (e: Exception) {
-                     Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show()
+                     snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR
                  }
-            },
-            onShareOther = {
+             },
+             onShareOther = {
                  try {
                      context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image)))
                  } catch (e: Exception) {
                      if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                     Toast.makeText(context, context.getString(R.string.error_sharing, e.message), Toast.LENGTH_SHORT).show()
+                     snackbarMessage = context.getString(R.string.error_sharing, e.message); snackbarType = SnackbarType.ERROR
                  }
-            },
-            onOpen = {
-                try {
-                    context.startActivity(createOpenIntent(path, context))
-                } catch (e: Exception) {
-                    if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
-                     Toast.makeText(context, context.getString(R.string.error_opening, e.message), Toast.LENGTH_SHORT).show()
-                }
-            }
+             },
+             onOpen = {
+                 try {
+                     context.startActivity(createOpenIntent(path, context))
+                 } catch (e: Exception) {
+                     if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("RemoveBackgroundVM", "operation failed", e)
+                     snackbarMessage = context.getString(R.string.error_opening, e.message); snackbarType = SnackbarType.ERROR
+                 }
+             }
         )
     }
 
@@ -277,6 +280,19 @@ fun RemoveBackgroundScreen(navController: NavController) {
                     ) {
                         Text(stringResource(R.string.reset))
                     }
+                }
+            }
+
+            AnimatedSnackbar(
+                message = snackbarMessage ?: "",
+                type = snackbarType,
+                visible = snackbarMessage != null,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (snackbarMessage != null) {
+                LaunchedEffect(snackbarMessage) {
+                    kotlinx.coroutines.delay(3000)
+                    snackbarMessage = null
                 }
             }
         }

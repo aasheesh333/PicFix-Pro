@@ -4,11 +4,6 @@ import android.util.Log
 import com.dhanuk.photodoctorpro.BuildConfig
 import kotlinx.coroutines.CoroutineExceptionHandler
 
-/**
- * Default CoroutineExceptionHandler for ViewModel coroutines. Logs the error in debug
- * and rethrows so that the process-level CrashReporter can capture it. Cancellation
- * exceptions are not handled here.
- */
 fun viewModelExceptionHandler(tag: String): CoroutineExceptionHandler =
     CoroutineExceptionHandler { _, throwable ->
         if (throwable is kotlinx.coroutines.CancellationException) return@CoroutineExceptionHandler
@@ -20,3 +15,15 @@ fun viewModelExceptionHandler(tag: String): CoroutineExceptionHandler =
                 ?.uncaughtException(Thread.currentThread(), throwable)
         }
     }
+
+fun getOpenCvNotReadyMessage(): String {
+    return "Image processing engine is not ready yet. Please try again in a moment."
+}
+
+fun getBitmapAllocFailedMessage(): String {
+    return "Could not allocate bitmap"
+}
+
+fun getHigherScalesDisabledMessage(): String {
+    return "Higher scales disabled for very large images."
+}

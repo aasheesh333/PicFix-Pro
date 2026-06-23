@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -71,8 +72,8 @@ fun BottomNavigationBar(navController: NavController) {
                 showDialog = false
                 pendingRoute = null
             },
-            title = { Text("Unsaved Changes") },
-            text = { Text("You have unsaved changes. What would you like to do?") },
+            title = { Text(stringResource(R.string.unsaved_warning_title)) },
+            text = { Text(stringResource(R.string.unsaved_warning_body)) },
             confirmButton = {
                 Button(onClick = {
                     scope.launch {
@@ -87,7 +88,7 @@ fun BottomNavigationBar(navController: NavController) {
                         }
                     }
                 }) {
-                    Text("Save")
+                    Text(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
@@ -101,13 +102,13 @@ fun BottomNavigationBar(navController: NavController) {
                         }
                         pendingRoute = null
                     }) {
-                        Text("Discard")
+                        Text(stringResource(R.string.discard))
                     }
                     TextButton(onClick = {
                         showDialog = false
                         pendingRoute = null
                     }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                 }
             }
@@ -196,7 +197,8 @@ private fun NavPill(
 
 fun navigateToFresh(navController: NavController, route: String) {
     navController.navigate(route) {
-        popUpTo(0) { inclusive = true }
+        popUpTo("home") { inclusive = route == "home"; saveState = true }
         launchSingleTop = true
+        restoreState = true
     }
 }

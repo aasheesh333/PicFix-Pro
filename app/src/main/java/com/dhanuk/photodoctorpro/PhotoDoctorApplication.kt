@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
 import com.dhanuk.photodoctorpro.utils.CrashReporter
 import com.dhanuk.photodoctorpro.utils.ThemeController
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class PhotoDoctorApplication : Application() {
     override fun onCreate() {
@@ -36,9 +38,10 @@ class PhotoDoctorApplication : Application() {
     }
 
     private fun initOpenCvAsync() {
-        applicationScope.launch {
+        applicationScope.launch(Dispatchers.IO) {
             val ok = OpenCVLoader.initDebug()
             OpenCVInitialized = ok
+            OpenCVInitializedFlow.value = ok
             if (ok) {
                 if (BuildConfig.DEBUG) Log.d("PhotoDoctor", "OpenCV loaded successfully")
             } else {
@@ -57,6 +60,9 @@ class PhotoDoctorApplication : Application() {
         @Volatile
         var OpenCVInitialized: Boolean = false
             private set
+
+        val OpenCVInitializedFlow = MutableStateFlow(false)
+        val openCVInitialized: StateFlow<Boolean> get() = OpenCVInitializedFlow
 
         private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }

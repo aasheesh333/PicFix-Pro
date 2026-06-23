@@ -2,7 +2,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -68,6 +67,8 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import kotlinx.coroutines.launch
@@ -84,6 +85,8 @@ fun ColorAdjustmentsScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var compareMode by remember { mutableStateOf(false) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
     val hasAdjustments = uiState.brightness != 0f || uiState.contrast != 1f ||
             uiState.saturation != 1f || uiState.warmth != 0f
 
@@ -116,7 +119,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (_: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
+                catch (_: Exception) { snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR }
             },
             onShareOther = {
                 try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image))) }
@@ -233,6 +236,9 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                     contentAlignment = Alignment.Center
                 ) {
                     when {
+                        uiState.isLoading -> {
+                            AnimatedLoadingIndicator(message = stringResource(R.string.processing))
+                        }
                         compareMode && originalImage != null && processedImage != null && hasAdjustments -> {
                             BeforeAfterSlider(
                                 beforeImage = originalImage,
@@ -338,6 +344,19 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
+                }
+
+                AnimatedSnackbar(
+                    message = snackbarMessage ?: "",
+                    type = snackbarType,
+                    visible = snackbarMessage != null,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                if (snackbarMessage != null) {
+                    LaunchedEffect(snackbarMessage) {
+                        kotlinx.coroutines.delay(3000)
+                        snackbarMessage = null
+                    }
                 }
             }
         }

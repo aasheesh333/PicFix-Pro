@@ -248,4 +248,12 @@
     <string name="exif_gps_location">GPS Location</string>
     <string name="exif_date_time">Date/Time: %1$s</string>
     <string name="exif_camera">Camera: %1$s %2$s</string>
+    <string name="export_share"><![CDATA[Export & Share]]></string>
+    <string name="edited_photo_preview">Edited Photo Preview</string>
+    <string name="gallery">Gallery</string>
+    <string name="more_apps">More Apps</string>
+    <string name="share_to_whatsapp">Share to WhatsApp</string>
+    <string name="opencv_not_ready">Image processing engine is not ready yet. Please try again in a moment.</string>
+    <string name="could_not_allocate_bitmap">Could not allocate bitmap</string>
+    <string name="higher_scales_disabled">Higher scales disabled for very large images.</string>
 </resources>

@@ -8,7 +8,6 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -56,6 +55,9 @@ import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
+import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
+import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
@@ -150,6 +152,13 @@ class PerspectiveCropViewModel(
     private fun autoDetectEdges(bitmap: Bitmap) {
         autoDetectJob?.cancel()
         autoDetectJob = viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.Default) {
+            if (!com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+                _uiState.update { it.copy(
+                    error = com.dhanuk.photodoctorpro.utils.getOpenCvNotReadyMessage(),
+                    isLoading = false
+                ) }
+                return@launch
+            }
             val src = Mat()
             val gray = Mat()
             val edges = Mat()
@@ -565,8 +574,10 @@ class PerspectiveCropViewModel(
         applyCropJob?.cancel()
         autoDetectJob = null
         applyCropJob = null
-        _uiState.value.originalBitmap?.takeIf { !it.isRecycled }?.recycle()
-        _uiState.value.processedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        val original = _uiState.value.originalBitmap
+        val processed = _uiState.value.processedBitmap
+        if (processed != null && processed !== original && !processed.isRecycled) processed.recycle()
+        if (original != null && !original.isRecycled) original.recycle()
     }
 }
 
@@ -576,12 +587,15 @@ fun PerspectiveCropScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: PerspectiveCropViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: PerspectiveCropViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
+    val openCvReady by com.dhanuk.photodoctorpro.PhotoDoctorApplication.openCVInitialized.collectAsState(false)
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
 
     val originalImage = rememberBitmap(uiState.originalBitmap)
     val processedImage = rememberBitmap(uiState.processedBitmap)
@@ -611,7 +625,7 @@ fun PerspectiveCropScreen(navController: NavController) {
             onDismiss = { showSaveSuccessDialog = null },
             onShareWhatsApp = {
                 try { context.startActivity(createShareIntent(path, context, "com.whatsapp")) }
-                catch (e: Exception) { Toast.makeText(context, context.getString(R.string.whatsapp_not_installed), Toast.LENGTH_SHORT).show() }
+                catch (e: Exception) { snackbarMessage = context.getString(R.string.whatsapp_not_installed); snackbarType = SnackbarType.ERROR }
             },
             onShareOther = {
                 try { context.startActivity(Intent.createChooser(createShareIntent(path, context), context.getString(R.string.share_image))) }
@@ -659,7 +673,9 @@ fun PerspectiveCropScreen(navController: NavController) {
                     .onSizeChanged { canvasSize = it },
                 contentAlignment = Alignment.Center
             ) {
-                if (originalImage != null && processedImage != null && compareMode) {
+                if (uiState.isLoading) {
+                    AnimatedLoadingIndicator(message = stringResource(R.string.processing))
+                } else if (originalImage != null && processedImage != null && compareMode) {
                     BeforeAfterSlider(
                         beforeImage = originalImage,
                         afterImage = processedImage,
@@ -756,8 +772,8 @@ if (processedImage == null) {
                                                         change.consume()
                                                         viewModel.updateCorner(
                                                             idx,
-                                                            change.position.x + (screenX - 50),
-                                                            change.position.y + (screenY - 50),
+                                                            change.position.x,
+                                                            change.position.y,
                                                             canvasSize
                                                         )
                                                     }
@@ -828,7 +844,7 @@ if (processedImage == null) {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = { viewModel.autoDetect() }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { viewModel.autoDetect() }, enabled = openCvReady, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.action_auto))
@@ -850,6 +866,19 @@ if (processedImage == null) {
                             Text(stringResource(R.string.action_save))
                         }
                     }
+                }
+            }
+
+            AnimatedSnackbar(
+                message = snackbarMessage ?: "",
+                type = snackbarType,
+                visible = snackbarMessage != null,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (snackbarMessage != null) {
+                LaunchedEffect(snackbarMessage) {
+                    kotlinx.coroutines.delay(3000)
+                    snackbarMessage = null
                 }
             }
         }

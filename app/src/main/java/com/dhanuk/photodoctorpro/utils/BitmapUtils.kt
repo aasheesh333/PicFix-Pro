@@ -40,40 +40,38 @@ object BitmapUtils {
         return target
     }
 
-    suspend fun loadBitmapFromUri(uri: Uri, context: Context, maxDimension: Int = 3000): Bitmap? = withContext(Dispatchers.IO) {
-        var inputStream: InputStream? = null
+    suspend fun loadBitmapFromUri(uri: Uri, context: Context, maxDimension: Int = 3000, mutable: Boolean = true): Bitmap? = withContext(Dispatchers.IO) {
         var bitmap: Bitmap? = null
         try {
             // 1. Decode bounds only
-            inputStream = context.contentResolver.openInputStream(uri)
-            val options = BitmapFactory.Options().apply {
+            val boundsOptions = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
-            BitmapFactory.decodeStream(inputStream, null, options)
-            inputStream?.close()
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, boundsOptions)
+            }
 
             // 2. Calculate inSampleSize
-            options.inSampleSize = calculateInSampleSize(options, maxDimension, maxDimension)
-            options.inJustDecodeBounds = false
-            options.inPreferredConfig = Bitmap.Config.ARGB_8888
-            options.inMutable = true
+            boundsOptions.inSampleSize = calculateInSampleSize(boundsOptions, maxDimension, maxDimension)
+            boundsOptions.inJustDecodeBounds = false
+            boundsOptions.inPreferredConfig = Bitmap.Config.ARGB_8888
+            boundsOptions.inMutable = mutable
 
             // 3. Decode full bitmap with subsampling
-            inputStream = context.contentResolver.openInputStream(uri)
-            bitmap = BitmapFactory.decodeStream(inputStream, null, options)
-            inputStream?.close()
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                bitmap = BitmapFactory.decodeStream(inputStream, null, boundsOptions)
+            }
 
             // 4. Handle EXIF Rotation
             if (bitmap != null) {
-                inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream != null) {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     val exifInterface = ExifInterface(inputStream)
                     val orientation = exifInterface.getAttributeInt(
                         ExifInterface.TAG_ORIENTATION,
                         ExifInterface.ORIENTATION_NORMAL
                     )
                     if (orientation != ExifInterface.ORIENTATION_NORMAL) {
-                        bitmap = rotateBitmap(bitmap, orientation)
+                        bitmap = rotateBitmap(bitmap!!, orientation)
                     }
                 }
             }
@@ -83,8 +81,6 @@ object BitmapUtils {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "loadBitmapFromUri failed", e)
             bitmap?.takeIf { !it.isRecycled }?.recycle()
             return@withContext null
-        } finally {
-            inputStream?.close()
         }
     }
 
@@ -93,7 +89,7 @@ object BitmapUtils {
         var inSampleSize = 1
 
         if (height > reqHeight || width > reqWidth) {
-            while ((height / inSampleSize) > reqHeight && (width / inSampleSize) > reqWidth) {
+            while ((height / inSampleSize) > reqHeight || (width / inSampleSize) > reqWidth) {
                 inSampleSize *= 2
             }
         }
@@ -246,9 +242,16 @@ fun resolveFileUri(path: String, context: Context): Uri {
     return if (path.startsWith("content://")) {
         Uri.parse(path)
     } else {
-        val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path ?: path else path
-        val file = File(cleanPath)
-        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        try {
+            val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path ?: path else path
+            val file = File(cleanPath)
+            FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        } catch (e: IllegalArgumentException) {
+            if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                android.util.Log.e("BitmapUtils", "resolveFileUri failed for path: $path", e)
+            }
+            Uri.fromFile(File(path))
+        }
     }
 }
 
