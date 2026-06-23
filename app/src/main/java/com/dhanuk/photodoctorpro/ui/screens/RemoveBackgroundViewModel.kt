@@ -33,6 +33,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.ArrayDeque
 
 class RemoveBackgroundViewModel(
@@ -158,15 +159,14 @@ class RemoveBackgroundViewModel(
             val pixels = ByteArray(totalPixels)
 
             maskBuffer.rewind()
-            if (maskBuffer.hasArray()) {
-                val rawArray = maskBuffer.array()
-                for (i in 0 until totalPixels) {
-                    val byteIdx = i * 4
-                    val f = if (byteIdx + 3 < rawArray.size) {
-                        java.nio.ByteBuffer.wrap(rawArray, byteIdx, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).float
-                    } else 0f
-                    pixels[i] = if (f > threshold) 255.toByte() else 0
-                }
+            maskBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val floatArray = FloatArray(totalPixels)
+            for (i in 0 until totalPixels) {
+                floatArray[i] = maskBuffer.float
+            }
+            for (i in 0 until totalPixels) {
+                pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
+            }
             } else {
                 val floatArray = FloatArray(totalPixels)
                 maskBuffer.rewind()
