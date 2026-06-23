@@ -2,6 +2,9 @@ package com.dhanuk.photodoctorpro.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,14 +31,15 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.animation.AnimatedVisibility
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(navController: NavController) {
     val context = LocalContext.current
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: HistoryViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: HistoryViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val historyItems = viewModel.history.collectAsState().value
     val isClearing by viewModel.isClearing.collectAsState()
     val errorMessage by viewModel.error.collectAsState()
@@ -44,6 +48,7 @@ fun HistoryScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val fileMissingMsg = stringResource(R.string.file_not_found)
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -213,6 +218,7 @@ fun HistoryScreen(navController: NavController) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
+                            .animateItemPlacement(tween(300))
                             .combinedClickable(
                                 onClick = { selectedItem = item },
                                 onLongClick = { pendingDelete = item }
@@ -237,7 +243,7 @@ fun HistoryScreen(navController: NavController) {
                             }
                             Text(displayName, style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.timestamp)),
+                                dateFormat.format(Date(item.timestamp)),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

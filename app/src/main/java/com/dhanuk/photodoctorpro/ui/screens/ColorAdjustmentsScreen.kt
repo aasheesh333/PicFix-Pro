@@ -67,6 +67,7 @@ import com.dhanuk.photodoctorpro.ui.components.BeforeAfterSlider
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import kotlinx.coroutines.launch
@@ -76,8 +77,8 @@ import kotlinx.coroutines.launch
 fun ColorAdjustmentsScreen(navController: NavController) {
     val context = LocalContext.current
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: ColorAdjustmentsViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: ColorAdjustmentsViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()

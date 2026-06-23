@@ -1,5 +1,9 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +35,11 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +63,14 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.document_scanner), stringResource(R.string.document_scanner_subtitle), Icons.Rounded.DocumentScanner, "perspective_crop"),
         Feature(stringResource(R.string.resize_compress), stringResource(R.string.resize_compress_subtitle), Icons.Rounded.Compress, "resize_compress")
     )
+
+    var visibleCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        features.indices.forEach { index ->
+            kotlinx.coroutines.delay(80L)
+            visibleCount = index + 1
+        }
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val isLandscape = maxWidth > maxHeight
@@ -105,14 +122,24 @@ fun HomeScreen(navController: NavController) {
                     )
                 }
             }
-            itemsIndexed(features) { _, feature ->
-                LuminaFeatureCard(
-                    title = feature.title,
-                    subtitle = feature.subtitle,
-                    icon = feature.icon,
-                    onClick = { navController.navigate(feature.route) },
-                    modifier = Modifier.fillMaxWidth().aspectRatio(if (isLandscape) 1.1f else 0.85f)
-                )
+            itemsIndexed(features) { index, feature ->
+                AnimatedVisibility(
+                    visible = index < visibleCount,
+                    enter = slideInVertically(
+                        animationSpec = tween(400),
+                        initialOffsetY = { it / 4 }
+                    ) + fadeIn(
+                        animationSpec = tween(400)
+                    )
+                ) {
+                    LuminaFeatureCard(
+                        title = feature.title,
+                        subtitle = feature.subtitle,
+                        icon = feature.icon,
+                        onClick = { navController.navigate(feature.route) },
+                        modifier = Modifier.fillMaxWidth().aspectRatio(if (isLandscape) 1.1f else 0.85f)
+                    )
+                }
             }
         }
     }

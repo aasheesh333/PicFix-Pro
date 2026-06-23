@@ -1,6 +1,7 @@
 package com.dhanuk.photodoctorpro
 
 import android.Manifest
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,7 +21,6 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            // Results handled individually; no-op here.
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,20 +32,30 @@ class MainActivity : ComponentActivity() {
 
         requestRequiredPermissions()
 
+        notifySystemDarkMode()
+
         setContent {
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
-            PhotoDoctorProTheme(darkTheme = isDarkTheme) {
+            PhotoDoctorProTheme(darkTheme = isDarkTheme, animateThemeChange = true) {
                 AppScaffold()
             }
         }
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val nightMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        ThemeController.onSystemDarkModeChanged(nightMode == Configuration.UI_MODE_NIGHT_YES)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         CrashReporter.unregisterActivity(this)
-        AdManager.cleanup()
-        ImageEnhancer.shutdown()
-        FaceEnhancer.shutdown()
+        if (isFinishing) {
+            AdManager.cleanup()
+            ImageEnhancer.shutdown()
+            FaceEnhancer.shutdown()
+        }
     }
 
     private fun requestRequiredPermissions() {
@@ -57,5 +67,10 @@ class MainActivity : ComponentActivity() {
         if (permissions.isNotEmpty()) {
             requestPermissionLauncher.launch(permissions.toTypedArray())
         }
+    }
+
+    private fun notifySystemDarkMode() {
+        val nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        ThemeController.onSystemDarkModeChanged(nightMode == Configuration.UI_MODE_NIGHT_YES)
     }
 }

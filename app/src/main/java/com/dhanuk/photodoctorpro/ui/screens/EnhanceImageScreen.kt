@@ -32,6 +32,7 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
@@ -42,8 +43,8 @@ fun EnhanceImageScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: EnhanceImageViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: EnhanceImageViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -173,16 +174,10 @@ fun EnhanceImageScreen(navController: NavController) {
                 contentAlignment = Alignment.Center
             ) {
                 if (uiState.isLoading) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        if (uiState.progress > 0f) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                stringResource(R.string.progress_percent, (uiState.progress * 100).toInt()),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+                    AnimatedLoadingIndicator(
+                        message = stringResource(R.string.processing),
+                        progress = if (uiState.progress > 0f) uiState.progress else null
+                    )
                 } else {
                     if (originalImage != null && enhancedImage != null) {
                         BeforeAfterSlider(

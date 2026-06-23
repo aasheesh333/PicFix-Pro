@@ -54,6 +54,7 @@ import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.ZoomableBox
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
@@ -68,12 +69,13 @@ fun ObjectEraserScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: ObjectEraserViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: ObjectEraserViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val globalState = LocalGlobalNavigationState.current
+    val openCvReady by com.dhanuk.photodoctorpro.PhotoDoctorApplication.openCVInitialized.collectAsState(false)
     var compareMode by remember { mutableStateOf(false) }
 
     val originalImage = rememberBitmap(uiState.originalBitmap)
@@ -184,7 +186,7 @@ fun ObjectEraserScreen(navController: NavController) {
                 },
                 actions = {
                     if (uiState.paths.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.eraseObjects() }, enabled = uiState.openCvReady && !uiState.isErasing) {
+                        IconButton(onClick = { viewModel.eraseObjects() }, enabled = openCvReady && !uiState.isErasing) {
                             Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_done))
                         }
                     }
@@ -216,26 +218,10 @@ fun ObjectEraserScreen(navController: NavController) {
                 contentAlignment = Alignment.Center
             ) {
                 if (uiState.isLoading || uiState.isErasing) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator()
-                        if (uiState.isErasing && uiState.progress > 0f) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                stringResource(R.string.erasing_progress, (uiState.progress * 100).toInt()),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = uiState.progress.coerceIn(0f, 1f),
-                                modifier = Modifier
-                                    .fillMaxWidth(0.6f)
-                                    .height(6.dp)
-                            )
-                        }
-                    }
+                    AnimatedLoadingIndicator(
+                        message = if (uiState.isErasing) stringResource(R.string.erasing_progress, (uiState.progress * 100).toInt()) else stringResource(R.string.loading),
+                        progress = if (uiState.isErasing && uiState.progress > 0f) uiState.progress else null
+                    )
                 } else if (originalImage != null && compareMode && processedImage != null) {
                     BeforeAfterSlider(
                         beforeImage = originalImage,
@@ -290,7 +276,7 @@ fun ObjectEraserScreen(navController: NavController) {
                         }
                         Button(
                             onClick = { viewModel.eraseObjects() },
-                            enabled = uiState.paths.isNotEmpty() && uiState.openCvReady && !uiState.isErasing
+                            enabled = uiState.paths.isNotEmpty() && openCvReady && !uiState.isErasing
                         ) {
                             Text(stringResource(R.string.erase))
                         }

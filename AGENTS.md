@@ -1,7 +1,7 @@
 # AGENTS.md — PhotoDoctor Pro
 
 Single-module Android app (Kotlin + Jetpack Compose). One Gradle module: `:app`.
-Package: `com.dhanuk.photodoctorpro`. `compileSdk` 34, `minSdk` 24, `targetSdk` 34. JVM 1.8. `applicationId` and `namespace` match the package.
+Package: `com.dhanuk.photodoctorpro`. `compileSdk` 35, `minSdk` 24, `targetSdk` 35. JVM 1.8. `applicationId` and `namespace` match the package.
 
 ## Build / run commands
 
@@ -37,11 +37,11 @@ Key properties and defaults (from `app/build.gradle.kts`):
 Entry points:
 - `MainActivity` (`com.dhanuk.photodoctorpro.MainActivity`) — `ComponentActivity`, sets the Compose tree to `AppScaffold()` and initializes `AdManager`. Requests `POST_NOTIFICATIONS` on Tiramisu+. Calls `AdManager.cleanup()` in `onDestroy` to release the InterstitialAd reference.
 - `PhotoDoctorApplication` — initializes `ThemeController`, launches OpenCV load asynchronously via `applicationScope`, and initializes OneSignal with `BuildConfig.ONESIGNAL_APP_ID` only when non-empty. `OpenCVInitialized` is a `@Volatile` flag set after async init completes.
-- Navigation: `ui/navigation/AppNavigation.kt` — single `NavHost` starting at `"home"`. Route names are string literals (e.g., `"remove_background"`, `"enhance_image"`, `"meme_maker"`, `"privacy_policy"`, `"terms_and_conditions"`). `ui/navigation/AppScaffold.kt` is the top-level scaffold and bottom bar wrapper.
+- Navigation: `ui/navigation/AppNavigation.kt` — single `NavHost` starting at `"home"`. Route names are string literals (e.g., `"remove_background"`, `"enhance_image"`, `"privacy_policy"`, `"terms_and_conditions"`). `ui/navigation/AppScaffold.kt` is the top-level scaffold and bottom bar wrapper.
 
 ### ViewModel persistence
 
-All 10 ViewModels accept `SavedStateHandle` as a constructor parameter (added in Phase 4). `ViewModelFactory` extends `ViewModelProvider.Factory` and uses `CreationExtras.createSavedStateHandle()` to extract the handle from the Compose `viewModel(factory = …)` call. Each ViewModel restores its persisted state in the initial `MutableStateFlow` value and writes back on each user mutation.
+All 9 ViewModels accept `SavedStateHandle` as a constructor parameter (added in Phase 4). `ViewModelFactory` extends `ViewModelProvider.Factory` and uses `CreationExtras.createSavedStateHandle()` to extract the handle from the Compose `viewModel(factory = …)` call. Each ViewModel restores its persisted state in the initial `MutableStateFlow` value and writes back on each user mutation.
 
 Persisted fields per ViewModel:
 - `HistoryViewModel` — none (read-only from Room)
@@ -53,14 +53,13 @@ Persisted fields per ViewModel:
 - `ResizeCompressViewModel` — `selectedUri`, `preset`, `quality`, `customWidth/Height/Text`, `maintainAspectRatio`
 - `PerspectiveCropViewModel` (inline) — `selectedImageUri`
 - `ExifStripperViewModel` (inline) — `selectedImageUri`
-- `MemeMakerViewModel` (inline) — `selectedImageUri`, `topText`, `bottomText`
 
 Bitmaps and ML-Kit results are NOT persisted — they are reloaded on restore if a Uri is present.
 
 Source layout (under `app/src/main/java/com/dhanuk/photodoctorpro/`):
 - `data/local/` — Room: `AppDatabase`, `HistoryDao`, `History` entity. Uses `kapt(libs.androidx.room.compiler)`.
 - `data/repository/HistoryRepository.kt` — wraps the DAO.
-- `ui/screens/` — one file per Compose screen + a paired `*ViewModel.kt` for the heavier ones (`HistoryViewModel`, `ObjectEraserViewModel`, `RemoveBackgroundViewModel`, `EnhanceImageViewModel`, `ImageToPdfViewModel`, `ColorAdjustmentsViewModel`, `ResizeCompressViewModel`). `ViewModelFactory.kt` provides a single shared factory. `MemeMakerViewModel`, `PerspectiveCropViewModel`, `ExifStripperViewModel` are declared inline in their respective screen files.
+- `ui/screens/` — one file per Compose screen + a paired `*ViewModel.kt` for the heavier ones (`HistoryViewModel`, `ObjectEraserViewModel`, `RemoveBackgroundViewModel`, `EnhanceImageViewModel`, `ImageToPdfViewModel`, `ColorAdjustmentsViewModel`, `ResizeCompressViewModel`). `ViewModelFactory.kt` provides a single shared factory. `PerspectiveCropViewModel`, `ExifStripperViewModel` are declared inline in their respective screen files.
 - `ui/navigation/`, `ui/theme/`, `ui/components/ZoomableBox.kt`, `ui/components/rememberBitmap.kt`.
 - `utils/` — `AdManager`, `ThemeController`, `UserPreferences` (DataStore-style prefs), `BitmapUtils`, `ImageEnhancer`, `FaceEnhancer`, `ESRGANHelper`.
 

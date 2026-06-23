@@ -1,5 +1,11 @@
 package com.dhanuk.photodoctorpro.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -24,7 +30,17 @@ fun AppScaffold() {
     CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
             bottomBar = {
-                if (showBottomBar) {
+                AnimatedVisibility(
+                    visible = showBottomBar,
+                    enter = slideInVertically(
+                        animationSpec = tween(300),
+                        initialOffsetY = { it }
+                    ) + fadeIn(animationSpec = tween(300)),
+                    exit = slideOutVertically(
+                        animationSpec = tween(200),
+                        targetOffsetY = { it }
+                    ) + fadeOut(animationSpec = tween(200))
+                ) {
                     Column {
                         BannerAd()
                         BottomNavigationBar(navController)

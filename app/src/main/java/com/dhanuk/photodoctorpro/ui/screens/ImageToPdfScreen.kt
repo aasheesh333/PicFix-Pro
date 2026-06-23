@@ -30,6 +30,7 @@ import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.data.local.AppDatabase
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
+import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
@@ -40,8 +41,8 @@ fun ImageToPdfScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context.findActivity() ?: return
     val db = AppDatabase.getDatabase(context)
-    val repository = HistoryRepository(db.historyDao())
-    val viewModel: ImageToPdfViewModel = viewModel(factory = ViewModelFactory(repository))
+    val repository = HistoryRepository.getInstance(db.historyDao())
+    val viewModel: ImageToPdfViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -175,7 +176,7 @@ fun ImageToPdfScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
         if (uiState.isCreating) {
-            CircularProgressIndicator()
+            AnimatedLoadingIndicator(message = stringResource(R.string.generating))
         } else {
             Button(
                 onClick = { viewModel.createPdf(activity) },

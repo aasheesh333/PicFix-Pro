@@ -153,7 +153,6 @@ fun SettingsScreen(navController: NavController) {
                 Switch(
                     checked = isDarkTheme,
                     onCheckedChange = { ThemeController.setDarkTheme(context, it) }
-                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -192,10 +191,7 @@ fun SettingsScreen(navController: NavController) {
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Privacy-Policy.html"))
-                    try { context.startActivity(intent) } catch (_: Exception) {}
-                }
+                onClick = { navController.navigate("privacy_policy") }
             )
 
             LuminaListItem(
@@ -208,10 +204,7 @@ fun SettingsScreen(navController: NavController) {
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Terms-and-Conditions.html"))
-                    try { context.startActivity(intent) } catch (_: Exception) {}
-                }
+                onClick = { navController.navigate("terms_and_conditions") }
             )
 
             LuminaListItem(

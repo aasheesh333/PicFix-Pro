@@ -1,5 +1,8 @@
 package com.dhanuk.photodoctorpro.ui.components
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,12 +33,19 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
@@ -53,6 +63,17 @@ fun SaveSuccessDialog(
     onOpen: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var imageVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { imageVisible = true }
+    val imageScale by animateFloatAsState(
+        targetValue = if (imageVisible) 1f else 0.85f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "imageScale"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -73,12 +94,12 @@ fun SaveSuccessDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Export & Share",
+                    text = stringResource(R.string.export_share),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.action_close), tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -99,9 +120,10 @@ fun SaveSuccessDialog(
             ) {
                 Image(
                     painter = rememberAsyncImagePainter(model = filePath),
-                    contentDescription = "Edited Photo Preview",
+                    contentDescription = stringResource(R.string.edited_photo_preview),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
+                        .scale(imageScale)
                         .fillMaxSize()
                         .clip(RoundedCornerShape(12.dp))
                 )
@@ -119,13 +141,13 @@ fun SaveSuccessDialog(
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = "WhatsApp",
+                    contentDescription = stringResource(R.string.action_share_whatsapp),
                     modifier = Modifier.size(22.dp),
                     tint = Color.White
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    "Share to WhatsApp",
+                    stringResource(R.string.share_to_whatsapp),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
             }
@@ -140,7 +162,7 @@ fun SaveSuccessDialog(
                 ) {
                     Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Gallery", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.gallery), style = MaterialTheme.typography.labelLarge)
                 }
                 OutlinedButton(
                     onClick = onShareOther,
@@ -149,7 +171,7 @@ fun SaveSuccessDialog(
                 ) {
                     Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("More Apps", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.more_apps), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
