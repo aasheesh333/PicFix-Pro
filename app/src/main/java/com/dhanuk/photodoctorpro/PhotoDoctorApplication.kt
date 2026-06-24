@@ -9,7 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
+import com.dhanuk.photodoctorpro.utils.ConsentManager
 import com.dhanuk.photodoctorpro.utils.CrashReporter
+import com.dhanuk.photodoctorpro.utils.NotificationHelper
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +24,10 @@ class PhotoDoctorApplication : Application() {
         ThemeController.init(this)
 
         initOpenCvAsync()
+
+        NotificationHelper.createNotificationChannel(this)
+
+        ConsentManager.init(this)
 
         if (BuildConfig.DEBUG) {
             OneSignal.Debug.logLevel = LogLevel.VERBOSE

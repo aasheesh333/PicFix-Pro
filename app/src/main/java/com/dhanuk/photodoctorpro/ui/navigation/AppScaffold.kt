@@ -16,7 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.dhanuk.photodoctorpro.ui.components.BannerAd
+import com.dhanuk.photodoctorpro.ui.components.BottomNavigationBar
+import com.dhanuk.photodoctorpro.ui.components.GlobalBannerAd
 
 @Composable
 fun AppScaffold() {
@@ -42,7 +43,7 @@ fun AppScaffold() {
                     ) + fadeOut(animationSpec = tween(200))
                 ) {
                     Column {
-                        BannerAd()
+                        GlobalBannerAd(navController)
                         BottomNavigationBar(navController)
                     }
                 }

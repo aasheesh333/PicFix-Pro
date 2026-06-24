@@ -25,6 +25,8 @@ mockk = "1.13.10"
 coroutinesTest = "1.7.3"
 turbine = "1.0.0"
 robolectric = "4.12.2"
+userMessagingPlatform = "2.1.0"
+playReview = "2.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -64,6 +66,9 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version = "2.2.0" }
+user-messaging-platform = { group = "com.google.android.ads", name = "user-messaging-platform", version.ref = "userMessagingPlatform" }
+play-review = { group = "com.google.android.play", name = "review", version.ref = "playReview" }
+play-review-ktx = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidApplication" }

@@ -60,6 +60,14 @@
 -keep class com.google.android.gms.ads.** { *; }
 -dontwarn com.google.android.gms.ads.**
 
+# Google User Messaging Platform (UMP)
+-keep class com.google.android.ump.** { *; }
+-dontwarn com.google.android.ump.**
+
+# Google Play In-App Review
+-keep class com.google.android.play.core.review.** { *; }
+-dontwarn com.google.android.play.core.review.**
+
 # Room
 -keep class androidx.room.** { *; }
 -dontwarn androidx.room.**
@@ -75,4 +83,4 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keep class kotlinx.coroutines.internal.MainDispatcherFactory$* { *; }
--keep class kotlinx.coroutines.android.AndroidDispatcherFactory* { *; }
+-keep class kotlinx.coroutines.android.AndroidDispatcherFactory { *; }

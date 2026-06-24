@@ -8,7 +8,7 @@ object ThemeController {
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme = _isDarkTheme.asStateFlow()
 
-    private var _followSystem = true
+    private var _followSystem = false
     val followSystem: Boolean get() = _followSystem
 
     fun init(context: Context) {

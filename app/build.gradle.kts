@@ -44,8 +44,8 @@ android {
         minSdk = 24
         targetSdk = 35
 
-        val vCode = getProperty("VERSION_CODE", "1").toIntOrNull() ?: 1
-        val vName = getProperty("VERSION_NAME", "1.0")
+        val vCode = getProperty("VERSION_CODE", "2").toIntOrNull() ?: 2
+        val vName = getProperty("VERSION_NAME", "1.1")
 
         versionCode = vCode
         versionName = vName
@@ -183,8 +183,13 @@ dependencies {
     implementation(libs.tensorflow.lite.gpu)
     implementation(libs.tensorflow.lite.support)
 
-    // AdMob
+    // AdMob + UMP Consent
     implementation(libs.play.services.ads)
+    implementation(libs.user.messaging.platform)
+
+    // Play In-App Review
+    implementation(libs.play.review)
+    implementation(libs.play.review.ktx)
 
     // OpenCV
     implementation(libs.opencv)

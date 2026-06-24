@@ -42,6 +42,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        ThemeController.init(this)
+        notifySystemDarkMode()
+        AdManager.onAppForeground(this)
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val nightMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK

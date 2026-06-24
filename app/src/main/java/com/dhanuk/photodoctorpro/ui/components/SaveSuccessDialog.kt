@@ -1,5 +1,6 @@
 package com.dhanuk.photodoctorpro.ui.components
 
+import android.app.Activity
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.Button
@@ -44,14 +44,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.dhanuk.photodoctorpro.R
-import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.ui.theme.WhatsAppGreen
+import com.dhanuk.photodoctorpro.utils.AdManager
+import com.dhanuk.photodoctorpro.utils.InAppReviewManager
+import com.dhanuk.photodoctorpro.utils.UserPreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +66,8 @@ fun SaveSuccessDialog(
     onOpen: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+    val activity = context as? Activity
 
     var imageVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { imageVisible = true }
@@ -74,6 +79,18 @@ fun SaveSuccessDialog(
         ),
         label = "imageScale"
     )
+
+    LaunchedEffect(Unit) {
+        val wasFirstSave = !UserPreferences.isFirstSaveCompleted(context)
+        UserPreferences.setFirstSaveCompleted(context)
+        if (wasFirstSave) {
+            com.dhanuk.photodoctorpro.utils.NotificationHelper.scheduleReEngagement(context)
+        }
+        if (!UserPreferences.hasRequestedReview(context) && !wasFirstSave) {
+            InAppReviewManager.requestReviewIfNeeded(context)
+            UserPreferences.setHasRequestedReview(context)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -132,7 +149,10 @@ fun SaveSuccessDialog(
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = onShareWhatsApp,
+                onClick = {
+                    activity?.let { AdManager.showInterstitialOnShare(it) }
+                    onShareWhatsApp()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -165,7 +185,10 @@ fun SaveSuccessDialog(
                     Text(stringResource(R.string.gallery), style = MaterialTheme.typography.labelLarge)
                 }
                 OutlinedButton(
-                    onClick = onShareOther,
+                    onClick = {
+                        activity?.let { AdManager.showInterstitialOnShare(it) }
+                        onShareOther()
+                    },
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {

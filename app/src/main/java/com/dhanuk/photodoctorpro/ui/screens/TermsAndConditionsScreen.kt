@@ -1,56 +1,75 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
+import android.annotation.SuppressLint
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
-import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dhanuk.photodoctorpro.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TermsAndConditionsScreen(navController: NavController) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.terms_conditions)) }) }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            item {
-                Text(
-                    """
-                    Terms & Conditions for PhotoDoctor Pro
-
-                    By downloading or using PhotoDoctor Pro, these terms will automatically apply to you.
-
-                    **1. Use of the App**
-                    You are permitted to use PhotoDoctor Pro for your personal, non-commercial use.
-
-                    **2. Intellectual Property**
-                    The app and all its content, features, and functionality are owned by Dhanuk Software.
-
-                    **3. Disclaimer of Warranties**
-                    The app is provided "as is," without warranty of any kind.
-
-                    **4. Limitation of Liability**
-                    In no event shall Dhanuk Software be liable for any damages arising out of the use or inability to use the app.
-
-                    **5. Changes to These Terms**
-                    We may update our Terms and Conditions from time to time. We will notify you of any changes by posting the new Terms and Conditions on this page.
-
-                    **6. Contact Us**
-                    If you have any questions about these Terms and Conditions, please contact us at support@dhanuksoftware.com.
-                    """.trimIndent()
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(R.string.terms_conditions),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back_button),
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
-            }
+            )
         }
+    ) { padding ->
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            factory = { context ->
+                WebView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = false
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    webViewClient = WebViewClient()
+                    loadUrl("file:///android_asset/terms.html")
+                }
+            }
+        )
     }
 }

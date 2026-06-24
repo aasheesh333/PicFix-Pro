@@ -2,13 +2,18 @@ package com.dhanuk.photodoctorpro.utils
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
+import com.dhanuk.photodoctorpro.BuildConfig
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import android.util.Log
-import com.dhanuk.photodoctorpro.BuildConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 
 object AdManager {
@@ -23,7 +28,7 @@ object AdManager {
     @Volatile var isAdLoaded: Boolean = false
         private set
 
-    private const val AD_FREQUENCY_CAP_MS = 3 * 60 * 1000 // 3 minutes
+    private const val AD_FREQUENCY_CAP_MS = 2 * 60 * 1000 // 2 minutes
     private const val MAJOR_ACTION_COUNT_CAP = 2
 
     fun initialize(context: Context) {
@@ -57,6 +62,10 @@ object AdManager {
     }
 
     fun showInterstitialAd(activity: Activity) {
+        if (InAppReviewManager.isReviewInProgress) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial — review in progress")
+            return
+        }
         val ad: InterstitialAd? = interstitialAd
         if (ad == null) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Ad is null, attempting to reload")
@@ -82,10 +91,52 @@ object AdManager {
         }
     }
 
-    /**
-     * Release ad resources. Safe to call multiple times. Call from Activity.onDestroy()
-     * to ensure the loaded InterstitialAd is not pinned to a destroyed Activity.
-     */
+    fun showInterstitialOnShare(activity: Activity) {
+        if (InAppReviewManager.isReviewInProgress) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on share — review in progress")
+            return
+        }
+        val ad: InterstitialAd? = interstitialAd
+        if (ad == null) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Ad is null, attempting to reload")
+            loadInterstitialAd(activity)
+        }
+
+        val currentTime = System.currentTimeMillis()
+        val lastShow = lastAdShowTime
+        if (ad != null && currentTime - lastShow >= AD_FREQUENCY_CAP_MS) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Showing Interstitial Ad on Share")
+            try {
+                ad.show(activity)
+            } catch (_: Exception) {}
+            lastAdShowTime = currentTime
+            majorActionCount.set(0)
+            loadInterstitialAd(activity)
+        } else {
+            majorActionCount.incrementAndGet()
+            if (BuildConfig.DEBUG) Log.d(TAG, "Share action recorded, ad not shown yet. Time diff: ${currentTime - lastShow}")
+        }
+    }
+
+    fun onAppForeground(activity: Activity) {
+        if (InAppReviewManager.isReviewInProgress) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on foreground — review in progress")
+            return
+        }
+        val ad: InterstitialAd? = interstitialAd
+        val currentTime = System.currentTimeMillis()
+        val lastShow = lastAdShowTime
+        if (ad != null && currentTime - lastShow >= AD_FREQUENCY_CAP_MS) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Showing periodic Interstitial Ad")
+            try {
+                ad.show(activity)
+            } catch (_: Exception) {}
+            lastAdShowTime = currentTime
+            majorActionCount.set(0)
+            loadInterstitialAd(activity)
+        }
+    }
+
     fun cleanup() {
         interstitialAd = null
         isAdLoaded = false

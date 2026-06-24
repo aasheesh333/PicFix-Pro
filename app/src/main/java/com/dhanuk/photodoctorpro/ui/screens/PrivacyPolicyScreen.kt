@@ -1,56 +1,85 @@
 package com.dhanuk.photodoctorpro.ui.screens
 
+import android.annotation.SuppressLint
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
-import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dhanuk.photodoctorpro.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacyPolicyScreen(navController: NavController) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.privacy_policy)) }) }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            item {
-                Text(
-                    """
-                    Privacy Policy for PhotoDoctor Pro
-
-                    This Privacy Policy describes how your personal information is handled in PhotoDoctor Pro.
-
-                    **1. Information We Collect**
-                    PhotoDoctor Pro is designed to respect your privacy. All image processing is done entirely on your device. We do not collect, store, or transmit any of your photos or personal information.
-
-                    **2. On-Device Processing**
-                    All features of PhotoDoctor Pro, including background removal, object erasing, and image enhancement, are performed on your device. Your photos are never uploaded to a server.
-
-                    **3. Advertising**
-                    PhotoDoctor Pro uses Google AdMob to display ads. AdMob may collect and use anonymous data for advertising purposes, such as your device's advertising ID. We do not share any personal information with AdMob.
-
-                    **4. Analytics**
-                    We do not collect any analytics data.
-
-                    **5. Changes to This Privacy Policy**
-                    We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.
-
-                    **6. Contact Us**
-                    If you have any questions about this Privacy Policy, please contact us at support@dhanuksoftware.com.
-                    """.trimIndent()
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(R.string.privacy_policy),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back_button),
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
+            )
+        }
+    ) { padding ->
+        WebViewCompose(
+            url = "https://dhanuk.page.gd/PhotoDoctor-Pro/Privacy-Policy.html",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        )
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun WebViewCompose(url: String, modifier: Modifier = Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                settings.javaScriptEnabled = false
+                settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                webViewClient = WebViewClient()
+                loadUrl(url)
             }
         }
-    }
+    )
 }
