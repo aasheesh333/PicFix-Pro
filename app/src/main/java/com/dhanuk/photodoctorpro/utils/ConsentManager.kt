@@ -6,6 +6,7 @@ import android.util.Log
 import com.dhanuk.photodoctorpro.BuildConfig
 import com.google.android.ump.ConsentDebugSettings
 import com.google.android.ump.ConsentForm
+import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.FormError
 import com.google.android.ump.UserMessagingPlatform
@@ -19,6 +20,12 @@ object ConsentManager {
         private set
 
     fun init(context: Context) {
+        val activity = context as? Activity ?: run {
+            isConsentObtained = true
+            AdManager.initialize(context)
+            return
+        }
+
         val builder = ConsentRequestParameters.Builder()
             .setTagForUnderAgeOfConsent(false)
 
@@ -34,19 +41,20 @@ object ConsentManager {
         val consentInfo = UserMessagingPlatform.getConsentInformation(context)
 
         consentInfo.requestConsentInfoUpdate(
+            activity,
             params,
-            object : com.google.android.ump.ConsentInformation.OnConsentInfoUpdateSuccessListener {
+            object : ConsentInformation.OnConsentInfoUpdateSuccessListener {
                 override fun onConsentInfoUpdateSuccess() {
                     isConsentRequired = consentInfo.isConsentRequired
                     if (isConsentRequired) {
-                        loadAndShowConsentForm(context)
+                        loadAndShowConsentForm(activity, context)
                     } else {
                         isConsentObtained = true
                         AdManager.initialize(context)
                     }
                 }
             },
-            object : com.google.android.ump.ConsentInformation.OnConsentInfoUpdateFailureListener {
+            object : ConsentInformation.OnConsentInfoUpdateFailureListener {
                 override fun onConsentInfoUpdateFailure(formError: FormError) {
                     if (BuildConfig.DEBUG) Log.e(TAG, "Consent info update failed: ${formError.message}")
                     isConsentRequired = false
@@ -57,31 +65,24 @@ object ConsentManager {
         )
     }
 
-    private fun loadAndShowConsentForm(context: Context) {
-        val activity = context as? Activity
-
+    private fun loadAndShowConsentForm(activity: Activity, context: Context) {
         UserMessagingPlatform.loadConsentForm(
             context,
             object : UserMessagingPlatform.OnConsentFormLoadSuccessListener {
                 override fun onConsentFormLoadSuccess(consentForm: ConsentForm) {
-                    if (activity != null) {
-                        consentForm.show(
-                            activity,
-                            object : ConsentForm.OnConsentFormDismissedListener {
-                                override fun onConsentFormDismissed(formError: FormError?) {
-                                    if (formError != null && BuildConfig.DEBUG) {
-                                        Log.e(TAG, "Consent form show failed: ${formError.message}")
-                                    }
-                                    val info = UserMessagingPlatform.getConsentInformation(context)
-                                    isConsentObtained = info.canRequestAds()
-                                    AdManager.initialize(context)
+                    consentForm.show(
+                        activity,
+                        object : ConsentForm.OnConsentFormDismissedListener {
+                            override fun onConsentFormDismissed(formError: FormError?) {
+                                if (formError != null && BuildConfig.DEBUG) {
+                                    Log.e(TAG, "Consent form show failed: ${formError.message}")
                                 }
+                                val info = UserMessagingPlatform.getConsentInformation(context)
+                                isConsentObtained = info.canRequestAds()
+                                AdManager.initialize(context)
                             }
-                        )
-                    } else {
-                        isConsentObtained = true
-                        AdManager.initialize(context)
-                    }
+                        }
+                    )
                 }
             },
             object : UserMessagingPlatform.OnConsentFormLoadFailureListener {
