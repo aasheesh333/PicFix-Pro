@@ -26,6 +26,9 @@ google-services.json
 # Log files
 *.log
 
+# Opencode config
+opencode.json
+
 # Test reports
 /app/build/reports/
 /app/build/test-results/
