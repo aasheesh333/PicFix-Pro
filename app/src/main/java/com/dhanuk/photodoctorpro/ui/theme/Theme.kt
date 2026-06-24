@@ -126,6 +126,13 @@ fun PhotoDoctorProTheme(
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }
+
+        val window = (view.context as Activity).window
+        val bgArgb = targetColorScheme.background.toArgb()
+        if (window.statusBarColor != bgArgb) {
+            window.statusBarColor = bgArgb
+            window.navigationBarColor = bgArgb
+        }
     }
 
     MaterialTheme(

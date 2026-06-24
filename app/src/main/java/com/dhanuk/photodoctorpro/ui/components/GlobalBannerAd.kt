@@ -1,6 +1,7 @@
 package com.dhanuk.photodoctorpro.ui.components
 
 import android.app.Activity
+import android.view.View
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -20,16 +21,17 @@ fun GlobalBannerAd(navController: NavHostController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val shouldShowBanner = remember(currentRoute) {
-        val excludedRoutes = setOf(
+    val excludedRoutes = remember {
+        setOf(
             "object_eraser",
             "color_adjustments",
             "perspective_crop",
             "resize_compress",
             "home"
         )
-        currentRoute != null && currentRoute !in excludedRoutes
     }
+
+    val shouldShowBanner = currentRoute != null && currentRoute !in excludedRoutes
 
     val context = LocalContext.current
     val activity = context as? Activity ?: return
@@ -53,16 +55,16 @@ fun GlobalBannerAd(navController: NavHostController) {
         }
     }
 
-    if (shouldShowBanner) {
-        val adView = manager.getAdView()
-        if (adView != null) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                factory = { adView },
-                update = { view ->
-                    view.visibility = if (shouldShowBanner) android.view.View.VISIBLE else android.view.View.GONE
-                }
-            )
-        }
+    val adView = manager.getAdView()
+    if (adView != null) {
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            factory = { adView },
+            update = { view ->
+                view.visibility = if (shouldShowBanner) View.VISIBLE else View.GONE
+            }
+        )
     }
 }

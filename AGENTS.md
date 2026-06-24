@@ -1,5 +1,7 @@
 # AGENTS.md — PhotoDoctor Pro
 
+**NEVER EVER build APK/AAB locally.** Always push code to GitHub → let GitHub Actions build → monitor CI until green → download APK/AAB artifacts from Actions page.
+
 Single-module Android app (Kotlin + Jetpack Compose). One Gradle module: `:app`.
 Package: `com.dhanuk.photodoctorpro`. `compileSdk` 35, `minSdk` 24, `targetSdk` 35. JVM 1.8. `applicationId` and `namespace` match the package.
 

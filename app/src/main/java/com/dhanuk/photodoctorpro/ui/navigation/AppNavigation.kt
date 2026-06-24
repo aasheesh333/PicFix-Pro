@@ -34,20 +34,30 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         fadeIn(tween(ANIM_DURATION))
     }
 
+    val tabRoutes = setOf("home", "history", "settings")
+    val instantEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+        fadeIn(tween(0))
+    }
+    val instantExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+        fadeOut(tween(0))
+    }
+
     NavHost(navController = navController, startDestination = "home", modifier = modifier) {
         composable(
             "home",
-            enterTransition = { fadeIn(tween(ANIM_DURATION)) },
-            exitTransition = { fadeOut(tween(ANIM_DURATION / 2)) }
+            enterTransition = { if (initialState.destination.route in tabRoutes) instantEnter else fadeIn(tween(ANIM_DURATION)) },
+            exitTransition = { if (targetState.destination.route in tabRoutes) instantExit else fadeOut(tween(ANIM_DURATION / 2)) }
         ) { HomeScreen(navController) }
 
         composable("history",
-            enterTransition = slideEnter, exitTransition = fadeExit,
+            enterTransition = { if (initialState.destination.route in tabRoutes) instantEnter else slideEnter },
+            exitTransition = { if (targetState.destination.route in tabRoutes) instantExit else fadeExit },
             popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { HistoryScreen(navController) }
 
         composable("settings",
-            enterTransition = slideEnter, exitTransition = fadeExit,
+            enterTransition = { if (initialState.destination.route in tabRoutes) instantEnter else slideEnter },
+            exitTransition = { if (targetState.destination.route in tabRoutes) instantExit else fadeExit },
             popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { SettingsScreen(navController) }
 
@@ -90,15 +100,5 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             enterTransition = slideEnter, exitTransition = fadeExit,
             popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { ResizeCompressScreen(navController) }
-
-        composable("privacy_policy",
-            enterTransition = slideEnter, exitTransition = fadeExit,
-            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
-        ) { PrivacyPolicyScreen(navController) }
-
-        composable("terms_and_conditions",
-            enterTransition = slideEnter, exitTransition = fadeExit,
-            popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
-        ) { TermsAndConditionsScreen(navController) }
     }
 }

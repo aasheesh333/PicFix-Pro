@@ -35,11 +35,11 @@ fun AppScaffold() {
                     enter = slideInVertically(
                         animationSpec = tween(300),
                         initialOffsetY = { it }
-                    ) + fadeIn(animationSpec = tween(300)),
+                    ) + fadeIn(animationSpec = tween(150)),
                     exit = slideOutVertically(
                         animationSpec = tween(200),
                         targetOffsetY = { it }
-                    ) + fadeOut(animationSpec = tween(200))
+                    ) + fadeOut(animationSpec = tween(100))
                 ) {
                     Column {
                         GlobalBannerAd(navController)

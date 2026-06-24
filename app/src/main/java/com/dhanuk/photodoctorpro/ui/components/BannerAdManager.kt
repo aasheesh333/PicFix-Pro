@@ -65,9 +65,10 @@ class BannerAdManager private constructor() {
 
     fun show() {
         isVisible = true
-        handler.removeCallbacks(refreshRunnable)
         adView?.visibility = View.VISIBLE
-        loadAd()
+        if (adView?.responseInfo == null) {
+            loadAd()
+        }
         scheduleRefresh()
     }
 
