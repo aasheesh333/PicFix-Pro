@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.dhanuk.photodoctorpro.BuildConfig
 import com.dhanuk.photodoctorpro.MainActivity
 import com.dhanuk.photodoctorpro.R
 import java.util.concurrent.TimeUnit

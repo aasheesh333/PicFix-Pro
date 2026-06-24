@@ -25,7 +25,7 @@ mockk = "1.13.10"
 coroutinesTest = "1.7.3"
 turbine = "1.0.0"
 robolectric = "4.12.2"
-userMessagingPlatform = "2.1.0"
+userMessagingPlatform = "2.0.1"
 playReview = "2.0.1"
 
 [libraries]
