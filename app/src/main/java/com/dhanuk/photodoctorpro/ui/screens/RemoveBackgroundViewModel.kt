@@ -33,7 +33,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.ArrayDeque
 
 class RemoveBackgroundViewModel(
@@ -159,13 +158,11 @@ class RemoveBackgroundViewModel(
             val pixels = ByteArray(totalPixels)
 
             maskBuffer.rewind()
-            maskBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            val floatArray = FloatArray(totalPixels)
+            val floatArray = FloatArray(minOf(totalPixels, maskBuffer.remaining()))
+            maskBuffer.get(floatArray)
             for (i in 0 until totalPixels) {
-                floatArray[i] = maskBuffer.float
-            }
-            for (i in 0 until totalPixels) {
-                pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
+                val f = if (i < floatArray.size) floatArray[i] else 0f
+                pixels[i] = if (f > threshold) 255.toByte() else 0
             }
 
             val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
