@@ -16,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.dhanuk.photodoctorpro.ui.components.BottomNavigationBar
 import com.dhanuk.photodoctorpro.ui.components.GlobalBannerAd
 
 @Composable

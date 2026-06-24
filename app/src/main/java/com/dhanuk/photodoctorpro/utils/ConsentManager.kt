@@ -35,50 +35,61 @@ object ConsentManager {
 
         consentInfo.requestConsentInfoUpdate(
             params,
-            {
-                isConsentRequired = consentInfo.isConsentRequired
-                if (isConsentRequired) {
-                    loadAndShowConsentForm(context)
-                } else {
+            object : com.google.android.ump.ConsentInformation.OnConsentInfoUpdateSuccessListener {
+                override fun onConsentInfoUpdateSuccess() {
+                    isConsentRequired = consentInfo.isConsentRequired
+                    if (isConsentRequired) {
+                        loadAndShowConsentForm(context)
+                    } else {
+                        isConsentObtained = true
+                        AdManager.initialize(context)
+                    }
+                }
+            },
+            object : com.google.android.ump.ConsentInformation.OnConsentInfoUpdateFailureListener {
+                override fun onConsentInfoUpdateFailure(formError: FormError) {
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Consent info update failed: ${formError.message}")
+                    isConsentRequired = false
                     isConsentObtained = true
                     AdManager.initialize(context)
                 }
-            },
-            { requestConsentError: FormError ->
-                if (BuildConfig.DEBUG) Log.e(TAG, "Consent info update failed: ${requestConsentError.message}")
-                isConsentRequired = false
-                isConsentObtained = true
-                AdManager.initialize(context)
             }
         )
     }
 
     private fun loadAndShowConsentForm(context: Context) {
+        val activity = context as? Activity
+
         UserMessagingPlatform.loadConsentForm(
             context,
-            { consentForm: ConsentForm ->
-                val activity = context as? Activity
-                if (activity != null) {
-                    consentForm.show(
-                        activity,
-                        { formError: FormError? ->
-                            if (formError != null && BuildConfig.DEBUG) {
-                                Log.e(TAG, "Consent form show failed: ${formError.message}")
+            object : UserMessagingPlatform.OnConsentFormLoadSuccessListener {
+                override fun onConsentFormLoadSuccess(consentForm: ConsentForm) {
+                    if (activity != null) {
+                        consentForm.show(
+                            activity,
+                            object : ConsentForm.OnConsentFormDismissedListener {
+                                override fun onConsentFormDismissed(formError: FormError?) {
+                                    if (formError != null && BuildConfig.DEBUG) {
+                                        Log.e(TAG, "Consent form show failed: ${formError.message}")
+                                    }
+                                    val info = UserMessagingPlatform.getConsentInformation(context)
+                                    isConsentObtained = info.canRequestAds()
+                                    AdManager.initialize(context)
+                                }
                             }
-                            val info = UserMessagingPlatform.getConsentInformation(context)
-                            isConsentObtained = info.canRequestAds()
-                            AdManager.initialize(context)
-                        }
-                    )
-                } else {
+                        )
+                    } else {
+                        isConsentObtained = true
+                        AdManager.initialize(context)
+                    }
+                }
+            },
+            object : UserMessagingPlatform.OnConsentFormLoadFailureListener {
+                override fun onConsentFormLoadFailure(formError: FormError) {
+                    if (BuildConfig.DEBUG) Log.e(TAG, "Consent form load failed: ${formError.message}")
                     isConsentObtained = true
                     AdManager.initialize(context)
                 }
-            },
-            { formLoadError: FormError ->
-                if (BuildConfig.DEBUG) Log.e(TAG, "Consent form load failed: ${formLoadError.message}")
-                isConsentObtained = true
-                AdManager.initialize(context)
             }
         )
     }

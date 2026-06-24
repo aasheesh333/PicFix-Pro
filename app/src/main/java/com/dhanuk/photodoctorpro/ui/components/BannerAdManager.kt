@@ -37,7 +37,7 @@ class BannerAdManager private constructor() {
 
     private fun createAdView(activity: Activity) {
         adView = AdView(activity).apply {
-            adSize = AdSize.BANNER
+            setAdSize(AdSize.BANNER)
             adUnitId = BuildConfig.ADMOB_BANNER_ID
             adListener = object : AdListener() {
                 override fun onAdLoaded() {
