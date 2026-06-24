@@ -74,6 +74,5 @@
 # Kotlin Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembers class kotlinx.coroutines.** {
-    volatile **;
-}
+-keep class kotlinx.coroutines.internal.MainDispatcherFactory$* { *; }
+-keep class kotlinx.coroutines.android.AndroidDispatcherFactory* { *; }
