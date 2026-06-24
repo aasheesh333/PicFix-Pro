@@ -167,14 +167,6 @@ class RemoveBackgroundViewModel(
             for (i in 0 until totalPixels) {
                 pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
             }
-            } else {
-                val floatArray = FloatArray(totalPixels)
-                maskBuffer.rewind()
-                maskBuffer.get(floatArray)
-                for (i in 0 until totalPixels) {
-                    pixels[i] = if (floatArray[i] > threshold) 255.toByte() else 0
-                }
-            }
 
             val safeMask = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
             safeMask.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
