@@ -193,7 +193,7 @@ fun SettingsScreen(navController: NavController) {
                     )
                 },
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Privacy-Policy.html"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Privacy-Policy.html?i=1"))
                     context.startActivity(intent)
                 }
             )
