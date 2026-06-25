@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -129,6 +131,13 @@ fun ImageToPdfScreen(navController: NavController) {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back_button))
                     }
+                },
+                actions = {
+                    if (uiState.selectedImageUris.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.clearAll() }) {
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.clear))
+                        }
+                    }
                 }
             )
         },
@@ -150,7 +159,12 @@ fun ImageToPdfScreen(navController: NavController) {
                     fallbackMultiPicker.launch(arrayOf("image/*"))
                 }
             }) {
-                Text(stringResource(R.string.select_images))
+                Text(
+                    if (uiState.selectedImageUris.isNotEmpty())
+                        stringResource(R.string.action_add_images)
+                    else
+                        stringResource(R.string.select_images)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -166,7 +180,8 @@ fun ImageToPdfScreen(navController: NavController) {
                             uri = item,
                             modifier = Modifier.shadow(0.dp),
                             onMoveUp = if (index > 0) { { viewModel.onImageReordered(index, index - 1) } } else null,
-                            onMoveDown = if (index < uiState.selectedImageUris.size - 1) { { viewModel.onImageReordered(index, index + 1) } } else null
+                            onMoveDown = if (index < uiState.selectedImageUris.size - 1) { { viewModel.onImageReordered(index, index + 1) } } else null,
+                            onRemove = { viewModel.onImageRemoved(index) }
                         )
                     }
                 }
@@ -211,7 +226,8 @@ fun ImageRow(
     uri: Uri,
     modifier: Modifier = Modifier,
     onMoveUp: (() -> Unit)?,
-    onMoveDown: (() -> Unit)?
+    onMoveDown: (() -> Unit)?,
+    onRemove: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     Card(
@@ -237,6 +253,11 @@ fun ImageRow(
                 }
                 IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
                     Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.move_down))
+                }
+            }
+            if (onRemove != null) {
+                IconButton(onClick = { onRemove() }) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.delete_entry), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }

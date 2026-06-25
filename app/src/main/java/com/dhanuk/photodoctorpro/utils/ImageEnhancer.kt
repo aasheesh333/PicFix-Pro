@@ -273,7 +273,6 @@ object OpenCVEnhancerFallback {
         val targetHeight = height * scaleFactor
 
         if (targetWidth.toLong() * targetHeight.toLong() > MAX_PIXELS) {
-            // Pre-flight downscale to bring the output under MAX_PIXELS.
             val longEdge = maxOf(width, height)
             if (longEdge > MAX_INPUT_DIM_FOR_LARGE_SCALE && scaleFactor >= 6) {
                 val scale = MAX_INPUT_DIM_FOR_LARGE_SCALE.toFloat() / longEdge.toFloat()
@@ -287,15 +286,116 @@ object OpenCVEnhancerFallback {
             throw IllegalArgumentException("Fallback: Result too large (${width}×${height}×${scaleFactor}).")
         }
 
-        val scaled = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        var current = bitmap
+        var currentScale = 1
+        var createdIntermediate = false
+
+        val steps = buildStepPlan(scaleFactor)
+
+        for ((stepMul, isDetailStep) in steps) {
+            val newW = current.width * stepMul
+            val newH = current.height * stepMul
+            val upscaled = highQualityUpscale(current, stepMul)
+            if (createdIntermediate && current != bitmap && !current.isRecycled) current.recycle()
+            current = if (isDetailStep && com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+                applySharpening(upscaled)
+            } else {
+                upscaled
+            }
+            createdIntermediate = true
+            currentScale *= stepMul
+        }
+
+        if (com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized && current == bitmap) {
+            current = applySharpening(current)
+            createdIntermediate = true
+        }
+
+        return current
+    }
+
+    private fun buildStepPlan(scaleFactor: Int): List<Pair<Int, Boolean>> {
+        return when (scaleFactor) {
+            2 -> listOf(2 to true)
+            4 -> listOf(2 to true, 2 to true)
+            6 -> listOf(2 to true, 3 to false)
+            8 -> listOf(2 to true, 2 to true, 2 to true)
+            else -> listOf(scaleFactor to false)
+        }
+    }
+
+    private fun highQualityUpscale(bitmap: Bitmap, factor: Int): Bitmap {
+        if (factor <= 0) return bitmap
+        val newW = bitmap.width * factor
+        val newH = bitmap.height * factor
+
+        if (com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+            try {
+                val src = Mat()
+                val dst = Mat()
+                try {
+                    Utils.bitmapToMat(bitmap, src)
+                    Imgproc.resize(src, dst, Size(newW.toDouble(), newH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
+                    val result = Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888)
+                    Utils.matToBitmap(dst, result)
+                    return result
+                } finally {
+                    src.release()
+                    dst.release()
+                }
+            } catch (_: Exception) {}
+        }
+
+        val scaled = Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(scaled)
         val paint = Paint()
         paint.isFilterBitmap = true
         paint.isAntiAlias = true
         val matrix = android.graphics.Matrix()
-        matrix.postScale(scaleFactor.toFloat(), scaleFactor.toFloat())
+        matrix.postScale(factor.toFloat(), factor.toFloat())
         canvas.drawBitmap(bitmap, matrix, paint)
-
         return scaled
+    }
+
+    private fun applySharpening(bitmap: Bitmap): Bitmap {
+        try {
+            val src = Mat()
+            val dst = Mat()
+            val blurred = Mat()
+            val lab = Mat()
+            val denoised = Mat()
+            val channels = ArrayList<Mat>()
+            try {
+                Utils.bitmapToMat(bitmap, src)
+                src.copyTo(dst)
+
+                Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 2.0)
+                Core.addWeighted(src, 2.0, blurred, -1.0, 0.0, dst)
+
+                Imgproc.cvtColor(dst, lab, Imgproc.COLOR_BGR2Lab)
+                Core.split(lab, channels)
+                val clahe = Imgproc.createCLAHE()
+                clahe.clipLimit = 2.0
+                clahe.apply(channels[0], channels[0])
+                Core.merge(channels, lab)
+                Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2BGR)
+
+                Imgproc.bilateralFilter(dst, denoised, 5, 30.0, 30.0)
+
+                val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
+                Utils.matToBitmap(denoised, result)
+                if (result != bitmap && !bitmap.isRecycled) bitmap.recycle()
+                return result
+            } finally {
+                src.release()
+                dst.release()
+                blurred.release()
+                lab.release()
+                denoised.release()
+                channels.forEach { it.release() }
+            }
+        } catch (_: Exception) {
+            return bitmap
+        }
     }
 }

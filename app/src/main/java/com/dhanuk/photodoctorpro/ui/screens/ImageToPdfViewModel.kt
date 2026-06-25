@@ -38,8 +38,22 @@ class ImageToPdfViewModel(
     val uiState = _uiState.asStateFlow()
 
     fun onImagesSelected(uris: List<Uri>) {
-        savedStateHandle[KEY_URIS] = uris.map { it.toString() }
-        _uiState.update { it.copy(selectedImageUris = uris) }
+        val updated = _uiState.value.selectedImageUris + uris
+        savedStateHandle[KEY_URIS] = updated.map { it.toString() }
+        _uiState.update { it.copy(selectedImageUris = updated) }
+    }
+
+    fun onImageRemoved(index: Int) {
+        val currentList = _uiState.value.selectedImageUris.toMutableList()
+        if (index !in currentList.indices) return
+        currentList.removeAt(index)
+        savedStateHandle[KEY_URIS] = currentList.map { it.toString() }
+        _uiState.update { it.copy(selectedImageUris = currentList) }
+    }
+
+    fun clearAll() {
+        savedStateHandle[KEY_URIS] = emptyList<String>()
+        _uiState.update { it.copy(selectedImageUris = emptyList()) }
     }
 
     fun onImageReordered(from: Int, to: Int) {

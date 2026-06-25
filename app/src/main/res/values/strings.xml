@@ -214,6 +214,7 @@
     <string name="delete_entry_confirm">Remove this history entry?</string>
     <string name="action_remove">Remove</string>
     <string name="something_went_wrong">Something went wrong</string>
+    <string name="action_add_images">Add Images</string>
     <string name="fatal_error_message">An unexpected error occurred. The app will close. Please try again.</string>
     <string name="fatal_error_restart">Unexpected error. Restart the app.</string>
     <string name="action_reset">Reset</string>
