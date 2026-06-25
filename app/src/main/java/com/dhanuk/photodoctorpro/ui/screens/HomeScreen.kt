@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,12 +73,8 @@ fun HomeScreen(navController: NavController) {
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val isLandscape = maxWidth > maxHeight
-        val minCardWidth = 220.dp
-        val columnCount = if (isLandscape) {
-            (maxWidth / minCardWidth).toInt().coerceAtLeast(3)
-        } else {
-            2
-        }
+        val minCardWidth = 170.dp
+        val columnCount = (maxWidth / minCardWidth).toInt().coerceIn(2, 4)
         val topPadding = if (isLandscape) 12.dp else 24.dp
         val logoSize = if (isLandscape) 72.dp else 96.dp
         val internalLogoSize = if (isLandscape) 56.dp else 72.dp
@@ -87,13 +82,13 @@ fun HomeScreen(navController: NavController) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(columnCount),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item(span = { GridItemSpan(columnCount) }) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = topPadding, bottom = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = topPadding, bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -109,7 +104,7 @@ fun HomeScreen(navController: NavController) {
                             modifier = Modifier.size(internalLogoSize)
                         )
                     }
-                    Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 20.dp))
+                    Spacer(modifier = Modifier.height(if (isLandscape) 8.dp else 14.dp))
                     Text(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
@@ -137,7 +132,7 @@ fun HomeScreen(navController: NavController) {
                         subtitle = feature.subtitle,
                         icon = feature.icon,
                         onClick = { navController.navigate(feature.route) },
-                        modifier = Modifier.fillMaxWidth().aspectRatio(if (isLandscape) 1.1f else 0.85f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
