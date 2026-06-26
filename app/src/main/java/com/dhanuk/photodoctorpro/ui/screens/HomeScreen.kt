@@ -73,18 +73,23 @@ fun HomeScreen(navController: NavController) {
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val isLandscape = maxWidth > maxHeight
-        val minCardWidth = 170.dp
-        val columnCount = (maxWidth / minCardWidth).toInt().coerceIn(2, 4)
         val topPadding = if (isLandscape) 12.dp else 24.dp
         val logoSize = if (isLandscape) 72.dp else 96.dp
         val internalLogoSize = if (isLandscape) 56.dp else 72.dp
+
+        // Dynamic card sizing for phones/tablets
+        val cardWidth = when {
+            maxWidth >= 600.dp -> (maxWidth / 2.5f).coerceAtMost(220.dp)  // Tablet: wider cards, partial 5th/6th card
+            else -> (maxWidth / 2.1f).coerceAtMost(180.dp)             // Phone: 2 cards per row, 4 visible
+        }
+        val columnCount = (maxWidth / cardWidth).toInt().coerceAtLeast(2)
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(columnCount),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(span = { GridItemSpan(columnCount) }) {
                 Column(
@@ -117,25 +122,25 @@ fun HomeScreen(navController: NavController) {
                     )
                 }
             }
-            itemsIndexed(features) { index, feature ->
-                AnimatedVisibility(
-                    visible = index < visibleCount,
-                    enter = slideInVertically(
-                        animationSpec = tween(400),
-                        initialOffsetY = { it / 4 }
-                    ) + fadeIn(
-                        animationSpec = tween(400)
-                    )
-                ) {
-                    LuminaFeatureCard(
-                        title = feature.title,
-                        subtitle = feature.subtitle,
-                        icon = feature.icon,
-                        onClick = { navController.navigate(feature.route) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+        itemsIndexed(features) { index, feature ->
+            AnimatedVisibility(
+                visible = index < visibleCount,
+                enter = slideInVertically(
+                    animationSpec = tween(400),
+                    initialOffsetY = { it / 4 }
+                ) + fadeIn(
+                    animationSpec = tween(400)
+                )
+            ) {
+                LuminaFeatureCard(
+                    title = feature.title,
+                    subtitle = feature.subtitle,
+                    icon = feature.icon,
+                    onClick = { navController.navigate(feature.route) },
+                    modifier = Modifier.height(100.dp)
+                )
             }
+        }
         }
     }
 }
