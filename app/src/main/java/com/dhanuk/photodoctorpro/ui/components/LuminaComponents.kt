@@ -63,7 +63,6 @@ fun LuminaFeatureCard(
                 alpha = 0.04f,
                 borderAlpha = 0.10f
             )
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.0f))
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         Row(

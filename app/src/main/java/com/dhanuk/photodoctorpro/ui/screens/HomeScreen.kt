@@ -77,19 +77,39 @@ fun HomeScreen(navController: NavController) {
         val logoSize = if (isLandscape) 72.dp else 96.dp
         val internalLogoSize = if (isLandscape) 56.dp else 72.dp
 
-        val isTablet = maxWidth >= 600.dp
-        val columnCount = if (isTablet || isLandscape) 3 else 2
+        val columnCount = when {
+            maxWidth >= 840.dp -> 4
+            maxWidth >= 600.dp -> 3
+            else -> 2
+        }
 
-        val headerEstimate = topPadding + logoSize + (if (isLandscape) 8.dp else 14.dp) + 60.dp + 12.dp
-        val availableHeight = maxHeight - headerEstimate
-        val cardHeight = (availableHeight / 2.5f).coerceIn(120.dp, 180.dp)
+        val cardHeight = when {
+            maxWidth >= 840.dp -> 150.dp
+            maxWidth >= 600.dp -> 140.dp
+            else -> 130.dp
+        }
+
+        val horizontalPadding = when {
+            maxWidth >= 840.dp -> 32.dp
+            maxWidth >= 600.dp -> 24.dp
+            else -> 16.dp
+        }
+
+        val cardSpacing = when {
+            maxWidth >= 840.dp -> 16.dp
+            maxWidth >= 600.dp -> 14.dp
+            else -> 12.dp
+        }
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(columnCount),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(
+                horizontal = horizontalPadding,
+                vertical = 12.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(cardSpacing),
+            verticalArrangement = Arrangement.spacedBy(cardSpacing)
         ) {
             item(span = { GridItemSpan(columnCount) }) {
                 Column(
