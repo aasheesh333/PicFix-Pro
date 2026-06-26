@@ -35,7 +35,7 @@ fun Modifier.luminaGlass(
     } else {
         fill = Color.White.copy(alpha = alpha)
         highlight = Color.White.copy(alpha = borderAlpha)
-        border = outline
+        border = MaterialTheme.colorScheme.outline.copy(alpha = borderAlpha)
     }
     return this
         .clip(shape)
