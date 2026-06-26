@@ -77,12 +77,12 @@ fun HomeScreen(navController: NavController) {
         val logoSize = if (isLandscape) 72.dp else 96.dp
         val internalLogoSize = if (isLandscape) 56.dp else 72.dp
 
-        // Dynamic card sizing for phones/tablets
-        val cardWidth = when {
-            maxWidth >= 600.dp -> (maxWidth / 2.5f).coerceAtMost(220.dp)  // Tablet: wider cards, partial 5th/6th card
-            else -> (maxWidth / 2.1f).coerceAtMost(180.dp)             // Phone: 2 cards per row, 4 visible
-        }
-        val columnCount = (maxWidth / cardWidth).toInt().coerceAtLeast(2)
+        val isTablet = maxWidth >= 600.dp
+        val columnCount = if (isTablet || isLandscape) 3 else 2
+
+        val headerEstimate = topPadding + logoSize + (if (isLandscape) 8.dp else 14.dp) + 60.dp + 12.dp
+        val availableHeight = maxHeight - headerEstimate
+        val cardHeight = (availableHeight / 2.5f).coerceIn(120.dp, 180.dp)
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(columnCount),
@@ -137,7 +137,7 @@ fun HomeScreen(navController: NavController) {
                     subtitle = feature.subtitle,
                     icon = feature.icon,
                     onClick = { navController.navigate(feature.route) },
-                    modifier = Modifier.height(100.dp)
+                    modifier = Modifier.height(cardHeight)
                 )
             }
         }
