@@ -9,7 +9,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
-import com.dhanuk.photodoctorpro.utils.ConsentManager
 import com.dhanuk.photodoctorpro.utils.CrashReporter
 import com.dhanuk.photodoctorpro.utils.NotificationHelper
 import com.dhanuk.photodoctorpro.utils.ThemeController
@@ -26,8 +25,6 @@ class PicFixApplication : Application() {
         initOpenCvAsync()
 
         NotificationHelper.createNotificationChannel(this)
-
-        ConsentManager.init(this)
 
         if (BuildConfig.DEBUG) {
             OneSignal.Debug.logLevel = LogLevel.VERBOSE

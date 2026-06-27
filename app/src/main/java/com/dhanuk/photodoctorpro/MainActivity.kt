@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { false }
+        ConsentManager.init(this)
         if (ConsentManager.canRequestAds()) {
             AdManager.initialize(this)
         }

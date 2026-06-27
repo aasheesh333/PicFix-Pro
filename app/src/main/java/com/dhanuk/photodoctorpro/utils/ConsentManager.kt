@@ -18,26 +18,26 @@ object ConsentManager {
 
     private var consentInformation: ConsentInformation? = null
 
-    fun init(context: Context) {
+    fun init(activity: Activity) {
         val params = ConsentRequestParameters.Builder()
             .setTagForUnderAgeOfConsent(false)
             .build()
 
-        consentInformation = UserMessagingPlatform.getConsentInformation(context)
+        consentInformation = UserMessagingPlatform.getConsentInformation(activity)
         consentInformation?.requestConsentInfoUpdate(
-            context,
+            activity,
             params,
             {
                 val info = consentInformation ?: return@requestConsentInfoUpdate
-                if (info.isConsentFormAvailable && context is Activity) {
-                    loadAndShowConsentForm(context)
+                if (info.isConsentFormAvailable) {
+                    loadAndShowConsentForm(activity)
                 } else {
-                    checkConsentAndInitAds(context)
+                    checkConsentAndInitAds(activity)
                 }
             },
             { formError: FormError ->
                 Log.e(TAG, "Consent info request failed: ${formError.message}")
-                checkConsentAndInitAds(context)
+                checkConsentAndInitAds(activity)
             }
         )
     }
@@ -79,9 +79,9 @@ object ConsentManager {
         }
     }
 
-    fun resetConsent(context: Context) {
+    fun resetConsent(activity: Activity) {
         consentInformation?.reset()
         isConsentObtained = false
-        init(context)
+        init(activity)
     }
 }
