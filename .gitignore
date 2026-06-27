@@ -42,3 +42,6 @@ opencode.json
 *.log
 *.txt
 !CMakeLists.txt
+
+.playwright-mcp/
+.opencode/plans/
