@@ -3,7 +3,10 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
+import android.graphics.PorterDuff
 import android.net.Uri
+import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
@@ -220,11 +224,12 @@ fun RemoveBackgroundScreen(navController: NavController) {
                 if (uiState.isLoading) {
                     AnimatedLoadingIndicator(message = stringResource(R.string.processing))
                 } else if (uiState.isRefining && uiState.originalBitmap != null && uiState.maskBitmap != null) {
+                    val maskVersion by viewModel.maskVersion.collectAsState()
                     RefineEditor(
                         viewModel = viewModel,
                         original = uiState.originalBitmap!!,
                         mask = uiState.maskBitmap!!,
-                        maskVersion = viewModel.maskVersion.value
+                        maskVersion = maskVersion
                     )
                 } else {
                     if (originalImage != null && processedImage != null) {
@@ -311,10 +316,11 @@ fun RefineEditor(
     var isAddMode by remember { mutableStateOf(false) }
 
     val originalImage = rememberBitmap(original)
-    val maskImage = remember(maskVersion) { mask.asImageBitmap() }
 
     var currentPath by remember { mutableStateOf(android.graphics.Path()) }
     val zoomState = rememberZoomableBoxState()
+
+    val context = LocalContext.current
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val layoutWidth = constraints.maxWidth.toFloat()
@@ -366,30 +372,24 @@ fun RefineEditor(
                         contentScale = ContentScale.Fit
                     )
 
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val viewAspectRatio = size.width / size.height
-                        val imageAspectRatio = original.width.toFloat() / original.height.toFloat()
-
-                        var drawWidth = size.width
-                        var drawHeight = size.height
-                        var drawX = 0f
-                        var drawY = 0f
-
-                        if (imageAspectRatio > viewAspectRatio) {
-                             drawHeight = drawWidth / imageAspectRatio
-                             drawY = (size.height - drawHeight) / 2f
-                        } else {
-                             drawWidth = drawHeight * imageAspectRatio
-                             drawX = (size.width - drawWidth) / 2f
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = {
+                            ImageView(it).apply {
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                colorFilter = android.graphics.PorterDuffColorFilter(
+                                    AndroidColor.argb(128, 255, 0, 0),
+                                    PorterDuff.Mode.SRC_IN
+                                )
+                            }
+                        },
+                        update = { imageView ->
+                            if (!mask.isRecycled) {
+                                imageView.setImageBitmap(mask)
+                                imageView.invalidate()
+                            }
                         }
-
-                        drawImage(
-                            image = maskImage,
-                            dstOffset = androidx.compose.ui.unit.IntOffset(drawX.toInt(), drawY.toInt()),
-                            dstSize = androidx.compose.ui.unit.IntSize(drawWidth.toInt(), drawHeight.toInt()),
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Red.copy(alpha = 0.5f), BlendMode.SrcIn)
-                        )
-                    }
+                    )
                 }
             }
         }

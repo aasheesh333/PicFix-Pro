@@ -250,31 +250,29 @@ class RemoveBackgroundViewModel(
             currentMask
         }
 
-        viewModelScope.launch(Dispatchers.Default) {
-            val canvas = Canvas(safeMask)
-            val paint = Paint().apply {
-                style = Paint.Style.STROKE
-                this.strokeWidth = strokeWidth
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                isAntiAlias = true
+        val canvas = Canvas(safeMask)
+        val paint = Paint().apply {
+            style = Paint.Style.STROKE
+            this.strokeWidth = strokeWidth
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            isAntiAlias = true
 
-                if (brushSoftness > 0) {
-                    val radius = brushSoftness + 0.1f
-                    maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
-                }
-
-                if (isAdd) {
-                    xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
-                    color = Color.WHITE
-                } else {
-                    xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-                    color = Color.TRANSPARENT
-                }
+            if (brushSoftness > 0) {
+                val radius = brushSoftness + 0.1f
+                maskFilter = BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL)
             }
-            canvas.drawPath(path, paint)
-            _maskVersion.value += 1
+
+            if (isAdd) {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC)
+                color = Color.WHITE
+            } else {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                color = Color.TRANSPARENT
+            }
         }
+        canvas.drawPath(path, paint)
+        _maskVersion.value += 1
 
         if (needsConversion) {
             val oldAlpha8 = currentMask

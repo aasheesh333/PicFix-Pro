@@ -695,91 +695,85 @@ fun PerspectiveCropScreen(navController: NavController) {
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
-if (processedImage == null) {
+                            if (processedImage == null) {
                                 val originalBitmap = uiState.originalBitmap
-                                if (originalBitmap != null) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    val w = size.width
-                                    val h = size.height
+                                if (originalBitmap != null && canvasSize.width > 0) {
                                     val bitmapW = originalBitmap.width.toFloat()
                                     val bitmapH = originalBitmap.height.toFloat()
-                                    val scale = minOf(w / bitmapW, h / bitmapH)
-                                    val drawW = bitmapW * scale
-                                    val drawH = bitmapH * scale
-                                    val offsetX = (w - drawW) / 2
-                                    val offsetY = (h - drawH) / 2
+                                    val iScale = minOf(canvasSize.width.toFloat() / bitmapW, canvasSize.height.toFloat() / bitmapH)
+                                    val drawW = bitmapW * iScale
+                                    val drawH = bitmapH * iScale
+                                    val offX = (canvasSize.width - drawW) / 2
+                                    val offY = (canvasSize.height - drawH) / 2
 
                                     val mappedCorners = uiState.corners.map { corner ->
-                                        Offset(
-                                            offsetX + corner.x * scale,
-                                            offsetY + corner.y * scale
-                                        )
+                                        Offset(offX + corner.x * iScale, offY + corner.y * iScale)
                                     }
 
-                                    if (mappedCorners.size == 4) {
-                                        for (i in mappedCorners.indices) {
-                                            val start = mappedCorners[i]
-                                            val end = mappedCorners[(i + 1) % mappedCorners.size]
-                                            drawLine(
-                                                color = ComposeColor(0xFF7C5CF7),
-                                                start = start,
-                                                end = end,
-                                                strokeWidth = 4f
-                                            )
-                                        }
-                                        mappedCorners.forEach { p ->
-                                            drawCircle(
-                                                color = ComposeColor(0xFF7C5CF7),
-                                                radius = 16f,
-                                                center = p
-                                            )
-                                            drawCircle(
-                                                color = ComposeColor.White,
-                                                radius = 8f,
-                                                center = p
-                                            )
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        if (mappedCorners.size == 4) {
+                                            for (i in mappedCorners.indices) {
+                                                drawLine(
+                                                    color = ComposeColor(0xFF7C5CF7),
+                                                    start = mappedCorners[i],
+                                                    end = mappedCorners[(i + 1) % mappedCorners.size],
+                                                    strokeWidth = 4f
+                                                )
+                                            }
+                                            mappedCorners.forEach { p ->
+                                                drawCircle(color = ComposeColor(0xFF7C5CF7), radius = 16f, center = p)
+                                                drawCircle(color = ComposeColor.White, radius = 8f, center = p)
+                                            }
                                         }
                                     }
-                                }
 
-                                if (canvasSize.width > 0) {
-                                    val obmp = uiState.originalBitmap
-                                    if (obmp != null) {
-                                    val bitmapW = obmp.width.toFloat()
-                                    val bitmapH = obmp.height.toFloat()
-                                    val scale = minOf(canvasSize.width.toFloat() / bitmapW, canvasSize.height.toFloat() / bitmapH)
-                                    val drawW = bitmapW * scale
-                                    val drawH = bitmapH * scale
-                                    val offsetX = (canvasSize.width - drawW) / 2
-                                    val offsetY = (canvasSize.height - drawH) / 2
+                                    var draggedCornerIndex by remember { mutableStateOf(-1) }
 
-                                    uiState.corners.forEachIndexed { idx, corner ->
-                                        val screenX = offsetX + corner.x * scale
-                                        val screenY = offsetY + corner.y * scale
-                                        Box(
-                                            modifier = Modifier
-                                                .offset {
-                                                    androidx.compose.ui.unit.IntOffset(
-                                                        (screenX - 50).toInt().coerceAtLeast(0),
-                                                        (screenY - 50).toInt().coerceAtLeast(0)
-                                                    )
-                                                }
-                                                .size(100.dp)
-                                                .pointerInput(idx) {
-                                                    detectDragGestures { change, _ ->
-                                                        change.consume()
-                                                        viewModel.updateCorner(
-                                                            idx,
-                                                            change.position.x,
-                                                            change.position.y,
-                                                            canvasSize
-                                                        )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .pointerInput(canvasSize) {
+                                                detectDragGestures(
+                                                    onDragStart = { offset ->
+                                                        if (mappedCorners.size == 4) {
+                                                            var minDist = Float.MAX_VALUE
+                                                            var closestIdx = -1
+                                                            mappedCorners.forEachIndexed { idx, corner ->
+                                                                val dx = offset.x - corner.x
+                                                                val dy = offset.y - corner.y
+                                                                val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                                                                if (dist < minDist) {
+                                                                    minDist = dist
+                                                                    closestIdx = idx
+                                                                }
+                                                            }
+                                                            if (minDist < 80f) {
+                                                                draggedCornerIndex = closestIdx
+                                                            } else {
+                                                                draggedCornerIndex = -1
+                                                            }
+                                                        }
+                                                    },
+                                                    onDrag = { change, _ ->
+                                                        if (draggedCornerIndex >= 0) {
+                                                            change.consume()
+                                                            viewModel.updateCorner(
+                                                                draggedCornerIndex,
+                                                                change.position.x,
+                                                                change.position.y,
+                                                                canvasSize
+                                                            )
+                                                        }
+                                                    },
+                                                    onDragEnd = {
+                                                        draggedCornerIndex = -1
+                                                    },
+                                                    onDragCancel = {
+                                                        draggedCornerIndex = -1
                                                     }
-                                                }
-                                        )
-                                    }
-                                    }
-                                }
+                                                )
+                                            }
+                                    )
                                 }
                             }
                         }
