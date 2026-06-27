@@ -2,10 +2,6 @@ package com.dhanuk.photodoctorpro.utils
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
@@ -13,15 +9,39 @@ import org.opencv.core.Core
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import org.opencv.photo.Photo
+import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
+import com.dhanuk.photodoctorpro.nativ.ProgressCallback
 
 object ImageEnhancer {
 
-    private const val MAX_PIXELS = 50_000_000L
-    private const val MAX_INPUT_PIXELS = 4_000_000L
-    private const val MAX_INPUT_DIM_FOR_LARGE_SCALE = 1024
+    private var tierInitialized = 0
+    private const val MODEL_DIR_STANDARD = "realesrgan-x4plus-anime"
+    private const val MODEL_DIR_HD = "realesrgan-x4plus"
+    private const val MODEL_NAME = "x4"
+    private const val MODEL_SCALE = 4
+
+    private var currentModelDir: String = MODEL_DIR_STANDARD
 
     fun shutdown() {
-        // No-op: no native interpreters to close anymore
+        RealESRGANNativeLib.cleanup()
+        tierInitialized = 0
+        currentModelDir = MODEL_DIR_STANDARD
+    }
+
+    suspend fun initializeIfNeeded(context: Context, modelDir: String) = withContext(Dispatchers.Default) {
+        val resolvedDir = when (modelDir) {
+            "hd" -> MODEL_DIR_HD
+            else -> MODEL_DIR_STANDARD
+        }
+        if (resolvedDir == currentModelDir && tierInitialized != 0) return@withContext
+        RealESRGANNativeLib.cleanup()
+        tierInitialized = 0
+        currentModelDir = resolvedDir
+        tryInitNcnn(context, useGpu = true)
+        if (tierInitialized == 0) {
+            tryInitNcnn(context, useGpu = false)
+        }
     }
 
     suspend fun enhanceImage(
@@ -30,179 +50,163 @@ object ImageEnhancer {
         scaleFactor: Int,
         onProgress: ((Float) -> Unit)? = null
     ): Bitmap = withContext(Dispatchers.Default) {
-        val inputPixels = bitmap.width.toLong() * bitmap.height.toLong()
-        if (inputPixels > MAX_INPUT_PIXELS) {
-            throw IllegalArgumentException(
-                "Input image too large (${bitmap.width}x${bitmap.height} = ${inputPixels/1_000_000}MP). " +
-                "Max allowed is ${MAX_INPUT_PIXELS/1_000_000}MP."
-            )
-        }
+        onProgress?.invoke(0.05f)
 
-        val maxInputDim = if (scaleFactor >= 6) MAX_INPUT_DIM_FOR_LARGE_SCALE
-            else kotlin.math.sqrt((MAX_PIXELS / (scaleFactor.toLong() * scaleFactor.toLong())).toDouble()).toInt()
-
-        val downscale = OpenCVEnhancerFallback.downscaleIfNeeded(bitmap, maxInputDim)
-        onProgress?.invoke(0.1f)
-
-        val upscaled = OpenCVEnhancerFallback.enhance(downscale, scaleFactor)
-        onProgress?.invoke(0.7f)
-
-        val result = if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
-            OpenCVEnhancerFallback.applySharpening(upscaled)
-        } else {
-            upscaled
-        }
-        if (result != upscaled && result != bitmap && !upscaled.isRecycled && upscaled !== downscale) {
-            upscaled.recycle()
-        }
-        if (downscale !== bitmap && !downscale.isRecycled) downscale.recycle()
-        onProgress?.invoke(1.0f)
-
-        return@withContext result
-    }
-}
-
-object OpenCVEnhancerFallback {
-    private const val MAX_PIXELS = 50_000_000L
-    private const val MAX_INPUT_DIM_FOR_LARGE_SCALE = 1024
-
-    fun downscaleIfNeeded(source: Bitmap, maxDim: Int): Bitmap {
-        val w = source.width
-        val h = source.height
-        val longEdge = maxOf(w, h)
-        if (longEdge <= maxDim) return source
-        val scale = maxDim.toFloat() / longEdge.toFloat()
-        val targetW = (w * scale).toInt().coerceAtLeast(1)
-        val targetH = (h * scale).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(source, targetW, targetH, true)
-    }
-
-    fun enhance(bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val targetWidth = width * scaleFactor
-        val targetHeight = height * scaleFactor
-
-        if (targetWidth.toLong() * targetHeight.toLong() > MAX_PIXELS) {
-            val longEdge = maxOf(width, height)
-            if (longEdge > MAX_INPUT_DIM_FOR_LARGE_SCALE && scaleFactor >= 6) {
-                val scale = MAX_INPUT_DIM_FOR_LARGE_SCALE.toFloat() / longEdge.toFloat()
-                val smallW = (width * scale).toInt().coerceAtLeast(1)
-                val smallH = (height * scale).toInt().coerceAtLeast(1)
-                val downscaled = Bitmap.createScaledBitmap(bitmap, smallW, smallH, true)
-                val out = enhance(downscaled, scaleFactor)
-                if (downscaled !== bitmap && !downscaled.isRecycled) downscaled.recycle()
-                return out
-            }
-            throw IllegalArgumentException("Fallback: Result too large (${width}x${height}x${scaleFactor}).")
-        }
-
-        var current = bitmap
-        var createdIntermediate = false
-
-        val steps = buildStepPlan(scaleFactor)
-
-        for ((stepMul, isDetailStep) in steps) {
-            val upscaled = highQualityUpscale(current, stepMul)
-            if (createdIntermediate && current != bitmap && !current.isRecycled) current.recycle()
-            current = if (isDetailStep && com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
-                applySharpening(upscaled)
-            } else {
-                upscaled
-            }
-            createdIntermediate = true
-        }
-
-        if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized && current == bitmap) {
-            current = applySharpening(current)
-            createdIntermediate = true
-        }
-
-        return current
-    }
-
-    private fun buildStepPlan(scaleFactor: Int): List<Pair<Int, Boolean>> {
-        return when (scaleFactor) {
-            2 -> listOf(2 to true)
-            4 -> listOf(2 to true, 2 to true)
-            6 -> listOf(2 to true, 3 to false)
-            8 -> listOf(2 to true, 2 to true, 2 to true)
-            else -> listOf(scaleFactor to false)
-        }
-    }
-
-    private fun highQualityUpscale(bitmap: Bitmap, factor: Int): Bitmap {
-        if (factor <= 0) return bitmap
-        val newW = bitmap.width * factor
-        val newH = bitmap.height * factor
-
-        if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
+        if (tryInitNcnn(context, useGpu = true)) {
             try {
-                val src = Mat()
-                val dst = Mat()
-                try {
-                    Utils.bitmapToMat(bitmap, src)
-                    Imgproc.resize(src, dst, Size(newW.toDouble(), newH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
-                    val result = Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888)
-                    Utils.matToBitmap(dst, result)
-                    return result
-                } finally {
-                    src.release()
-                    dst.release()
+                val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
+                if (result != null) {
+                    onProgress?.invoke(1.0f)
+                    return@withContext result
                 }
             } catch (_: Exception) {}
         }
 
-        val scaled = Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(scaled)
-        val paint = Paint()
-        paint.isFilterBitmap = true
-        paint.isAntiAlias = true
-        val matrix = android.graphics.Matrix()
-        matrix.postScale(factor.toFloat(), factor.toFloat())
-        canvas.drawBitmap(bitmap, matrix, paint)
-        return scaled
+        if (tryInitNcnn(context, useGpu = false)) {
+            try {
+                val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
+                if (result != null) {
+                    onProgress?.invoke(1.0f)
+                    return@withContext result
+                }
+            } catch (_: Exception) {}
+        }
+
+        onProgress?.invoke(0.3f)
+        val result = enhanceWithOpenCv(bitmap, scaleFactor)
+        onProgress?.invoke(1.0f)
+        return@withContext result
     }
 
-    fun applySharpening(bitmap: Bitmap): Bitmap {
-        try {
-            val src = Mat()
-            val dst = Mat()
-            val blurred = Mat()
-            val lab = Mat()
-            val denoised = Mat()
-            val channels = ArrayList<Mat>()
-            try {
-                Utils.bitmapToMat(bitmap, src)
-                src.copyTo(dst)
+    private fun tryInitNcnn(context: Context, useGpu: Boolean): Boolean {
+        if (useGpu && tierInitialized == 1) return true
+        if (!useGpu && tierInitialized == 2) return true
 
-                Imgproc.GaussianBlur(src, blurred, Size(0.0, 0.0), 2.0)
-                Core.addWeighted(src, 2.0, blurred, -1.0, 0.0, dst)
-
-                Imgproc.cvtColor(dst, lab, Imgproc.COLOR_BGR2Lab)
-                Core.split(lab, channels)
-                val clahe = Imgproc.createCLAHE()
-                clahe.clipLimit = 2.0
-                clahe.apply(channels[0], channels[0])
-                Core.merge(channels, lab)
-                Imgproc.cvtColor(lab, dst, Imgproc.COLOR_Lab2BGR)
-
-                Imgproc.bilateralFilter(dst, denoised, 5, 30.0, 30.0)
-
-                val result = Bitmap.createBitmap(denoised.cols(), denoised.rows(), Bitmap.Config.ARGB_8888)
-                Utils.matToBitmap(denoised, result)
-                if (result != bitmap && !bitmap.isRecycled) bitmap.recycle()
-                return result
-            } finally {
-                src.release()
-                dst.release()
-                blurred.release()
-                lab.release()
-                denoised.release()
-                channels.forEach { it.release() }
-            }
+        val initialized = try {
+            RealESRGANNativeLib.initialize(context, currentModelDir, MODEL_NAME, MODEL_SCALE, useGpu)
         } catch (_: Exception) {
-            return bitmap
+            false
         }
+
+        if (initialized) {
+            tierInitialized = if (useGpu) 1 else 2
+            return true
+        }
+        return false
+    }
+
+    private suspend fun enhanceWithNcnn(
+        bitmap: Bitmap,
+        scaleFactor: Int,
+        onProgress: ((Float) -> Unit)? = null
+    ): Bitmap? {
+        val progressWrapper = object : ProgressCallback {
+            override fun onProgress(progress: Float) {
+                onProgress?.invoke(progress * 0.9f)
+            }
+        }
+
+        val x4Result = RealESRGANNativeLib.enhance(bitmap, progressWrapper) ?: return null
+
+        return when (scaleFactor) {
+            2 -> {
+                val w = bitmap.width * 2
+                val h = bitmap.height * 2
+                Bitmap.createScaledBitmap(x4Result, w, h, true).also {
+                    if (it !== x4Result) x4Result.recycle()
+                }
+            }
+            4 -> x4Result
+            6, 8 -> {
+                val targetW = bitmap.width * scaleFactor
+                val targetH = bitmap.height * scaleFactor
+
+                if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
+                    val src = Utils.bitmapToMat(x4Result)
+                    val dst = Mat()
+                    Imgproc.resize(src, dst, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
+                    val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                    Utils.matToBitmap(dst, result)
+                    src.release()
+                    dst.release()
+                    if (result !== x4Result) x4Result.recycle()
+                    result
+                } else {
+                    Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
+                        if (it !== x4Result) x4Result.recycle()
+                    }
+                }
+            }
+            else -> {
+                val targetW = bitmap.width * scaleFactor
+                val targetH = bitmap.height * scaleFactor
+                Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
+                    if (it !== x4Result) x4Result.recycle()
+                }
+            }
+        }
+    }
+
+    private fun enhanceWithOpenCv(bitmap: Bitmap, scaleFactor: Int): Bitmap {
+        if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
+            return Bitmap.createScaledBitmap(
+                bitmap,
+                bitmap.width * scaleFactor,
+                bitmap.height * scaleFactor,
+                true
+            )
+        }
+
+        val src = Mat()
+        val upscaled = Mat()
+        Utils.bitmapToMat(bitmap, src)
+        val targetW = bitmap.width * scaleFactor
+        val targetH = bitmap.height * scaleFactor
+        Imgproc.resize(src, upscaled, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
+        src.release()
+
+        var current = upscaled
+        var ownsCurrent = true
+
+        val denoised = Mat()
+        try {
+            Photo.edgePreservingFilter(current, denoised, Photo.RECURS_FILTER, 60.0, 0.4)
+            if (ownsCurrent) current.release()
+            current = denoised
+            ownsCurrent = false
+        } catch (_: Exception) {}
+
+        ownsCurrent = true
+        val enhanced = Mat()
+        try {
+            Photo.detailEnhance(current, enhanced, 20.0f, 0.2f)
+            if (ownsCurrent) current.release()
+            current = enhanced
+            ownsCurrent = true
+        } catch (_: Exception) {
+            ownsCurrent = true
+        }
+
+        val lab = Mat()
+        val out = Mat()
+        try {
+            Imgproc.cvtColor(current, lab, Imgproc.COLOR_BGR2Lab)
+            val channels = ArrayList<Mat>()
+            Core.split(lab, channels)
+            val clahe = Imgproc.createCLAHE()
+            clahe.clipLimit = 1.2
+            clahe.apply(channels[0], channels[0])
+            Core.merge(channels, lab)
+            channels.forEach { it.release() }
+            Imgproc.cvtColor(lab, out, Imgproc.COLOR_Lab2BGR)
+            lab.release()
+            current.release()
+            current = out
+        } catch (_: Exception) {}
+
+        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(current, result)
+        current.release()
+        return result
     }
 }

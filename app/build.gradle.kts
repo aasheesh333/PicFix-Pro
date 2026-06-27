@@ -50,6 +50,17 @@ android {
         minSdk = 24
         targetSdk = 35
 
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
+                arguments += listOf("-DANDROID_STL=c++_shared")
+            }
+        }
+
         val vCode = getProperty("VERSION_CODE", "2").toIntOrNull() ?: 2
         val vName = getProperty("VERSION_NAME", "1.1")
 
@@ -150,6 +161,23 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            pickFirst("lib/c++_shared.so")
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+    androidResources {
+        noCompress += listOf("param", "bin")
     }
 }
 

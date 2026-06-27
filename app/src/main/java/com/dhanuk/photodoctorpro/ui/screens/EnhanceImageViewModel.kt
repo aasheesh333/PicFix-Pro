@@ -31,7 +31,8 @@ class EnhanceImageViewModel(
             selectedImageUri = savedStateHandle.get<String>(KEY_URI)?.let {
                 runCatching { Uri.parse(it) }.getOrNull()
             },
-            scaleFactor = savedStateHandle.get<Int>(KEY_SCALE) ?: 2
+            scaleFactor = savedStateHandle.get<Int>(KEY_SCALE) ?: 2,
+            qualityMode = savedStateHandle.get<String>(KEY_QUALITY_MODE) ?: "standard"
         )
     )
     val uiState = _uiState.asStateFlow()
@@ -45,15 +46,12 @@ class EnhanceImageViewModel(
             try {
                 val bitmap = BitmapUtils.loadBitmapFromUri(uri, context)
                 if (bitmap != null) {
-                    val isLarge = (bitmap.width.toLong() * bitmap.height.toLong()) > 25_000_000
-                    // Free the old bitmaps (if any) before replacing.
                     val oldOriginal = _uiState.value.originalBitmap
                     val oldEnhanced = _uiState.value.enhancedBitmap
                     _uiState.update { it.copy(
                         originalBitmap = bitmap,
                         enhancedBitmap = null,
                         isLoading = false,
-                        isLargeImage = isLarge,
                         progress = 0f,
                         savedFilePath = null,
                         selectedImageUri = uri
@@ -74,67 +72,40 @@ class EnhanceImageViewModel(
         }
     }
 
+    fun setQualityMode(mode: String) {
+        savedStateHandle[KEY_QUALITY_MODE] = mode
+        _uiState.update { it.copy(qualityMode = mode, isModelReady = false) }
+    }
+
     fun enhanceImage(context: Context, scaleFactor: Int) {
-        val state = _uiState.value
-        if (state.isLargeImage && scaleFactor > 4) {
-            _uiState.value = state.copy(error = "Higher scales disabled for very large images.")
-            return
-        }
-
-        val original = state.originalBitmap ?: return
+        val original = _uiState.value.originalBitmap ?: return
         if (original.isRecycled) return
-        if (state.isLargeImage && scaleFactor > 4) {
-            _uiState.value = state.copy(error = com.dhanuk.photodoctorpro.utils.getHigherScalesDisabledMessage())
-            return
-        }
 
-        _uiState.value = state.copy(isLoading = true, error = null, progress = 0f)
+        _uiState.update { it.copy(isLoading = true, error = null, progress = 0f) }
 
         enhanceJob?.cancel()
         enhanceJob = viewModelScope.launch(viewModelExceptionHandler("EnhanceVM")) {
             try {
+                val modelDir = _uiState.value.qualityMode
+                if (!_uiState.value.isModelReady) {
+                    ImageEnhancer.initializeIfNeeded(context, modelDir)
+                    _uiState.update { it.copy(isModelReady = true) }
+                }
+
                 val enhanced = ImageEnhancer.enhanceImage(context, original, scaleFactor) { progress ->
                     _uiState.update { it.copy(progress = progress) }
                 }
                 checkActive()
 
-                // Downscale for safe display: cap the long edge to 4096 px
-                // to prevent OOM when the UI renders the bitmap. The full
-                // resolution is preserved for saving.
-                val displayBitmap = if (maxOf(enhanced.width, enhanced.height) > 4096) {
-                    val scale = 4096f / maxOf(enhanced.width, enhanced.height)
-                    val w = (enhanced.width * scale).toInt().coerceAtLeast(1)
-                    val h = (enhanced.height * scale).toInt().coerceAtLeast(1)
-                    val downscaled = Bitmap.createScaledBitmap(enhanced, w, h, true)
-                    // Keep the enhanced bitmap for save, use downscaled for display
-                    downscaled
-                } else {
-                    enhanced
-                }
-
-                if (displayBitmap != enhanced) {
-                    // Store full-res for saving, downscaled for display
-                    val oldEnhance = _uiState.value.enhancedBitmap
-                    savedStateHandle[KEY_SCALE] = scaleFactor
-                    _uiState.update { it.copy(
-                        enhancedBitmap = displayBitmap,
-                        fullResBitmap = enhanced,
-                        isLoading = false,
-                        scaleFactor = scaleFactor,
-                        progress = 1f
-                    ) }
-                    if (oldEnhance != null && oldEnhance !== original && oldEnhance != displayBitmap && !oldEnhance.isRecycled) oldEnhance.recycle()
-                } else {
-                    val old = _uiState.value.enhancedBitmap
-                    savedStateHandle[KEY_SCALE] = scaleFactor
-                    _uiState.update { it.copy(
-                        enhancedBitmap = enhanced,
-                        isLoading = false,
-                        scaleFactor = scaleFactor,
-                        progress = 1f
-                    ) }
-                    if (old != null && old !== original && old != enhanced && !old.isRecycled) old.recycle()
-                }
+                val oldEnhanced = _uiState.value.enhancedBitmap
+                savedStateHandle[KEY_SCALE] = scaleFactor
+                _uiState.update { it.copy(
+                    enhancedBitmap = enhanced,
+                    isLoading = false,
+                    scaleFactor = scaleFactor,
+                    progress = 1f
+                ) }
+                if (oldEnhanced != null && oldEnhanced !== original && oldEnhanced !== enhanced && !oldEnhanced.isRecycled) oldEnhanced.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -153,9 +124,8 @@ class EnhanceImageViewModel(
     private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
     suspend fun saveImage(activity: Activity): Boolean {
-        // Prefer full-res bitmap for saving if available, fall back to display bitmap
         val state = _uiState.value
-        val bitmap = state.fullResBitmap ?: state.enhancedBitmap ?: return false
+        val bitmap = state.enhancedBitmap ?: return false
         val uri = state.selectedImageUri ?: return false
         _uiState.update { it.copy(isLoading = true) }
 
@@ -188,13 +158,11 @@ class EnhanceImageViewModel(
 
     fun reset() {
         val oldState = _uiState.value
-        val fullRes = oldState.fullResBitmap
         val enhanced = oldState.enhancedBitmap
         val original = oldState.originalBitmap
-        if (fullRes != null && fullRes !== enhanced && !fullRes.isRecycled) fullRes.recycle()
-        if (enhanced != null && enhanced !== original && enhanced !== fullRes && !enhanced.isRecycled) enhanced.recycle()
+        if (enhanced != null && enhanced !== original && !enhanced.isRecycled) enhanced.recycle()
         if (original != null && !original.isRecycled) original.recycle()
-        _uiState.value = EnhanceImageUiState(scaleFactor = oldState.scaleFactor)
+        _uiState.value = EnhanceImageUiState(scaleFactor = oldState.scaleFactor, qualityMode = oldState.qualityMode)
     }
 
     fun onErrorShown() {
@@ -209,12 +177,11 @@ class EnhanceImageViewModel(
         super.onCleared()
         enhanceJob?.cancel()
         enhanceJob = null
+        ImageEnhancer.shutdown()
         val state = _uiState.value
         val original = state.originalBitmap
         val enhanced = state.enhancedBitmap
-        val fullRes = state.fullResBitmap
-        if (fullRes != null && fullRes !== enhanced && !fullRes.isRecycled) fullRes.recycle()
-        if (enhanced != null && enhanced !== original && enhanced !== fullRes && !enhanced.isRecycled) enhanced.recycle()
+        if (enhanced != null && enhanced !== original && !enhanced.isRecycled) enhanced.recycle()
         if (original != null && !original.isRecycled) original.recycle()
     }
 }
@@ -228,9 +195,11 @@ data class EnhanceImageUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val savedFilePath: String? = null,
-    val isLargeImage: Boolean = false,
-    val progress: Float = 0f
+    val progress: Float = 0f,
+    val qualityMode: String = "standard",
+    val isModelReady: Boolean = false
 )
 
 private const val KEY_URI = "selectedImageUri"
 private const val KEY_SCALE = "scaleFactor"
+private const val KEY_QUALITY_MODE = "qualityMode"

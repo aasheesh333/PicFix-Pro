@@ -77,3 +77,7 @@
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keep class kotlinx.coroutines.internal.MainDispatcherFactory$* { *; }
 -keep class kotlinx.coroutines.android.AndroidDispatcherFactory { *; }
+
+# NCNN / Real-ESRGAN JNI bridge
+-keep class com.dhanuk.photodoctorpro.nativ.** { *; }
+-dontwarn com.dhanuk.photodoctorpro.nativ.**

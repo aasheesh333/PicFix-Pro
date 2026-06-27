@@ -259,4 +259,13 @@
     <string name="opencv_not_ready">Image processing engine is not ready yet. Please try again in a moment.</string>
     <string name="could_not_allocate_bitmap">Could not allocate bitmap</string>
     <string name="higher_scales_disabled">Higher scales disabled for very large images.</string>
+    <string name="quality_standard">Standard</string>
+    <string name="quality_hd">HD Quality</string>
+    <string name="download_hd_model">Download HD Model</string>
+    <string name="download_hd_model_message">Download the HD enhancement model for better photo quality? (%1$.0f MB)</string>
+    <string name="model_loading">Loading enhancement model…</string>
+    <string name="enhance_gpu">GPU</string>
+    <string name="enhance_cpu">CPU</string>
+    <string name="enhance_fallback">Basic</string>
+    <string name="enhance_engine_fmt">Engine: %1$s</string>
 </resources>

@@ -60,8 +60,9 @@ fun EnhanceImageScreen(navController: NavController) {
     val originalImage = rememberBitmap(uiState.originalBitmap)
     val enhancedImage = rememberBitmap(uiState.enhancedBitmap)
 
-    // Hold to compare
     var isHoldingOriginal by remember { mutableStateOf(false) }
+
+    var showHdDownloadDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
@@ -102,6 +103,23 @@ fun EnhanceImageScreen(navController: NavController) {
                     }) { Text(stringResource(R.string.action_discard)) }
                     TextButton(onClick = { showUnsavedDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
+            }
+        )
+    }
+
+    if (showHdDownloadDialog) {
+        AlertDialog(
+            onDismissRequest = { showHdDownloadDialog = false },
+            title = { Text("Download HD Model") },
+            text = { Text("Download HD enhancement model? (32 MB)") },
+            confirmButton = {
+                Button(onClick = {
+                    showHdDownloadDialog = false
+                    viewModel.setQualityMode("hd")
+                }) { Text("Download") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHdDownloadDialog = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -189,9 +207,6 @@ fun EnhanceImageScreen(navController: NavController) {
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (originalImage != null) {
-                        // Show the loaded bitmap directly (selectedImageUri is also
-                        // set, but the bitmap is the source of truth — works even
-                        // if the URI permission is transiently unavailable).
                         ZoomableBox {
                             Image(
                                 bitmap = originalImage,
@@ -215,19 +230,41 @@ fun EnhanceImageScreen(navController: NavController) {
                 }
             }
 
-            // Controls
             if (uiState.originalBitmap == null) {
                 Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.select_image))
                 }
             } else if (uiState.enhancedBitmap == null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    val isStandard = uiState.qualityMode == "standard"
+                    TextButton(
+                        onClick = { viewModel.setQualityMode("standard") },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text("Standard") }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            if (!isStandard) return@TextButton
+                            showHdDownloadDialog = true
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = if (!isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text("HD Quality") }
+                }
+
+                Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.select_upscale_factor))
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                     listOf(2, 4, 6, 8).forEach { scale ->
-                        val isEnabled = !uiState.isLoading && !(uiState.isLargeImage && scale > 4)
                         OutlinedButton(
                             onClick = { viewModel.enhanceImage(context, scale) },
-                            enabled = isEnabled
+                            enabled = !uiState.isLoading
                         ) {
                             Text(stringResource(R.string.scale_factor_x, scale))
                         }
