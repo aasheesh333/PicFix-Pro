@@ -1,5 +1,4 @@
 #include <android/asset_manager.h>
-#include <android/asset_manager_jniproxy.h>
 #include <android/bitmap.h>
 #include <android/log.h>
 #include <jni.h>
