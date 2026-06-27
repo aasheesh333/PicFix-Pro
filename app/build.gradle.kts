@@ -8,6 +8,12 @@ plugins {
     id("kotlin-kapt")
 }
 
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+}
+
 // Helper to get properties from local.properties or environment variables
 // It now checks for the key (GitHub Actions style) and APP_key (Jules environment style)
 fun getProperty(key: String, defaultValue: String = ""): String {

@@ -4,6 +4,9 @@ build/
 # Local configuration
 local.properties
 
+# Room schema
+app/schemas/
+
 # IDE files
 .idea/
 *.iml

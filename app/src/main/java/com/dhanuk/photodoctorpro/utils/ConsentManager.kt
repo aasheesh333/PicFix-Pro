@@ -1,11 +1,11 @@
 package com.dhanuk.photodoctorpro.utils
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.dhanuk.photodoctorpro.BuildConfig
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
-import com.google.android.ump.ConsentStatus
 import com.google.android.ump.FormError
 import com.google.android.ump.UserMessagingPlatform
 
@@ -29,7 +29,7 @@ object ConsentManager {
             params,
             {
                 val info = consentInformation ?: return@requestConsentInfoUpdate
-                if (info.isConsentFormAvailable) {
+                if (info.isConsentFormAvailable && context is Activity) {
                     loadAndShowConsentForm(context)
                 } else {
                     checkConsentAndInitAds(context)
@@ -42,20 +42,20 @@ object ConsentManager {
         )
     }
 
-    private fun loadAndShowConsentForm(context: Context) {
+    private fun loadAndShowConsentForm(activity: Activity) {
         UserMessagingPlatform.loadConsentForm(
-            context,
+            activity,
             { consentForm ->
-                consentForm.show(context) { formError ->
+                consentForm.show(activity) { formError ->
                     if (formError != null) {
                         Log.e(TAG, "Consent form error: ${formError.message}")
                     }
-                    checkConsentAndInitAds(context)
+                    checkConsentAndInitAds(activity)
                 }
             },
             { formError: FormError ->
                 Log.e(TAG, "Consent form load failed: ${formError.message}")
-                checkConsentAndInitAds(context)
+                checkConsentAndInitAds(activity)
             }
         )
     }
@@ -63,7 +63,7 @@ object ConsentManager {
     private fun checkConsentAndInitAds(context: Context) {
         val info = consentInformation
         if (info != null) {
-            isConsentObtained = info.consentStatus == ConsentStatus.OBTAINED
+            isConsentObtained = info.canRequestAds()
         }
         if (canRequestAds()) {
             AdManager.initialize(context)
