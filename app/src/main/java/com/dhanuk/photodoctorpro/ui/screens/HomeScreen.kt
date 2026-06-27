@@ -84,9 +84,9 @@ fun HomeScreen(navController: NavController) {
         }
 
         val cardHeight = when {
-            maxWidth >= 840.dp -> 150.dp
-            maxWidth >= 600.dp -> 140.dp
-            else -> 130.dp
+            maxWidth >= 840.dp -> 200.dp
+            maxWidth >= 600.dp -> 180.dp
+            else -> 170.dp
         }
 
         val horizontalPadding = when {

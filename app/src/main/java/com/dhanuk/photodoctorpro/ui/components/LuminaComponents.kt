@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -60,21 +61,21 @@ fun LuminaFeatureCard(
             .luminaGlass(
                 shape = RoundedCornerShape(20.dp),
                 cornerRadius = 20.dp,
-                alpha = 0.04f,
-                borderAlpha = 0.10f
+                alpha = 0.08f,
+                borderAlpha = 0.20f
             )
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 18.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(56.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(14.dp)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(20.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -82,27 +83,26 @@ fun LuminaFeatureCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(32.dp)
                 )
             }
-            Spacer(modifier = Modifier.size(12.dp))
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 }
