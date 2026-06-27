@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">PhotoDoctor Pro</string>
+    <string name="app_name">PicFix Pro</string>
     <string name="home">Home</string>
     <string name="history">History</string>
     <string name="settings">Settings</string>
@@ -71,7 +71,7 @@
     <string name="about">About</string>
     <string name="app_version">App Version</string>
     <string name="general">General</string>
-    <string name="default_save_location_label">Default (DCIM/PhotoDoctorPro)</string>
+    <string name="default_save_location_label">Default (DCIM/PicFixPro)</string>
     <string name="resize_compress">Resize &amp; Compress</string>
     <string name="resize_compress_subtitle">Shrink photos &amp; save space</string>
     <string name="target_size">Target size</string>
@@ -186,7 +186,7 @@
     <string name="inactive">Inactive</string>
     <string name="loading_image">Loading image…</string>
     <string name="permission_required">Permission required</string>
-    <string name="permission_storage_rationale">PhotoDoctor Pro needs access to your photos so you can edit and save them. Please grant storage permission.</string>
+    <string name="permission_storage_rationale">PicFix Pro needs access to your photos so you can edit and save them. Please grant storage permission.</string>
     <string name="error_decoding_image">Could not decode image</string>
     <string name="error_loading_image">Failed to load image: %1$s</string>
     <string name="error_saving_image">Failed to save image: %1$s</string>

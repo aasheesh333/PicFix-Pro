@@ -28,7 +28,7 @@ object BitmapUtils {
      * SD card, scoped storage quirks on some OEMs). Returns the directory and
      * the FileProvider authority already applied.
      */
-    fun resolveWritableDir(context: Context, subdir: String = "PhotoDoctorPro"): File {
+    fun resolveWritableDir(context: Context, subdir: String = "PicFixPro"): File {
         val external = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
         if (external != null) {
             val target = if (subdir.isBlank()) external else File(external, subdir)
@@ -117,7 +117,7 @@ object BitmapUtils {
     }
 
     /**
-     * Saves the bitmap to the user's preferred directory or falls back to DCIM/PhotoDoctorPro.
+     * Saves the bitmap to the user's preferred directory or falls back to DCIM/PicFixPro.
      * Returns the URI string of the saved file.
      * Handles Auto-Increment for filename collisions.
      */
@@ -158,7 +158,7 @@ object BitmapUtils {
             }
         }
 
-        // 2. Fallback to MediaStore (DCIM/PhotoDoctorPro)
+        // 2. Fallback to MediaStore (DCIM/PicFixPro)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             var finalName = "$baseName$extension"
             // Note: MediaStore automatically handles duplicates by adding (1), (2) usually,
@@ -170,7 +170,7 @@ object BitmapUtils {
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
                 put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/PhotoDoctorPro")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/PicFixPro")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
 
@@ -193,7 +193,7 @@ object BitmapUtils {
         }
 
         // 3. Fallback for older Android versions (Direct File)
-        val imagesDir = resolveWritableDir(context, "PhotoDoctorPro")
+        val imagesDir = resolveWritableDir(context, "PicFixPro")
         if (!imagesDir.exists()) imagesDir.mkdirs()
 
         var finalName = "$baseName$extension"

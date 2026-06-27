@@ -10,7 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
-import com.dhanuk.photodoctorpro.ui.theme.PhotoDoctorProTheme
+import com.dhanuk.photodoctorpro.ui.theme.PicFixProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.CrashReporter
 import com.dhanuk.photodoctorpro.utils.FaceEnhancer
@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
-            PhotoDoctorProTheme(darkTheme = isDarkTheme, animateThemeChange = true) {
+            PicFixProTheme(darkTheme = isDarkTheme, animateThemeChange = true) {
                 AppScaffold()
             }
         }

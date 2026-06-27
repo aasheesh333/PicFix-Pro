@@ -152,7 +152,7 @@ class PerspectiveCropViewModel(
     private fun autoDetectEdges(bitmap: Bitmap) {
         autoDetectJob?.cancel()
         autoDetectJob = viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.Default) {
-            if (!com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+            if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
                 _uiState.update { it.copy(
                     error = com.dhanuk.photodoctorpro.utils.getOpenCvNotReadyMessage(),
                     isLoading = false
@@ -590,7 +590,7 @@ fun PerspectiveCropScreen(navController: NavController) {
     val repository = HistoryRepository.getInstance(db.historyDao())
     val viewModel: PerspectiveCropViewModel = viewModel(factory = ViewModelFactory.getInstance(repository))
     val uiState by viewModel.uiState.collectAsState()
-    val openCvReady by com.dhanuk.photodoctorpro.PhotoDoctorApplication.openCVInitialized.collectAsState(false)
+    val openCvReady by com.dhanuk.photodoctorpro.PicFixApplication.openCVInitialized.collectAsState(false)
     val snackbarHostState = remember { SnackbarHostState() }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }

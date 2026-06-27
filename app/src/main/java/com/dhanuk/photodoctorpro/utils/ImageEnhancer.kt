@@ -199,7 +199,7 @@ object ImageEnhancer {
     }
 
     private fun applyPostProcessing(bitmap: Bitmap): Bitmap {
-        if (!com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+        if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
             return bitmap
         }
         val src = Mat()
@@ -297,7 +297,7 @@ object OpenCVEnhancerFallback {
             val newH = current.height * stepMul
             val upscaled = highQualityUpscale(current, stepMul)
             if (createdIntermediate && current != bitmap && !current.isRecycled) current.recycle()
-            current = if (isDetailStep && com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+            current = if (isDetailStep && com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
                 applySharpening(upscaled)
             } else {
                 upscaled
@@ -306,7 +306,7 @@ object OpenCVEnhancerFallback {
             currentScale *= stepMul
         }
 
-        if (com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized && current == bitmap) {
+        if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized && current == bitmap) {
             current = applySharpening(current)
             createdIntermediate = true
         }
@@ -329,7 +329,7 @@ object OpenCVEnhancerFallback {
         val newW = bitmap.width * factor
         val newH = bitmap.height * factor
 
-        if (com.dhanuk.photodoctorpro.PhotoDoctorApplication.OpenCVInitialized) {
+        if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
             try {
                 val src = Mat()
                 val dst = Mat()

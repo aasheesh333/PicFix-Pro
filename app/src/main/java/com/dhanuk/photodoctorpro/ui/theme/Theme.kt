@@ -60,7 +60,7 @@ private val LuminaDarkColors = darkColorScheme(
 )
 
 @Composable
-fun PhotoDoctorProTheme(
+fun PicFixProTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     animateThemeChange: Boolean = false,
     content: @Composable () -> Unit

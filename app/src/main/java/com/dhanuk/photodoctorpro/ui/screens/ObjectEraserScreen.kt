@@ -76,7 +76,7 @@ fun ObjectEraserScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val globalState = LocalGlobalNavigationState.current
-    val openCvReady by com.dhanuk.photodoctorpro.PhotoDoctorApplication.openCVInitialized.collectAsState(false)
+    val openCvReady by com.dhanuk.photodoctorpro.PicFixApplication.openCVInitialized.collectAsState(false)
     var compareMode by remember { mutableStateOf(false) }
 
     val originalImage = rememberBitmap(uiState.originalBitmap)

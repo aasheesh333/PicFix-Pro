@@ -156,7 +156,7 @@ class ImageToPdfViewModel(
             }
         }
 
-        val dir = com.dhanuk.photodoctorpro.utils.BitmapUtils.resolveWritableDir(context, "PhotoDoctorPro")
+        val dir = com.dhanuk.photodoctorpro.utils.BitmapUtils.resolveWritableDir(context, "PicFixPro")
         if (!dir.exists()) dir.mkdirs()
         val file = File(dir, fileName)
         FileOutputStream(file).use { outStream ->

@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dhanuk.photodoctorpro.PhotoDoctorApplication
+import com.dhanuk.photodoctorpro.PicFixApplication
 import com.dhanuk.photodoctorpro.data.local.History
 import com.dhanuk.photodoctorpro.data.repository.HistoryRepository
 import com.dhanuk.photodoctorpro.utils.AdManager
@@ -198,7 +198,7 @@ class ObjectEraserViewModel(
         val paths = _uiState.value.paths
         if (paths.isEmpty()) return
 
-        if (!PhotoDoctorApplication.OpenCVInitialized) {
+        if (!PicFixApplication.OpenCVInitialized) {
             _uiState.update { it.copy(
                 error = com.dhanuk.photodoctorpro.utils.getOpenCvNotReadyMessage()
             ) }

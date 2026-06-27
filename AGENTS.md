@@ -1,4 +1,4 @@
-# AGENTS.md — PhotoDoctor Pro
+# AGENTS.md — PicFix Pro
 
 **NEVER EVER build APK/AAB locally.** Always push code to GitHub → let GitHub Actions build → monitor CI until green → download APK/AAB artifacts from Actions page.
 
@@ -38,7 +38,7 @@ Key properties and defaults (from `app/build.gradle.kts`):
 
 Entry points:
 - `MainActivity` (`com.dhanuk.photodoctorpro.MainActivity`) — `ComponentActivity`, sets the Compose tree to `AppScaffold()` and initializes `AdManager`. Requests `POST_NOTIFICATIONS` on Tiramisu+. Calls `AdManager.cleanup()` in `onDestroy` to release the InterstitialAd reference.
-- `PhotoDoctorApplication` — initializes `ThemeController`, launches OpenCV load asynchronously via `applicationScope`, and initializes OneSignal with `BuildConfig.ONESIGNAL_APP_ID` only when non-empty. `OpenCVInitialized` is a `@Volatile` flag set after async init completes.
+- `PicFixApplication` — initializes `ThemeController`, launches OpenCV load asynchronously via `applicationScope`, and initializes OneSignal with `BuildConfig.ONESIGNAL_APP_ID` only when non-empty. `OpenCVInitialized` is a `@Volatile` flag set after async init completes.
 - Navigation: `ui/navigation/AppNavigation.kt` — single `NavHost` starting at `"home"`. Route names are string literals (e.g., `"remove_background"`, `"enhance_image"`, `"privacy_policy"`, `"terms_and_conditions"`). `ui/navigation/AppScaffold.kt` is the top-level scaffold and bottom bar wrapper.
 
 ### ViewModel persistence
@@ -73,7 +73,7 @@ ML assets (bundled in APK, `aaptOptions.noCompress += "tflite"` so `.tflite` fil
 
 ## Permissions, manifest, FileProvider
 
-Permissions (`AndroidManifest.xml`): `INTERNET`, `READ_MEDIA_IMAGES`, legacy `READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE` capped via `android:maxSdkVersion`, `POST_NOTIFICATIONS`. `android:largeHeap="true"` is set. The app declares a `FileProvider` at `${applicationId}.provider` and `PhotoDoctorApplication` as the `Application` class.
+Permissions (`AndroidManifest.xml`): `INTERNET`, `READ_MEDIA_IMAGES`, legacy `READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE` capped via `android:maxSdkVersion`, `POST_NOTIFICATIONS`. `android:largeHeap="true"` is set. The app declares a `FileProvider` at `${applicationId}.provider` and `PicFixApplication` as the `Application` class.
 
 FileProvider paths (`app/src/main/res/xml/provider_paths.xml`) are intentionally restricted to app-specific directories only — `external-files-path` (Pictures), `files-path` (Pictures), and `cache-path` (export/). Do not re-add `<external-path path=".">` or unrestricted `<cache-path path="/">`; these were removed for security in Phase 2F because they grant FileProvider access to the entire external storage and cache.
 

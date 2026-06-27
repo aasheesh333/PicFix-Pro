@@ -16,7 +16,7 @@ import com.dhanuk.photodoctorpro.utils.ThemeController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class PhotoDoctorApplication : Application() {
+class PicFixApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
@@ -39,7 +39,7 @@ class PhotoDoctorApplication : Application() {
             OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
             requestNotificationPermission()
         } else {
-            Log.w("PhotoDoctor", "OneSignal APP_ID is empty - push notifications disabled")
+            Log.w("PicFix", "OneSignal APP_ID is empty - push notifications disabled")
         }
     }
 
@@ -49,9 +49,9 @@ class PhotoDoctorApplication : Application() {
             OpenCVInitialized = ok
             OpenCVInitializedFlow.value = ok
             if (ok) {
-                if (BuildConfig.DEBUG) Log.d("PhotoDoctor", "OpenCV loaded successfully")
+                if (BuildConfig.DEBUG) Log.d("PicFix", "OpenCV loaded successfully")
             } else {
-                Log.e("PhotoDoctor", "OpenCV initialization failed!")
+                Log.e("PicFix", "OpenCV initialization failed!")
             }
         }
     }

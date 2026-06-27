@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PhotoDoctor Pro"
+rootProject.name = "PicFix Pro"
 include(":app")
