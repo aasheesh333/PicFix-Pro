@@ -61,7 +61,7 @@ class EnhanceImageViewModel(
                     if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
                     if (oldEnhanced != null && oldEnhanced !== bitmap && !oldEnhanced.isRecycled) oldEnhanced.recycle()
                 } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Failed to load image", selectedImageUri = uri) }
+                    _uiState.update { it.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed), selectedImageUri = uri) }
                 }
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
@@ -69,7 +69,7 @@ class EnhanceImageViewModel(
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                     android.util.Log.e("EnhanceVM", "onImageSelected failed", e)
                 }
-                _uiState.update { it.copy(isLoading = false, error = "Load failed: ${e.message}", selectedImageUri = uri) }
+                _uiState.update { it.copy(isLoading = false, error = context.getString(com.dhanuk.photodoctorpro.R.string.image_load_failed_with_reason, e.message), selectedImageUri = uri) }
             }
         }
     }
@@ -144,7 +144,7 @@ class EnhanceImageViewModel(
                 _uiState.update { it.copy(
                     isLoading = false,
                     progress = 0f,
-                    error = "Enhance failed: ${e.localizedMessage ?: e.javaClass.simpleName}"
+                    error = context.getString(com.dhanuk.photodoctorpro.R.string.enhance_failed_fmt, e.localizedMessage ?: e.javaClass.simpleName)
                 ) }
             }
         }
@@ -160,7 +160,7 @@ class EnhanceImageViewModel(
         _uiState.update { it.copy(isLoading = true) }
 
         return try {
-            val fileName = "PhotoDoctorPro_Enhanced_${System.currentTimeMillis()}"
+            val fileName = "PicFixPro_Enhanced_${System.currentTimeMillis()}"
             val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
             repository.addHistory(
                 History(
@@ -179,7 +179,7 @@ class EnhanceImageViewModel(
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("EnhanceVM", "saveImage failed", e)
             }
-            _uiState.update { it.copy(error = "Failed to save: ${e.message}") }
+            _uiState.update { it.copy(error = activity.getString(com.dhanuk.photodoctorpro.R.string.save_failed_fmt, e.message)) }
             false
         } finally {
             _uiState.update { it.copy(isLoading = false) }

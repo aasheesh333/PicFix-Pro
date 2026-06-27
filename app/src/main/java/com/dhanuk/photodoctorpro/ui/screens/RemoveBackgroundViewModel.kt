@@ -379,7 +379,7 @@ class RemoveBackgroundViewModel(
         _uiState.update { it.copy(isLoading = true) }
 
         return try {
-            val fileName = "PhotoDoctorPro_BG_${System.currentTimeMillis()}"
+            val fileName = "PicFixPro_BG_${System.currentTimeMillis()}"
             val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
             repository.addHistory(
                 History(

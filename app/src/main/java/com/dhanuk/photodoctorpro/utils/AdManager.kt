@@ -62,6 +62,10 @@ object AdManager {
     }
 
     fun showInterstitialAd(activity: Activity) {
+        if (!ConsentManager.canRequestAds()) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial — no ad consent")
+            return
+        }
         if (InAppReviewManager.isReviewInProgress) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial — review in progress")
             return
@@ -92,6 +96,10 @@ object AdManager {
     }
 
     fun showInterstitialOnShare(activity: Activity) {
+        if (!ConsentManager.canRequestAds()) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on share — no ad consent")
+            return
+        }
         if (InAppReviewManager.isReviewInProgress) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on share — review in progress")
             return
@@ -119,6 +127,10 @@ object AdManager {
     }
 
     fun onAppForeground(activity: Activity) {
+        if (!ConsentManager.canRequestAds()) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on foreground — no ad consent")
+            return
+        }
         if (InAppReviewManager.isReviewInProgress) {
             if (BuildConfig.DEBUG) Log.d(TAG, "Skipping interstitial on foreground — review in progress")
             return

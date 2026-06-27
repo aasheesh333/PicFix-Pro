@@ -136,7 +136,7 @@ class ImageToPdfViewModel(
     }
 
     private suspend fun savePdf(context: Context, document: PdfDocument): String = withContext(Dispatchers.IO) {
-        val fileName = "PhotoDoctorPro_${System.currentTimeMillis()}.pdf"
+        val fileName = "PicFixPro_${System.currentTimeMillis()}.pdf"
         val saveDirUriString = UserPreferences.getSaveDirectory(context)
         if (saveDirUriString != null) {
             try {

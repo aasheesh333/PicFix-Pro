@@ -36,10 +36,6 @@
 #    java.lang.Object readResolve();
 #}
 
-# TensorFlow Lite
--keep class org.tensorflow.lite.** { *; }
--dontwarn org.tensorflow.lite.**
-
 # OpenCV (just in case)
 -keep class org.opencv.** { *; }
 -dontwarn org.opencv.**
@@ -75,9 +71,6 @@
 
 # FileProvider
 -keep class androidx.core.content.FileProvider { *; }
-
-# TensorFlow Lite GPU Delegate
--keep class org.tensorflow.lite.gpu.** { *; }
 
 # Kotlin Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}

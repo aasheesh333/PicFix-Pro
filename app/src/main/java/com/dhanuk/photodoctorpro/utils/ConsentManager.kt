@@ -3,23 +3,85 @@ package com.dhanuk.photodoctorpro.utils
 import android.content.Context
 import android.util.Log
 import com.dhanuk.photodoctorpro.BuildConfig
+import com.google.android.ump.ConsentInformation
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.ConsentStatus
+import com.google.android.ump.FormError
+import com.google.android.ump.UserMessagingPlatform
 
 object ConsentManager {
 
     private const val TAG = "ConsentManager"
-    @Volatile var isConsentRequired: Boolean = false
-        private set
-    @Volatile var isConsentObtained: Boolean = true
+
+    @Volatile var isConsentObtained: Boolean = false
         private set
 
+    private var consentInformation: ConsentInformation? = null
+
     fun init(context: Context) {
-        isConsentObtained = true
-        AdManager.initialize(context)
-        if (BuildConfig.DEBUG) Log.d(TAG, "AdManager initialized (UMP simplified)")
+        val params = ConsentRequestParameters.Builder()
+            .setTagForUnderAgeOfConsent(false)
+            .build()
+
+        consentInformation = UserMessagingPlatform.getConsentInformation(context)
+        consentInformation?.requestConsentInfoUpdate(
+            context,
+            params,
+            {
+                val info = consentInformation ?: return@requestConsentInfoUpdate
+                if (info.isConsentFormAvailable) {
+                    loadAndShowConsentForm(context)
+                } else {
+                    checkConsentAndInitAds(context)
+                }
+            },
+            { formError: FormError ->
+                Log.e(TAG, "Consent info request failed: ${formError.message}")
+                checkConsentAndInitAds(context)
+            }
+        )
+    }
+
+    private fun loadAndShowConsentForm(context: Context) {
+        UserMessagingPlatform.loadConsentForm(
+            context,
+            { consentForm ->
+                consentForm.show(context) { formError ->
+                    if (formError != null) {
+                        Log.e(TAG, "Consent form error: ${formError.message}")
+                    }
+                    checkConsentAndInitAds(context)
+                }
+            },
+            { formError: FormError ->
+                Log.e(TAG, "Consent form load failed: ${formError.message}")
+                checkConsentAndInitAds(context)
+            }
+        )
+    }
+
+    private fun checkConsentAndInitAds(context: Context) {
+        val info = consentInformation
+        if (info != null) {
+            isConsentObtained = info.consentStatus == ConsentStatus.OBTAINED
+        }
+        if (canRequestAds()) {
+            AdManager.initialize(context)
+        }
+    }
+
+    fun canRequestAds(): Boolean {
+        val info = consentInformation
+        return if (info != null) {
+            info.canRequestAds()
+        } else {
+            isConsentObtained
+        }
     }
 
     fun resetConsent(context: Context) {
-        isConsentObtained = true
+        consentInformation?.reset()
+        isConsentObtained = false
         init(context)
     }
 }

@@ -37,8 +37,8 @@ Key properties and defaults (from `app/build.gradle.kts`):
 ## Architecture notes
 
 Entry points:
-- `MainActivity` (`com.dhanuk.photodoctorpro.MainActivity`) — `ComponentActivity`, sets the Compose tree to `AppScaffold()` and initializes `AdManager`. Requests `POST_NOTIFICATIONS` on Tiramisu+. Calls `AdManager.cleanup()` in `onDestroy` to release the InterstitialAd reference.
-- `PicFixApplication` — initializes `ThemeController`, launches OpenCV load asynchronously via `applicationScope`, and initializes OneSignal with `BuildConfig.ONESIGNAL_APP_ID` only when non-empty. `OpenCVInitialized` is a `@Volatile` flag set after async init completes.
+- `MainActivity` (`com.dhanuk.photodoctorpro.MainActivity`) — `ComponentActivity`, sets the Compose tree to `AppScaffold()`. Gates `AdManager.initialize()` and `AdManager.onAppForeground()` on `ConsentManager.canRequestAds()`. Requests `POST_NOTIFICATIONS` on Tiramisu+. Calls `AdManager.cleanup()` and `ImageEnhancer.shutdown()` in `onDestroy`.
+- `PicFixApplication` — initializes `ThemeController`, launches OpenCV load asynchronously via `applicationScope`, initializes OneSignal with `BuildConfig.ONESIGNAL_APP_ID` only when non-empty, and calls `ConsentManager.init(this)` which triggers the UMP consent flow and then initializes AdMob once consent is obtained. `OpenCVInitialized` is a `@Volatile` flag set after async init completes.
 - Navigation: `ui/navigation/AppNavigation.kt` — single `NavHost` starting at `"home"`. Route names are string literals (e.g., `"remove_background"`, `"enhance_image"`, `"privacy_policy"`, `"terms_and_conditions"`). `ui/navigation/AppScaffold.kt` is the top-level scaffold and bottom bar wrapper.
 
 ### ViewModel persistence
@@ -63,13 +63,9 @@ Source layout (under `app/src/main/java/com/dhanuk/photodoctorpro/`):
 - `data/repository/HistoryRepository.kt` — wraps the DAO.
 - `ui/screens/` — one file per Compose screen + a paired `*ViewModel.kt` for the heavier ones (`HistoryViewModel`, `ObjectEraserViewModel`, `RemoveBackgroundViewModel`, `EnhanceImageViewModel`, `ImageToPdfViewModel`, `ColorAdjustmentsViewModel`, `ResizeCompressViewModel`). `ViewModelFactory.kt` provides a single shared factory. `PerspectiveCropViewModel`, `ExifStripperViewModel` are declared inline in their respective screen files.
 - `ui/navigation/`, `ui/theme/`, `ui/components/ZoomableBox.kt`, `ui/components/rememberBitmap.kt`.
-- `utils/` — `AdManager`, `ThemeController`, `UserPreferences` (DataStore-style prefs), `BitmapUtils`, `ImageEnhancer`, `FaceEnhancer`, `ESRGANHelper`.
+- `utils/` — `AdManager`, `ConsentManager` (real UMP consent flow), `ThemeController`, `UserPreferences` (DataStore-style prefs), `BitmapUtils`, `ImageEnhancer`, `NotificationHelper`, `CrashReporter`.
 
-ML assets (bundled in APK, `aaptOptions.noCompress += "tflite"` so `.tflite` files are not compressed):
-- `app/src/main/assets/models/esrgan_x2.tflite`
-- `app/src/main/assets/models/esrgan_x4.tflite`
-- `app/src/main/assets/models/gfpgan.tflite`
-- `ESRGANHelper` and `FaceEnhancer` both load from `assets/models/<file>`, prefer `GpuDelegate` when `CompatibilityList` reports support, otherwise fall back to 4 CPU threads. Both use a `ReentrantLock` (`interpLock`) to make `Interpreter.run()` thread-safe and protect `close()` from racing with inference. `close()` is wrapped in `interpLock.withLock`.
+Image enhancement uses OpenCV only (Lanczos upscaling + unsharp mask + CLAHE + bilateral denoise). TFLite models and interpreters (`ESRGANHelper`, `FaceEnhancer`) have been removed. If real TFLite models are added back in the future, restore `assets/models/`, the TFLite Gradle deps, and `aaptOptions.noCompress += "tflite"`.
 
 ## Permissions, manifest, FileProvider
 
@@ -79,7 +75,7 @@ FileProvider paths (`app/src/main/res/xml/provider_paths.xml`) are intentionally
 
 ## AdMob
 
-AdMob is frequency-capped to once per 3 minutes AND only after every 2 major user actions (`AD_FREQUENCY_CAP_MS = 3 * 60 * 1000`, `MAJOR_ACTION_COUNT_CAP = 2` in `AdManager`). `AdManager.cleanup()` is called from `MainActivity.onDestroy()` to drop the `InterstitialAd` reference.
+AdMob is frequency-capped to once per 2 minutes AND only after every 2 major user actions (`AD_FREQUENCY_CAP_MS = 2 * 60 * 1000`, `MAJOR_ACTION_COUNT_CAP = 2` in `AdManager`). All ad show methods (`showInterstitialAd`, `showInterstitialOnShare`, `onAppForeground`) are gated on `ConsentManager.canRequestAds()` which uses the real UMP SDK consent flow. `AdManager.cleanup()` is called from `MainActivity.onDestroy()` to drop the `InterstitialAd` reference.
 
 The release build (CI) will fail with `GradleException` if any of the three AdMob IDs is the Google test ID or blank. Set all three via `local.properties`, env vars, or GitHub Actions secrets (`ADMOB_APP_ID`, `ADMOB_INTERSTITIAL_ID`, `ADMOB_BANNER_ID` or `APP_*` prefixed).
 
@@ -87,7 +83,7 @@ The release build (CI) will fail with `GradleException` if any of the three AdMo
 
 `app/src/main/res/values/strings.xml` is the single source of truth for user-facing strings. New strings must be added there and consumed via `stringResource(R.string.…)`. Prefixes used in this repo: `action_*` (buttons/menu items), `cd_*` (content descriptions / a11y), `success_*` and `error_*` (snackbar/dialog text), `select_*` (empty-state copy), `original`/`optimized`/`enhanced` for screen labels. Formatted strings use positional placeholders (`%1$s`, `%1$d`, `%1$.1f`) and require `formatted="true"` for non-positional single-arg variants.
 
-ProGuard: release uses `isMinifyEnabled = true` with `proguard-android-optimize.txt` plus `app/proguard-rules.pro`. The proguard rules already keep `org.tensorflow.lite.**`, `org.opencv.**`, and `coil.**`. Add a `-keep` rule here if you add a new library that gets stripped.
+ProGuard: release uses `isMinifyEnabled = true` with `proguard-android-optimize.txt` plus `app/proguard-rules.pro`. The proguard rules keep `org.opencv.**` and `coil.**`. Add a `-keep` rule here if you add a new library that gets stripped.
 
 ## Asset generation
 
@@ -107,8 +103,8 @@ There is no `app/src/test/` or `app/src/androidTest/` source set, and no JUnit/E
 - The release keystore is expected to be PKCS12, alias `mykey` (hardcoded in `app/build.gradle.kts`). Mismatched `keyAlias` or `storeType` will silently produce an unsigned or wrongly-signed APK.
 - The build script accepts both `KEYSTORE_FILE` and `APP_KEYSTORE_FILE` (and same for other props) — match whatever the surrounding CI / local convention is.
 - `app/src/main/res/mipmap-*` and `drawable/ic_launcher_foreground.png` are generated. Re-run `scripts/generate_icons.py` rather than editing them by hand.
-- Keep `org.tensorflow.lite.**`, `org.opencv.**`, and `coil.**` keep-rules in `proguard-rules.pro` when minification is on; new native/reflection-using libs will need their own `-keep` rules.
+- Keep `org.opencv.**` and `coil.**` keep-rules in `proguard-rules.pro` when minification is on; new native/reflection-using libs will need their own `-keep` rules.
 - All bitmaps should be loaded through `BitmapUtils.loadBitmapFromUri(uri, context, maxDim)` to avoid OOM on large images. Do not use `BitmapFactory.decodeStream` directly in screens.
 - ViewModels that take user input must wrap `loadBitmapFromUri` (or other disk reads) in `withContext(Dispatchers.IO)` — the Compose UI thread must not block on I/O.
-- `withLock` is required around any `Interpreter.run()` call and any `close()` call on the same interpreter; do not bypass `interpLock`.
 - `catch (e: Exception)` only — never `catch (e: Throwable)` — in ViewModel coroutine bodies. `OutOfMemoryError` must propagate to the process.
+- Re-engagement notifications in `NotificationHelper` must only be scheduled when the user has opted in via `UserPreferences.isRemindersEnabled()` (Settings toggle).

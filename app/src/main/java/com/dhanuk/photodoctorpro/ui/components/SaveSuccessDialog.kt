@@ -83,7 +83,7 @@ fun SaveSuccessDialog(
     LaunchedEffect(Unit) {
         val wasFirstSave = !UserPreferences.isFirstSaveCompleted(context)
         UserPreferences.setFirstSaveCompleted(context)
-        if (wasFirstSave) {
+        if (wasFirstSave && UserPreferences.isRemindersEnabled(context)) {
             com.dhanuk.photodoctorpro.utils.NotificationHelper.scheduleReEngagement(context)
         }
         if (!UserPreferences.hasRequestedReview(context) && !wasFirstSave) {

@@ -207,7 +207,7 @@ class ColorAdjustmentsViewModel(
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
-                    fileNamePrefix = "PhotoDoctorPro_Color",
+                    fileNamePrefix = "PicFixPro_Color",
                     operationType = "Color Adjustments",
                     inputUriString = state.selectedImageUri?.toString() ?: "",
                     repository = repository,

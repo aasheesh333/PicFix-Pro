@@ -9,6 +9,7 @@ object UserPreferences {
     private const val KEY_FOLLOW_SYSTEM = "follow_system"
     private const val KEY_HAS_REQUESTED_REVIEW = "has_requested_review"
     private const val KEY_FIRST_SAVE_COMPLETED = "first_save_completed"
+    private const val KEY_REMINDERS_ENABLED = "reminders_enabled"
 
     fun getSaveDirectory(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -68,5 +69,15 @@ object UserPreferences {
     fun setFirstSaveCompleted(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_FIRST_SAVE_COMPLETED, true).apply()
+    }
+
+    fun isRemindersEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_REMINDERS_ENABLED, false)
+    }
+
+    fun setRemindersEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_REMINDERS_ENABLED, enabled).apply()
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material3.Divider
@@ -55,15 +56,19 @@ import com.dhanuk.photodoctorpro.BuildConfig
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.components.LuminaListItem
 import com.dhanuk.photodoctorpro.ui.components.LuminaSectionLabel
+import com.dhanuk.photodoctorpro.utils.NotificationHelper
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import com.dhanuk.photodoctorpro.utils.UserPreferences
 
 class SettingsViewModel : ViewModel() {
     var saveDirectory by mutableStateOf<String?>(null)
         private set
+    var remindersEnabled by mutableStateOf(false)
+        private set
 
     fun loadSettings(context: Context) {
         saveDirectory = UserPreferences.getSaveDirectory(context)
+        remindersEnabled = UserPreferences.isRemindersEnabled(context)
     }
 
     fun updateSaveDirectory(context: Context, uri: Uri?) {
@@ -78,6 +83,16 @@ class SettingsViewModel : ViewModel() {
             }
             UserPreferences.setSaveDirectory(context, uri.toString())
             saveDirectory = uri.toString()
+        }
+    }
+
+    fun updateReminders(context: Context, enabled: Boolean) {
+        UserPreferences.setRemindersEnabled(context, enabled)
+        remindersEnabled = enabled
+        if (enabled) {
+            NotificationHelper.scheduleReEngagement(context)
+        } else {
+            NotificationHelper.cancelReEngagement(context)
         }
     }
 }
@@ -153,6 +168,39 @@ fun SettingsScreen(navController: NavController) {
                 Switch(
                     checked = isDarkTheme,
                     onCheckedChange = { ThemeController.setDarkTheme(context, it) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Notifications,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.size(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.reminders),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.reminders_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = viewModel.remindersEnabled,
+                    onCheckedChange = { viewModel.updateReminders(context, it) }
                 )
             }
 

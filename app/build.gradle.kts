@@ -145,9 +145,6 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-    aaptOptions {
-        noCompress += "tflite"
-    }
 }
 
 dependencies {
@@ -173,15 +170,9 @@ dependencies {
 
     // ML Kit
     implementation(libs.play.services.mlkit.subject.segmentation)
-    implementation(libs.play.services.mlkit.face.detection)
 
     // EXIF
     implementation(libs.androidx.exifinterface)
-
-    // TFLite
-    implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.gpu)
-    implementation(libs.tensorflow.lite.support)
 
     // AdMob + UMP Consent
     implementation(libs.play.services.ads)
@@ -193,9 +184,6 @@ dependencies {
 
     // OpenCV
     implementation(libs.opencv)
-
-    // RealESRGAN
-    // implementation(libs.realesrgan.mobile)
 
 
     // OneSignal

@@ -30,7 +30,7 @@ object NotificationHelper {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Reminders to use PhotoDoctor Pro"
+                description = "Reminders to use PicFix Pro"
                 enableVibration(false)
                 setSound(null, null)
             }
@@ -40,6 +40,7 @@ object NotificationHelper {
     }
 
     fun scheduleReEngagement(context: Context) {
+        if (!UserPreferences.isRemindersEnabled(context)) return
         if (!UserPreferences.isFirstSaveCompleted(context)) return
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -94,7 +95,7 @@ class ReEngagementReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, "re_engagement")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("PhotoDoctor Pro")
+            .setContentTitle("PicFix Pro")
             .setContentText("Your photos miss you! Come enhance something new.")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)

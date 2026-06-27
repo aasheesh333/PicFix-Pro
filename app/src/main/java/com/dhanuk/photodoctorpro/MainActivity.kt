@@ -12,8 +12,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PicFixProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
+import com.dhanuk.photodoctorpro.utils.ConsentManager
 import com.dhanuk.photodoctorpro.utils.CrashReporter
-import com.dhanuk.photodoctorpro.utils.FaceEnhancer
 import com.dhanuk.photodoctorpro.utils.ImageEnhancer
 import com.dhanuk.photodoctorpro.utils.ThemeController
 
@@ -27,7 +27,9 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { false }
-        AdManager.initialize(this)
+        if (ConsentManager.canRequestAds()) {
+            AdManager.initialize(this)
+        }
         CrashReporter.registerActivity(this)
 
         requestRequiredPermissions()
@@ -46,7 +48,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         ThemeController.init(this)
         notifySystemDarkMode()
-        AdManager.onAppForeground(this)
+        if (ConsentManager.canRequestAds()) {
+            AdManager.onAppForeground(this)
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -61,7 +65,6 @@ class MainActivity : ComponentActivity() {
         if (isFinishing) {
             AdManager.cleanup()
             ImageEnhancer.shutdown()
-            FaceEnhancer.shutdown()
         }
     }
 

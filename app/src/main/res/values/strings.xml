@@ -236,6 +236,8 @@
     <string name="keep">Keep</string>
     <string name="dark_mode_on">On</string>
     <string name="dark_mode_off">Off</string>
+    <string name="reminders">Reminders</string>
+    <string name="reminders_subtitle">Get notified to enhance your photos</string>
     <string name="gallery_selected_folder">Gallery/Selected Folder</string>
     <string name="available">available</string>
     <string name="error_sharing">Error sharing: %1$s</string>

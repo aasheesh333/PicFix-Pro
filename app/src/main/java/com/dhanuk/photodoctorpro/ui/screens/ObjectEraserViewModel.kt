@@ -354,7 +354,7 @@ class ObjectEraserViewModel(
         _uiState.update { it.copy(isLoading = true) }
 
         return try {
-            val fileName = "PhotoDoctorPro_Erased_${System.currentTimeMillis()}"
+            val fileName = "PicFixPro_Erased_${System.currentTimeMillis()}"
             val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
             repository.addHistory(
                 History(

@@ -12,7 +12,7 @@ import java.lang.ref.WeakReference
 
 object CrashReporter {
 
-    private const val TAG = "PhotoDoctorCrash"
+    private const val TAG = "PicFixCrash"
     private var installed = false
     private var currentActivity: WeakReference<Activity>? = null
 
