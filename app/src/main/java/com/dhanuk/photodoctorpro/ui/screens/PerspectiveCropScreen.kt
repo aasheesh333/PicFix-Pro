@@ -723,7 +723,7 @@ if (processedImage == null) {
                                             val start = mappedCorners[i]
                                             val end = mappedCorners[(i + 1) % mappedCorners.size]
                                             drawLine(
-                                                color = ComposeColor(0xFF00E676),
+                                                color = ComposeColor(0xFF7C5CF7),
                                                 start = start,
                                                 end = end,
                                                 strokeWidth = 4f
@@ -731,7 +731,7 @@ if (processedImage == null) {
                                         }
                                         mappedCorners.forEach { p ->
                                             drawCircle(
-                                                color = ComposeColor(0xFF00E676),
+                                                color = ComposeColor(0xFF7C5CF7),
                                                 radius = 16f,
                                                 center = p
                                             )

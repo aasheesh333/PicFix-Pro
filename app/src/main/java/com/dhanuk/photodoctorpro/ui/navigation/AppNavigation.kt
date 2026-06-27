@@ -40,29 +40,29 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable(
             "home",
             enterTransition = {
-                if (initialState.destination.route in tabRoutes) fadeIn(tween(0)) else fadeIn(tween(ANIM_DURATION))
+                if (initialState.destination.route in tabRoutes) fadeIn(tween(ANIM_DURATION / 2)) else fadeIn(tween(ANIM_DURATION))
             },
             exitTransition = {
-                if (targetState.destination.route in tabRoutes) fadeOut(tween(0)) else fadeOut(tween(ANIM_DURATION / 2))
+                if (targetState.destination.route in tabRoutes) fadeOut(tween(ANIM_DURATION / 2)) else fadeOut(tween(ANIM_DURATION / 2))
             }
         ) { HomeScreen(navController) }
 
         composable("history",
             enterTransition = {
-                if (initialState.destination.route in tabRoutes) fadeIn(tween(0)) else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(ANIM_DURATION)) + fadeIn(tween(ANIM_DURATION))
+                if (initialState.destination.route in tabRoutes) fadeIn(tween(ANIM_DURATION / 2)) else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(ANIM_DURATION)) + fadeIn(tween(ANIM_DURATION))
             },
             exitTransition = {
-                if (targetState.destination.route in tabRoutes) fadeOut(tween(0)) else fadeOut(tween(ANIM_DURATION / 2))
+                if (targetState.destination.route in tabRoutes) fadeOut(tween(ANIM_DURATION / 2)) else fadeOut(tween(ANIM_DURATION / 2))
             },
             popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { HistoryScreen(navController) }
 
         composable("settings",
             enterTransition = {
-                if (initialState.destination.route in tabRoutes) fadeIn(tween(0)) else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(ANIM_DURATION)) + fadeIn(tween(ANIM_DURATION))
+                if (initialState.destination.route in tabRoutes) fadeIn(tween(ANIM_DURATION / 2)) else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(ANIM_DURATION)) + fadeIn(tween(ANIM_DURATION))
             },
             exitTransition = {
-                if (targetState.destination.route in tabRoutes) fadeOut(tween(0)) else fadeOut(tween(ANIM_DURATION / 2))
+                if (targetState.destination.route in tabRoutes) fadeOut(tween(ANIM_DURATION / 2)) else fadeOut(tween(ANIM_DURATION / 2))
             },
             popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
         ) { SettingsScreen(navController) }

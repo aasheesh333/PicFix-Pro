@@ -43,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
@@ -198,7 +199,9 @@ private fun NavPill(
 
 fun navigateToFresh(navController: NavController, route: String) {
     navController.navigate(route) {
-        popUpTo("home") { inclusive = route == "home"; saveState = true }
+        popUpTo(navController.graph.findStartDestination().id) {
+            saveState = true
+        }
         launchSingleTop = true
         restoreState = true
     }

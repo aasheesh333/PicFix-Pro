@@ -33,7 +33,7 @@ private val LuminaLightColors = lightColorScheme(
     error = ErrorColor,
     onError = OnErrorColor,
     errorContainer = ErrorContainerColor,
-    onErrorContainer = OnPhotoGreen
+    onErrorContainer = OnPhotoGreenContainer
 )
 
 private val LuminaDarkColors = darkColorScheme(

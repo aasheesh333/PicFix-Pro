@@ -2,33 +2,33 @@ package com.dhanuk.photodoctorpro.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand
-val PhotoGreen = Color(0xFF25D366)
-val PhotoGreenContainer = Color(0xFF4FF07F)
-val OnPhotoGreen = Color(0xFF003915)
-val OnPhotoGreenContainer = Color(0xFF002109)
+// Brand - Indigo/Purple palette matching app icon
+val PhotoGreen = Color(0xFF5B3CF0)
+val PhotoGreenContainer = Color(0xFF7C5CF7)
+val OnPhotoGreen = Color(0xFFFFFFFF)
+val OnPhotoGreenContainer = Color(0xFF1A0061)
 
-// Neutrals - tuned to Lumina Edit
-val SurfaceDim = Color(0xFF131313)
-val Surface = Color(0xFF1E1E1E)
-val SurfaceContainerLow = Color(0xFF1C1B1B)
-val SurfaceContainer = Color(0xFF201F1F)
-val SurfaceContainerHigh = Color(0xFF2A2A2A)
-val SurfaceContainerHighest = Color(0xFF353534)
-val SurfaceVariant = Color(0xFF353534)
-val Outline = Color(0xFF869584)
-val OutlineVariant = Color(0xFF3C4A3D)
+// Neutrals - tuned with subtle indigo tint
+val SurfaceDim = Color(0xFF0F0A1F)
+val Surface = Color(0xFF171127)
+val SurfaceContainerLow = Color(0xFF15101E)
+val SurfaceContainer = Color(0xFF1B1530)
+val SurfaceContainerHigh = Color(0xFF251D3D)
+val SurfaceContainerHighest = Color(0xFF30274A)
+val SurfaceVariant = Color(0xFF30274A)
+val Outline = Color(0xFF847CA0)
+val OutlineVariant = Color(0xFF3D3559)
 
-val OnSurface = Color(0xFFE5E2E1)
-val OnSurfaceVariant = Color(0xFFBBCBB9)
-val InverseSurface = Color(0xFFE5E2E1)
-val InverseOnSurface = Color(0xFF313030)
+val OnSurface = Color(0xFFE8E3F5)
+val OnSurfaceVariant = Color(0xFFC4BCDB)
+val InverseSurface = Color(0xFFE8E3F5)
+val InverseOnSurface = Color(0xFF2A2143)
 
-// Light theme counterparts (light mode not the primary focus but kept consistent)
-val LightBackground = Color(0xFFF8F9FA)
+// Light theme counterparts
+val LightBackground = Color(0xFFF6F4FC)
 val LightSurface = Color(0xFFFFFFFF)
-val LightOnSurface = Color(0xFF1E1E1E)
-val LightSecondary = Color(0xFF6C757D)
+val LightOnSurface = Color(0xFF1A1228)
+val LightSecondary = Color(0xFF6C6480)
 
 // Semantic
 val ErrorColor = Color(0xFF93000A)
@@ -36,8 +36,8 @@ val OnErrorColor = Color(0xFFFFDAD6)
 val ErrorContainerColor = Color(0xFFFFB4AB)
 
 // Tertiary accents
-val TertiaryColor = Color(0xFFFFC7B4)
-val OnTertiaryColor = Color(0xFF581D05)
+val TertiaryColor = Color(0xFFD7CEFD)
+val OnTertiaryColor = Color(0xFF1A0061)
 
 // Legacy aliases for backwards compatibility
 val DarkBackground = SurfaceDim
@@ -47,10 +47,10 @@ val DarkText = OnSurface
 val DarkSecondaryText = OnSurfaceVariant
 val DarkAccentColor = PhotoGreen
 
-val LightAccentColor = Color(0xFF1EAB52)
+val LightAccentColor = Color(0xFF5B3CF0)
 val CardBackground = LightSurface
 val PrimaryText = LightOnSurface
 val SecondaryText = LightSecondary
 val AccentColor = LightAccentColor
 val WhatsAppGreen = PhotoGreen
-val WhatsAppGreenDark = Color(0xFF1EAB52)
+val WhatsAppGreenDark = Color(0xFF4A2BD6)
