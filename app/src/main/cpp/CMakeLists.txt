@@ -19,7 +19,7 @@ target_compile_options(realesrgan_jni PRIVATE
     -fexceptions
 )
 target_link_options(realesrgan_jni PRIVATE
-    -Wl,--unresolved-symbols=allow-all
+    -Wl,--allow-shlib-undefined
 )
 
 set_target_properties(realesrgan_jni PROPERTIES

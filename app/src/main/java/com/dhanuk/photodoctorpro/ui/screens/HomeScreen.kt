@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Brush
 import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.CropFree
-import androidx.compose.material.icons.rounded.DocumentScanner
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Tune
@@ -42,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +59,7 @@ fun HomeScreen(navController: NavController) {
         Feature(stringResource(R.string.image_to_pdf), stringResource(R.string.multi_page_pdf), Icons.Rounded.PictureAsPdf, "image_to_pdf"),
         Feature(stringResource(R.string.color_adjustments), stringResource(R.string.color_adjustments_subtitle), Icons.Rounded.Tune, "color_adjustments"),
         Feature(stringResource(R.string.privacy_doctor), stringResource(R.string.privacy_doctor_subtitle), Icons.Rounded.Security, "exif_stripper"),
-        Feature(stringResource(R.string.document_scanner), stringResource(R.string.document_scanner_subtitle), Icons.Rounded.DocumentScanner, "perspective_crop"),
+        Feature(stringResource(R.string.document_scanner), stringResource(R.string.document_scanner_subtitle), Icons.Rounded.CropFree, "perspective_crop"),
         Feature(stringResource(R.string.resize_compress), stringResource(R.string.resize_compress_subtitle), Icons.Rounded.Compress, "resize_compress")
     )
 
@@ -75,7 +75,6 @@ fun HomeScreen(navController: NavController) {
         val isLandscape = maxWidth > maxHeight
         val topPadding = if (isLandscape) 12.dp else 24.dp
         val logoSize = if (isLandscape) 72.dp else 96.dp
-        val internalLogoSize = if (isLandscape) 56.dp else 72.dp
 
         val columnCount = when {
             maxWidth >= 840.dp -> 4
@@ -126,7 +125,8 @@ fun HomeScreen(navController: NavController) {
                         Image(
                             painter = painterResource(id = R.drawable.app_logo),
                             contentDescription = stringResource(R.string.app_logo),
-                            modifier = Modifier.size(internalLogoSize)
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
                         )
                     }
                     Spacer(modifier = Modifier.height(if (isLandscape) 8.dp else 14.dp))

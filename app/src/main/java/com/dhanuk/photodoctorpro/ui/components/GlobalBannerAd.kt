@@ -26,8 +26,7 @@ fun GlobalBannerAd(navController: NavHostController) {
             "object_eraser",
             "color_adjustments",
             "perspective_crop",
-            "resize_compress",
-            "home"
+            "resize_compress"
         )
     }
 

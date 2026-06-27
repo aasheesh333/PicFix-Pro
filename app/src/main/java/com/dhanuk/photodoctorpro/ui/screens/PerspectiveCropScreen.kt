@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Compare
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,12 +78,6 @@ import org.opencv.core.Point
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 
-/**
- * Aspect ratio lock for the cropped output. FREE = use the actual selected
- * region (no lock). All other values force the output to that ratio.
- *
- * A4 is the standard ISO 216 paper size (210×297mm) → ratio ≈ 0.707.
- */
 enum class AspectRatioLock(val displayName: String, val ratio: Float?) {
     FREE("Free", null),
     SQUARE("1:1", 1f),
@@ -130,13 +125,16 @@ class PerspectiveCropViewModel(
                     return@launch
                 }
                 val old = _uiState.value.originalBitmap
+                val oldProcessed = _uiState.value.processedBitmap
                 _uiState.update {
                     it.copy(
                         originalBitmap = bitmap,
+                        processedBitmap = null,
                         isLoading = false
                     )
                 }
                 if (old != null && old != bitmap && !old.isRecycled) old.recycle()
+                if (oldProcessed != null && oldProcessed != bitmap && !oldProcessed.isRecycled) oldProcessed.recycle()
                 autoDetectEdges(bitmap)
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
@@ -286,10 +284,6 @@ class PerspectiveCropViewModel(
         val bitmapY = (localY / scale).coerceIn(0f, bitmapH)
         val updated = _uiState.value.corners.toMutableList()
         if (index !in updated.indices) return
-        // When the aspect ratio is locked, treat the user's drag as a
-        // resize of the rectangle: anchor the opposite corner and rebuild
-        // the four points to satisfy the locked ratio. This prevents the
-        // "stretched" output the user reported.
         val lock = _uiState.value.aspectRatio
         if (lock.ratio != null && updated.size == 4) {
             val newRect = rectangleForDrag(updated, index, bitmapX, bitmapY, lock.ratio, bitmapW, bitmapH)
@@ -300,19 +294,6 @@ class PerspectiveCropViewModel(
         }
     }
 
-    /**
-     * Snap the dragged corner to the user's click position. The opposite
-     * corner stays put. The other 2 corners are computed so the 4 corners
-     * form an axis-aligned rectangle (TL/BR diagonal) with horizontal and
-     * vertical edges only.
-     *
-     * The resulting rectangle's aspect ratio may not match the locked ratio;
-     * warpPerspective() normalizes the output to the locked ratio, so the
-     * final saved image has the correct aspect. The visual green overlay
-     * shows a clean rectangle so the user sees what they're going to get.
-     *
-     * 0=TL, 1=TR, 2=BR, 3=BL. Opposite corner is at [(index+2) % 4].
-     */
     private fun rectangleForDrag(
         current: List<PointF>,
         index: Int,
@@ -325,31 +306,23 @@ class PerspectiveCropViewModel(
         if (current.size != 4) return current
         val oppositeIndex = (index + 2) % 4
         val anchor = current[oppositeIndex]
-        // The dragged corner lands at the click position, clamped to bitmap.
         val draggedX = newX.coerceIn(0f, bitmapW)
         val draggedY = newY.coerceIn(0f, bitmapH)
-        // Build the axis-aligned rectangle from the dragged corner and the
-        // opposite anchor corner. The other 2 corners are the projections
-        // of the dragged corner onto the anchor's vertical and horizontal
-        // lines. If the dragged corner is on the "wrong" side of the anchor
-        // (e.g. user dragged TL below BR), the opposite is automatically
-        // picked so the rectangle is well-formed.
         val leftX: Float
         val rightX: Float
         val topY: Float
         val bottomY: Float
         when (index) {
-            0 -> { // TL dragged, anchor is BR
+            0 -> {
                 var lxL = draggedX
                 var rxL = anchor.x
                 var tyL = draggedY
                 var byL = anchor.y
-                // Normalize so left <= right and top <= bottom
                 if (lxL > rxL) { val t = lxL; lxL = rxL; rxL = t }
                 if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
                 leftX = lxL; rightX = rxL; topY = tyL; bottomY = byL
             }
-            1 -> { // TR dragged, anchor is BL
+            1 -> {
                 var rxL = draggedX
                 var lxL = anchor.x
                 var tyL = draggedY
@@ -358,7 +331,7 @@ class PerspectiveCropViewModel(
                 if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
                 rightX = rxL; leftX = lxL; topY = tyL; bottomY = byL
             }
-            2 -> { // BR dragged, anchor is TL
+            2 -> {
                 var rxL = draggedX
                 var lxL = anchor.x
                 var byL = draggedY
@@ -367,7 +340,7 @@ class PerspectiveCropViewModel(
                 if (byL < tyL) { val t = byL; byL = tyL; tyL = t }
                 rightX = rxL; leftX = lxL; bottomY = byL; topY = tyL
             }
-            3 -> { // BL dragged, anchor is TR
+            3 -> {
                 var lxL = draggedX
                 var rxL = anchor.x
                 var byL = draggedY
@@ -378,16 +351,45 @@ class PerspectiveCropViewModel(
             }
             else -> return current
         }
-        // Clamp to bitmap. The rectangle is always non-degenerate after this.
         val lx = leftX.coerceIn(0f, bitmapW)
         val rx = rightX.coerceIn(lx + 1f, bitmapW)
         val ty = topY.coerceIn(0f, bitmapH)
         val by = bottomY.coerceIn(ty + 1f, bitmapH)
+
+        val rectW = rx - lx
+        val rectH = by - ty
+        val adjustedH = if (rectW > 0 && ratio > 0) rectW / ratio else rectH
+        val finalBy = (ty + adjustedH).coerceIn(ty + 1f, bitmapH)
+        val finalTy = (by - adjustedH).coerceIn(0f, by - 1f)
+
+        val adjBy: Float
+        val adjTy: Float
+        val adjLx: Float
+        val adjRx: Float
+        if (ty + adjustedH <= bitmapH) {
+            adjTy = ty
+            adjBy = ty + adjustedH
+            adjLx = lx
+            adjRx = rx
+        } else if (by - adjustedH >= 0f) {
+            adjTy = by - adjustedH
+            adjBy = by
+            adjLx = lx
+            adjRx = rx
+        } else {
+            val maxH = bitmapH
+            val maxW = maxH * ratio
+            adjTy = 0f
+            adjBy = maxH
+            adjLx = if (index == 0 || index == 3) (rx - maxW).coerceIn(0f, bitmapW) else lx
+            adjRx = if (index == 1 || index == 2) (lx + maxW).coerceIn(0f, bitmapW) else rx
+        }
+
         return listOf(
-            PointF(lx, ty),  // TL
-            PointF(rx, ty),  // TR
-            PointF(rx, by),  // BR
-            PointF(lx, by)   // BL
+            PointF(adjLx, adjTy),
+            PointF(adjRx, adjTy),
+            PointF(adjRx, adjBy),
+            PointF(adjLx, adjBy)
         )
     }
 
@@ -510,12 +512,6 @@ class PerspectiveCropViewModel(
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
 
-    /**
-     * Set (or clear) the aspect-ratio lock. When set, the four corners are
-     * forced to form an axis-aligned rectangle whose width/height matches the
-     * locked ratio. Switching ratios re-snaps the existing corners using the
-     * same center and area.
-     */
     fun setAspectRatio(lock: AspectRatioLock) {
         _uiState.update { state ->
             val newCorners = if (lock.ratio == null) {
@@ -529,12 +525,6 @@ class PerspectiveCropViewModel(
         }
     }
 
-    /**
-     * Given 4 corner points (in any order, possibly a non-rectangle), produce
-     * 4 corner points that form an axis-aligned rectangle with the requested
-     * width/height ratio [ratio]. The rectangle is the *minimum-area* rectangle
-     * covering the original four points, scaled so the ratio matches.
-     */
     private fun snapToRectangle(corners: List<PointF>, ratio: Float): List<PointF> {
         if (corners.size != 4) return corners
         val minX = corners.minOf { it.x }
@@ -648,6 +638,14 @@ fun PerspectiveCropScreen(navController: NavController) {
                     }
                 },
                 actions = {
+                    if (originalImage != null) {
+                        IconButton(onClick = { viewModel.autoDetect() }) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.reset)
+                            )
+                        }
+                    }
                     if (originalImage != null && processedImage != null) {
                         IconButton(onClick = { compareMode = !compareMode }) {
                             Icon(
@@ -802,9 +800,6 @@ if (processedImage == null) {
             }
 
             if (originalImage != null) {
-                // Aspect-ratio lock chips. Tapping a chip constrains the
-                // four corners to form an axis-aligned rectangle with that
-                // ratio. Tap "Free" to remove the lock.
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

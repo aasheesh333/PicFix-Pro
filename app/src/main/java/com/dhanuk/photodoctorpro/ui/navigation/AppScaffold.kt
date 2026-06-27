@@ -27,22 +27,22 @@ fun AppScaffold() {
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "history", "settings")
 
-    CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
+        CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
             bottomBar = {
-                AnimatedVisibility(
-                    visible = showBottomBar,
-                    enter = slideInVertically(
-                        animationSpec = tween(300),
-                        initialOffsetY = { it }
-                    ) + fadeIn(animationSpec = tween(150)),
-                    exit = slideOutVertically(
-                        animationSpec = tween(200),
-                        targetOffsetY = { it }
-                    ) + fadeOut(animationSpec = tween(100))
-                ) {
-                    Column {
-                        GlobalBannerAd(navController)
+                Column {
+                    GlobalBannerAd(navController)
+                    AnimatedVisibility(
+                        visible = showBottomBar,
+                        enter = slideInVertically(
+                            animationSpec = tween(300),
+                            initialOffsetY = { it }
+                        ) + fadeIn(animationSpec = tween(150)),
+                        exit = slideOutVertically(
+                            animationSpec = tween(200),
+                            targetOffsetY = { it }
+                        ) + fadeOut(animationSpec = tween(100))
+                    ) {
                         BottomNavigationBar(navController)
                     }
                 }

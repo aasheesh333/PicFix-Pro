@@ -65,7 +65,7 @@
     <string name="color_adjustments_subtitle">Brightness, contrast, saturation &amp; warmth</string>
     <string name="privacy_doctor">Privacy Doctor</string>
     <string name="privacy_doctor_subtitle">Strip hidden EXIF metadata</string>
-    <string name="document_scanner">Document Scanner</string>
+    <string name="document_scanner">Perspective Crop</string>
     <string name="document_scanner_subtitle">Auto-crop &amp; perspective fix</string>
     <string name="dark_mode">Dark Mode</string>
     <string name="about">About</string>
