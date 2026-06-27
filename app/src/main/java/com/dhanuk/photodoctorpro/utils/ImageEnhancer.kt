@@ -168,7 +168,7 @@ object ImageEnhancer {
 
         val denoised = Mat()
         try {
-            Photo.edgePreservingFilter(current, denoised, Photo.RECURS_FILTER, 60.0, 0.4)
+            Photo.edgePreservingFilter(current, denoised, Photo.RECURS_FILTER, 60.0f, 0.4f)
             if (ownsCurrent) current.release()
             current = denoised
             ownsCurrent = false
