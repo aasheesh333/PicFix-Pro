@@ -394,8 +394,8 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
             ncnn::Mat valid_out(valid_w, valid_h, 3);
             for (int c = 0; c < 3; c++)
             {
-                const float* src_ptr = out_tile.channel(c);
-                float* dst_ptr = valid_out.channel(c);
+                const float* src_ptr = (const float*)out_tile.channel(c).data;
+                float* dst_ptr = (float*)valid_out.channel(c).data;
                 for (int y = 0; y < valid_h; y++)
                 {
                     memcpy(dst_ptr + y * valid_w,
@@ -410,9 +410,9 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
 
             for (int y = 0; y < valid_h; y++)
             {
-                const float* ptr_r = valid_out.channel(0) + y * valid_w;
-                const float* ptr_g = valid_out.channel(1) + y * valid_w;
-                const float* ptr_b = valid_out.channel(2) + y * valid_w;
+                const float* ptr_r = (const float*)valid_out.channel(0).data + y * valid_w;
+                const float* ptr_g = (const float*)valid_out.channel(1).data + y * valid_w;
+                const float* ptr_b = (const float*)valid_out.channel(2).data + y * valid_w;
 
                 unsigned char* row = out_rgba +
                     (dst_y + y) * out_info.stride + dst_x * 4;
