@@ -8,7 +8,14 @@ target_include_directories(realesrgan_jni PRIVATE
     ${CMAKE_SOURCE_DIR}/ncnn/include
 )
 
+set(NCNN_LIB_DIR "${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
+add_library(ncnn SHARED IMPORTED)
+set_target_properties(ncnn PROPERTIES
+    IMPORTED_LOCATION "${NCNN_LIB_DIR}/libncnn.so"
+)
+
 target_link_libraries(realesrgan_jni
+    ncnn
     android
     jnigraphics
     log
@@ -17,9 +24,6 @@ target_link_libraries(realesrgan_jni
 target_compile_options(realesrgan_jni PRIVATE
     -frtti
     -fexceptions
-)
-target_link_options(realesrgan_jni PRIVATE
-    -Wl,--allow-shlib-undefined
 )
 
 set_target_properties(realesrgan_jni PROPERTIES
