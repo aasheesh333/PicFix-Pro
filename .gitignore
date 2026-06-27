@@ -41,3 +41,4 @@ opencode.json
 *.hprof
 *.log
 *.txt
+!CMakeLists.txt
