@@ -1,10 +1,10 @@
-#include <android/asset_manager.h>
 #include <android/bitmap.h>
 #include <android/log.h>
 #include <jni.h>
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 #include "net.h"
 #include "mat.h"
@@ -12,242 +12,196 @@
 
 #define LOG_TAG "RealESRGAN_JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static ncnn::Net* g_net = nullptr;
-static int g_scale = 2;
+static int g_scale = 4;
+static std::string g_input_blob_name;
+static std::string g_output_blob_name;
 
-class AssetDataReader : public ncnn::DataReader
+static long getAvailableMemKB()
 {
-public:
-    AssetDataReader(AAssetManager* mgr, const std::string& filename)
-    {
-        asset_ = AAssetManager_open(mgr, filename.c_str(), AASSET_MODE_STREAMING);
-    }
-
-    ~AssetDataReader()
-    {
-        if (asset_)
-            AAsset_close(asset_);
-    }
-
-    virtual int read(void* buf, int size) override
-    {
-        if (!asset_)
-            return -1;
-        int remaining = AAsset_getRemainingLength(asset_);
-        int read_size = size < remaining ? size : remaining;
-        if (read_size == 0)
-            return 0;
-        int n = AAsset_read(asset_, buf, read_size);
-        return n > 0 ? n : -1;
-    }
-
-    virtual int scan(const char* format, void* p) override
-    {
-        if (!asset_)
-            return -1;
-        int remaining = AAsset_getRemainingLength(asset_);
-        if (remaining <= 0)
-            return -1;
-        off_t seek_pos = AAsset_seek(asset_, 0, SEEK_CUR);
-        const char* buf = (const char*)AAsset_getBuffer(asset_);
-        if (!buf)
-            return -1;
-        int n = sscanf(buf + seek_pos, format, p);
-        if (n == 1)
-        {
-            while (remaining > 0)
-            {
-                char c = buf[seek_pos];
-                AAsset_seek(asset_, 1, SEEK_CUR);
-                remaining--;
-                seek_pos++;
-                if (c == '\n' || c == '\r' || c == ' ' || c == '\t')
-                    break;
-            }
-        }
-        return n == 1 ? 0 : -1;
-    }
-
-private:
-    AAsset* asset_ = nullptr;
-};
-
-static long getJavaHeap()
-{
-    long heap = 0;
+    long val = 0;
     FILE* fp = fopen("/proc/meminfo", "r");
     if (fp)
     {
         char line[256];
         while (fgets(line, sizeof(line), fp))
         {
-            long val;
             if (sscanf(line, "MemAvailable: %ld kB", &val) == 1)
-            {
-                heap = val * 1024;
                 break;
-            }
         }
         fclose(fp);
     }
-    return heap;
+    return val;
 }
 
 static int autoTileSize(int scale)
 {
-    long avail = getJavaHeap();
-    if (avail > 1900LL * 1024 * 1024)
-        return 200 / scale > 0 ? 200 : 100;
-    if (avail > 550LL * 1024 * 1024)
+    long availKB = getAvailableMemKB();
+    if (availKB > 1900LL * 1024)
+        return 200;
+    if (availKB > 550LL * 1024)
         return 100;
-    if (avail > 190LL * 1024 * 1024)
+    if (availKB > 190LL * 1024)
         return 64;
     return 32;
 }
 
-static ncnn::Mat bitmapToNcnnMat(JNIEnv* env, jobject bitmap)
+static bool loadModel(const char* param_path, const char* model_path, int gpu_id)
 {
-    AndroidBitmapInfo info;
-    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS)
+    if (g_net)
     {
-        LOGE("AndroidBitmap_getInfo failed");
-        return ncnn::Mat();
+        delete g_net;
+        g_net = nullptr;
     }
 
-    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888)
+    g_net = new ncnn::Net();
+
+    g_net->opt.use_vulkan_compute = false;
+    g_net->opt.use_fp16_packed = true;
+    g_net->opt.use_fp16_storage = true;
+    g_net->opt.use_fp16_arithmetic = false;
+    g_net->opt.use_int8_storage = true;
+    g_net->opt.use_int8_arithmetic = false;
+
+    bool use_gpu = (gpu_id >= 0) && (ncnn::get_gpu_count() > 0);
+    if (use_gpu)
     {
-        LOGE("Bitmap format is not RGBA_8888");
-        return ncnn::Mat();
+        g_net->opt.use_vulkan_compute = true;
+        int dev = gpu_id;
+        if (dev >= ncnn::get_gpu_count())
+            dev = 0;
+        g_net->set_vulkan_device(dev);
+        LOGI("Using Vulkan device %d", dev);
     }
 
-    int w = info.width;
-    int h = info.height;
-
-    void* pixels = nullptr;
-    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS)
+    int ret = g_net->load_param(param_path);
+    if (ret != 0)
     {
-        LOGE("AndroidBitmap_lockPixels failed");
-        return ncnn::Mat();
-    }
-
-    ncnn::Mat mat(w, h, 3);
-    if (mat.empty())
-    {
-        AndroidBitmap_unlockPixels(env, bitmap);
-        LOGE("Failed to allocate ncnn::Mat");
-        return ncnn::Mat();
-    }
-
-    const unsigned char* rgba = (const unsigned char*)pixels;
-    float* ptr_r = mat.channel(0);
-    float* ptr_g = mat.channel(1);
-    float* ptr_b = mat.channel(2);
-
-    for (int y = 0; y < h; y++)
-    {
-        const unsigned char* row = rgba + y * w * 4;
-        for (int x = 0; x < w; x++)
+        if (use_gpu)
         {
-            ptr_r[y * w + x] = row[x * 4 + 0] / 255.f;
-            ptr_g[y * w + x] = row[x * 4 + 1] / 255.f;
-            ptr_b[y * w + x] = row[x * 4 + 2] / 255.f;
+            LOGW("load_param failed with Vulkan (ret=%d), retrying on CPU", ret);
+            delete g_net;
+            g_net = new ncnn::Net();
+            g_net->opt.use_vulkan_compute = false;
+            g_net->opt.use_fp16_packed = true;
+            g_net->opt.use_fp16_storage = true;
+            g_net->opt.use_fp16_arithmetic = false;
+            g_net->opt.use_int8_storage = true;
+            g_net->opt.use_int8_arithmetic = false;
+
+            ret = g_net->load_param(param_path);
+            if (ret != 0)
+            {
+                LOGE("load_param failed on CPU too: %d", ret);
+                delete g_net;
+                g_net = nullptr;
+                return false;
+            }
+
+            ret = g_net->load_model(model_path);
+            if (ret != 0)
+            {
+                LOGE("load_model failed on CPU: %d", ret);
+                delete g_net;
+                g_net = nullptr;
+                return false;
+            }
+        }
+        else
+        {
+            LOGE("load_param failed: %d", ret);
+            delete g_net;
+            g_net = nullptr;
+            return false;
+        }
+    }
+    else
+    {
+        ret = g_net->load_model(model_path);
+        if (ret != 0)
+        {
+            if (use_gpu)
+            {
+                LOGW("load_model failed with Vulkan (ret=%d), retrying on CPU", ret);
+                delete g_net;
+                g_net = new ncnn::Net();
+                g_net->opt.use_vulkan_compute = false;
+                g_net->opt.use_fp16_packed = true;
+                g_net->opt.use_fp16_storage = true;
+                g_net->opt.use_fp16_arithmetic = false;
+                g_net->opt.use_int8_storage = true;
+                g_net->opt.use_int8_arithmetic = false;
+
+                ret = g_net->load_param(param_path);
+                if (ret != 0)
+                {
+                    LOGE("load_param failed on CPU retry: %d", ret);
+                    delete g_net;
+                    g_net = nullptr;
+                    return false;
+                }
+
+                ret = g_net->load_model(model_path);
+                if (ret != 0)
+                {
+                    LOGE("load_model failed on CPU retry: %d", ret);
+                    delete g_net;
+                    g_net = nullptr;
+                    return false;
+                }
+            }
+            else
+            {
+                LOGE("load_model failed: %d", ret);
+                delete g_net;
+                g_net = nullptr;
+                return false;
+            }
         }
     }
 
-    AndroidBitmap_unlockPixels(env, bitmap);
-    return mat;
-}
-
-static bool ncnnMatToBitmap(JNIEnv* env, const ncnn::Mat& mat, int out_w, int out_h, jobject* out_bitmap)
-{
-    jclass bitmap_cls = env->FindClass("android/graphics/Bitmap");
-    jmethodID create_bitmap = env->GetStaticMethodID(
-        bitmap_cls, "createBitmap",
-        "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
-    jclass config_cls = env->FindClass("android/graphics/Bitmap$Config");
-    jfieldID argb8888_field = env->GetStaticFieldID(config_cls, "ARGB_8888",
-        "Landroid/graphics/Bitmap$Config;");
-    jobject argb8888 = env->GetStaticObject(config_cls, argb8888_field);
-
-    jobject bitmap = env->CallStaticObjectMethod(bitmap_cls, create_bitmap, out_w, out_h, argb8888);
-    if (!bitmap)
+    const std::vector<int>& in_idxs = g_net->input_indexes();
+    const std::vector<int>& out_idxs = g_net->output_indexes();
+    if (!in_idxs.empty())
     {
-        LOGE("Bitmap.createBitmap returned null");
-        return false;
+        const std::vector<ncnn::Blob>& blobs = g_net->blobs();
+        g_input_blob_name = blobs[in_idxs[0]].name;
+    }
+    else
+    {
+        g_input_blob_name = "0";
+    }
+    if (!out_idxs.empty())
+    {
+        const std::vector<ncnn::Blob>& blobs = g_net->blobs();
+        g_output_blob_name = blobs[out_idxs[0]].name;
+    }
+    else
+    {
+        const std::vector<ncnn::Blob>& blobs = g_net->blobs();
+        g_output_blob_name = blobs.back().name;
     }
 
-    AndroidBitmapInfo info;
-    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS)
-    {
-        env->DeleteLocalRef(bitmap);
-        return false;
-    }
+    LOGI("Input blob: '%s', Output blob: '%s'",
+         g_input_blob_name.c_str(), g_output_blob_name.c_str());
 
-    void* pixels = nullptr;
-    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS)
-    {
-        env->DeleteLocalRef(bitmap);
-        return false;
-    }
-
-    const float* ptr_r = mat.channel(0);
-    const float* ptr_g = mat.channel(1);
-    const float* ptr_b = mat.channel(2);
-
-    unsigned char* rgba = (unsigned char*)pixels;
-    for (int y = 0; y < out_h; y++)
-    {
-        unsigned char* row = rgba + y * out_w * 4;
-        for (int x = 0; x < out_w; x++)
-        {
-            float r = ptr_r[y * out_w + x] * 255.f;
-            float g = ptr_g[y * out_w + x] * 255.f;
-            float b = ptr_b[y * out_w + x] * 255.f;
-            row[x * 4 + 0] = (unsigned char)(r < 0.f ? 0 : r > 255.f ? 255 : r);
-            row[x * 4 + 1] = (unsigned char)(g < 0.f ? 0 : g > 255.f ? 255 : g);
-            row[x * 4 + 2] = (unsigned char)(b < 0.f ? 0 : b > 255.f ? 255 : b);
-            row[x * 4 + 3] = 255;
-        }
-    }
-
-    AndroidBitmap_unlockPixels(env, bitmap);
-    *out_bitmap = bitmap;
     return true;
 }
 
-static ncnn::Mat extractRoi(const ncnn::Mat& src, int x0, int y0, int w, int h)
+static jobject createArgbBitmap(JNIEnv* env, int w, int h)
 {
-    ncnn::Mat roi(w, h, 3);
-    if (roi.empty())
-        return roi;
-
-    for (int c = 0; c < 3; c++)
-    {
-        const float* src_ptr = src.channel(c);
-        float* dst_ptr = roi.channel(c);
-        for (int y = 0; y < h; y++)
-        {
-            memcpy(dst_ptr + y * w, src_ptr + (y0 + y) * src.w + x0, w * sizeof(float));
-        }
-    }
-    return roi;
-}
-
-static void copyRoiToMat(const ncnn::Mat& roi, ncnn::Mat& dst, int dst_x, int dst_y)
-{
-    for (int c = 0; c < 3; c++)
-    {
-        const float* src_ptr = roi.channel(c);
-        float* dst_ptr = dst.channel(c);
-        for (int y = 0; y < roi.h; y++)
-        {
-            memcpy(dst_ptr + (dst_y + y) * dst.w + dst_x,
-                   src_ptr + y * roi.w,
-                   roi.w * sizeof(float));
-        }
-    }
+    jclass bitmap_cls = env->FindClass("android/graphics/Bitmap");
+    jmethodID create_method = env->GetStaticMethodID(
+        bitmap_cls, "createBitmap",
+        "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
+    jclass config_cls = env->FindClass("android/graphics/Bitmap$Config");
+    jfieldID argb8888_fid = env->GetStaticFieldID(
+        config_cls, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
+    jobject argb8888 = env->GetStaticObjectField(config_cls, argb8888_fid);
+    return env->CallStaticObjectMethod(bitmap_cls, create_method, w, h, argb8888);
 }
 
 static void reportProgress(JNIEnv* env, jobject listener, jmethodID mid, float progress)
@@ -260,181 +214,34 @@ extern "C" {
 
 JNIEXPORT jint JNICALL
 Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeInit(
-    JNIEnv* env, jobject thiz, jobject asset_manager, jstring model_dir,
-    jstring model_name, jint scale, jint gpu_id)
+    JNIEnv* env, jobject thiz, jstring param_path, jstring model_path,
+    jint scale, jint gpu_id)
 {
-    if (g_net)
+    const char* param_c = env->GetStringUTFChars(param_path, nullptr);
+    const char* model_c = env->GetStringUTFChars(model_path, nullptr);
+    if (!param_c || !model_c)
     {
-        delete g_net;
-        g_net = nullptr;
-    }
-
-    g_net = new ncnn::Net();
-    if (!g_net)
-    {
-        LOGE("Failed to allocate ncnn::Net");
+        LOGE("null param_path or model_path");
+        if (param_c) env->ReleaseStringUTFChars(param_path, param_c);
+        if (model_c) env->ReleaseStringUTFChars(model_path, model_c);
         return -1;
     }
 
-    g_net->opt.use_vulkan_compute = true;
-    g_net->opt.use_fp16_packed = true;
-    g_net->opt.use_fp16_storage = true;
-    g_net->opt.use_fp16_arithmetic = false;
-    g_net->opt.use_int8_storage = true;
-    g_net->opt.use_int8_arithmetic = false;
+    LOGI("Loading model: param=%s model=%s scale=%d gpu=%d",
+         param_c, model_c, scale, gpu_id);
 
-    bool use_gpu = (gpu_id >= 0) || (gpu_id == -1);
+    bool ok = loadModel(param_c, model_c, gpu_id);
 
-    if (use_gpu && ncnn::get_gpu_count() > 0)
-    {
-        if (gpu_id >= 0)
-        {
-            g_net->set_vulkan_device(gpu_id);
-            LOGI("Set Vulkan device %d", gpu_id);
-        }
-        else
-        {
-            g_net->set_vulkan_device(0);
-            LOGI("Auto-selected Vulkan device 0");
-        }
-    }
-    else
-    {
-        g_net->opt.use_vulkan_compute = false;
-        LOGI("Vulkan not available, using CPU");
-    }
+    env->ReleaseStringUTFChars(param_path, param_c);
+    env->ReleaseStringUTFChars(model_path, model_c);
 
-    AAssetManager* mgr = AAssetManager_fromJava(env, asset_manager);
-    if (!mgr)
-    {
-        LOGE("Failed to get AssetManager");
-        delete g_net;
-        g_net = nullptr;
+    if (!ok)
         return -1;
-    }
-
-    const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
-    const char* model_name_c = env->GetStringUTFChars(model_name, nullptr);
-
-    std::string base_path = "models/" + std::string(model_dir_c) + "/" + std::string(model_name_c);
-    std::string param_path = base_path + ".param";
-    std::string bin_path = base_path + ".bin";
-
-    LOGI("Loading model: %s", base_path.c_str());
-
-    AssetDataReader param_dr(mgr, param_path);
-    AssetDataReader bin_dr(mgr, bin_path);
-
-    bool use_vulkan = g_net->opt.use_vulkan_compute;
-    int ret = g_net->load_param(param_dr);
-    if (ret != 0)
-    {
-        if (use_vulkan)
-        {
-            LOGW("load_param failed with Vulkan, retrying on CPU");
-            delete g_net;
-            g_net = new ncnn::Net();
-            g_net->opt.use_vulkan_compute = false;
-            g_net->opt.use_fp16_packed = true;
-            g_net->opt.use_fp16_storage = true;
-            g_net->opt.use_fp16_arithmetic = false;
-            g_net->opt.use_int8_storage = true;
-            g_net->opt.use_int8_arithmetic = false;
-
-            AssetDataReader param_dr2(mgr, param_path);
-            ret = g_net->load_param(param_dr2);
-            if (ret != 0)
-            {
-                LOGE("load_param failed on CPU too: %d", ret);
-                env->ReleaseStringUTFChars(model_dir, model_dir_c);
-                env->ReleaseStringUTFChars(model_name, model_name_c);
-                delete g_net;
-                g_net = nullptr;
-                return -1;
-            }
-
-            AssetDataReader bin_dr2(mgr, bin_path);
-            ret = g_net->load_model(bin_dr2);
-            if (ret != 0)
-            {
-                LOGE("load_model failed on CPU: %d", ret);
-                env->ReleaseStringUTFChars(model_dir, model_dir_c);
-                env->ReleaseStringUTFChars(model_name, model_name_c);
-                delete g_net;
-                g_net = nullptr;
-                return -1;
-            }
-        }
-        else
-        {
-            LOGE("load_param failed: %d", ret);
-            env->ReleaseStringUTFChars(model_dir, model_dir_c);
-            env->ReleaseStringUTFChars(model_name, model_name_c);
-            delete g_net;
-            g_net = nullptr;
-            return -1;
-        }
-    }
-    else
-    {
-        ret = g_net->load_model(bin_dr);
-        if (ret != 0)
-        {
-            if (use_vulkan)
-            {
-                LOGW("load_model failed with Vulkan, retrying on CPU");
-                delete g_net;
-                g_net = new ncnn::Net();
-                g_net->opt.use_vulkan_compute = false;
-                g_net->opt.use_fp16_packed = true;
-                g_net->opt.use_fp16_storage = true;
-                g_net->opt.use_fp16_arithmetic = false;
-                g_net->opt.use_int8_storage = true;
-                g_net->opt.use_int8_arithmetic = false;
-
-                AssetDataReader param_dr3(mgr, param_path);
-                ret = g_net->load_param(param_dr3);
-                if (ret != 0)
-                {
-                    LOGE("load_param failed on CPU retry: %d", ret);
-                    env->ReleaseStringUTFChars(model_dir, model_dir_c);
-                    env->ReleaseStringUTFChars(model_name, model_name_c);
-                    delete g_net;
-                    g_net = nullptr;
-                    return -1;
-                }
-
-                AssetDataReader bin_dr3(mgr, bin_path);
-                ret = g_net->load_model(bin_dr3);
-                if (ret != 0)
-                {
-                    LOGE("load_model failed on CPU retry: %d", ret);
-                    env->ReleaseStringUTFChars(model_dir, model_dir_c);
-                    env->ReleaseStringUTFChars(model_name, model_name_c);
-                    delete g_net;
-                    g_net = nullptr;
-                    return -1;
-                }
-            }
-            else
-            {
-                LOGE("load_model failed: %d", ret);
-                env->ReleaseStringUTFChars(model_dir, model_dir_c);
-                env->ReleaseStringUTFChars(model_name, model_name_c);
-                delete g_net;
-                g_net = nullptr;
-                return -1;
-            }
-        }
-    }
 
     g_scale = scale;
 
-    env->ReleaseStringUTFChars(model_dir, model_dir_c);
-    env->ReleaseStringUTFChars(model_name, model_name_c);
-
-    LOGI("Model loaded successfully (scale=%d, vulkan=%d)", g_scale,
-         g_net->opt.use_vulkan_compute ? 1 : 0);
+    LOGI("Model loaded successfully (scale=%d, vulkan=%d)",
+         g_scale, g_net->opt.use_vulkan_compute ? 1 : 0);
     return 0;
 }
 
@@ -449,10 +256,9 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
     }
 
     jmethodID on_progress_mid = nullptr;
-    jclass listener_cls = nullptr;
     if (progress_listener)
     {
-        listener_cls = env->GetObjectClass(progress_listener);
+        jclass listener_cls = env->GetObjectClass(progress_listener);
         if (listener_cls)
             on_progress_mid = env->GetMethodID(listener_cls, "onProgress", "(F)V");
     }
@@ -464,6 +270,12 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
         return nullptr;
     }
 
+    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888)
+    {
+        LOGE("Bitmap format is not RGBA_8888");
+        return nullptr;
+    }
+
     int w = info.width;
     int h = info.height;
     int scale = g_scale;
@@ -472,17 +284,10 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
 
     LOGI("Enhancing %dx%d -> %dx%d (scale=%d)", w, h, out_w, out_h, scale);
 
-    ncnn::Mat inimage = bitmapToNcnnMat(env, bitmap);
-    if (inimage.empty())
+    void* input_pixels = nullptr;
+    if (AndroidBitmap_lockPixels(env, bitmap, &input_pixels) != ANDROID_BITMAP_RESULT_SUCCESS)
     {
-        LOGE("bitmapToNcnnMat failed");
-        return nullptr;
-    }
-
-    ncnn::Mat outimage(out_w, out_h, 3);
-    if (outimage.empty())
-    {
-        LOGE("Failed to allocate output Mat %dx%d", out_w, out_h);
+        LOGE("AndroidBitmap_lockPixels failed");
         return nullptr;
     }
 
@@ -496,8 +301,34 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
     int total_tiles = xtiles * ytiles;
     int completed = 0;
 
+    jobject out_bitmap = createArgbBitmap(env, out_w, out_h);
+    if (!out_bitmap)
+    {
+        AndroidBitmap_unlockPixels(env, bitmap);
+        LOGE("Failed to create output bitmap");
+        return nullptr;
+    }
+
+    AndroidBitmapInfo out_info;
+    AndroidBitmap_getInfo(env, out_bitmap, &out_info);
+    void* output_pixels = nullptr;
+    if (AndroidBitmap_lockPixels(env, out_bitmap, &output_pixels) != ANDROID_BITMAP_RESULT_SUCCESS)
+    {
+        AndroidBitmap_unlockPixels(env, bitmap);
+        env->DeleteLocalRef(out_bitmap);
+        LOGE("AndroidBitmap_lockPixels on output failed");
+        return nullptr;
+    }
+
     LOGI("Tiling: tile=%d xtiles=%d ytiles=%d prepadding=%d",
          tile_size, xtiles, ytiles, prepadding);
+
+    const float mean_vals[3] = {0.f, 0.f, 0.f};
+    const float norm_vals[3] = {1.f / 255.f, 1.f / 255.f, 1.f / 255.f};
+    const float out_mean[3] = {0.f, 0.f, 0.f};
+    const float out_norm[3] = {255.f, 255.f, 255.f};
+
+    ncnn::Option opt_default;
 
     for (int yi = 0; yi < ytiles; yi++)
     {
@@ -522,58 +353,92 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
             int crop_w = pad_x1 - pad_x0;
             int crop_h = pad_y1 - pad_y0;
 
-            ncnn::Mat tile_in = extractRoi(inimage, pad_x0, pad_y0, crop_w, crop_h);
-            if (tile_in.empty())
+            ncnn::Mat in_tile = ncnn::Mat::from_pixels_roi(
+                (const unsigned char*)input_pixels,
+                ncnn::Mat::PIXEL_RGBA2RGB,
+                w, h,
+                pad_x0, pad_y0, crop_w, crop_h);
+
+            if (in_tile.empty())
             {
-                LOGE("extractRoi failed for tile (%d,%d)", xi, yi);
+                LOGE("from_pixels_roi failed for tile (%d,%d)", xi, yi);
+                AndroidBitmap_unlockPixels(env, out_bitmap);
+                AndroidBitmap_unlockPixels(env, bitmap);
+                env->DeleteLocalRef(out_bitmap);
                 return nullptr;
             }
+
+            in_tile.substract_mean_normalize(mean_vals, norm_vals);
 
             ncnn::Extractor ex = g_net->create_extractor();
-            ex.input("input", tile_in);
+            ex.input(g_input_blob_name.c_str(), in_tile);
 
-            ncnn::Mat tile_out;
-            int ret = ex.extract("output", tile_out);
-            if (ret != 0 || tile_out.empty())
+            ncnn::Mat out_tile;
+            int ret = ex.extract(g_output_blob_name.c_str(), out_tile);
+            if (ret != 0 || out_tile.empty())
             {
                 LOGE("Inference failed for tile (%d,%d): ret=%d", xi, yi, ret);
+                AndroidBitmap_unlockPixels(env, out_bitmap);
+                AndroidBitmap_unlockPixels(env, bitmap);
+                env->DeleteLocalRef(out_bitmap);
                 return nullptr;
             }
+
+            out_tile.substract_mean_normalize(out_mean, out_norm);
 
             int sx = (tile_x0 - pad_x0) * scale;
             int sy = (tile_y0 - pad_y0) * scale;
             int valid_w = (tile_x1 - tile_x0) * scale;
             int valid_h = (tile_y1 - tile_y0) * scale;
 
-            ncnn::Mat valid_out = extractRoi(tile_out, sx, sy, valid_w, valid_h);
-            if (valid_out.empty())
+            ncnn::Mat valid_out(valid_w, valid_h, 3);
+            for (int c = 0; c < 3; c++)
             {
-                LOGE("extractRoi on output tile failed");
-                return nullptr;
+                const float* src_ptr = out_tile.channel(c);
+                float* dst_ptr = valid_out.channel(c);
+                for (int y = 0; y < valid_h; y++)
+                {
+                    memcpy(dst_ptr + y * valid_w,
+                           src_ptr + (sy + y) * out_tile.w + sx,
+                           valid_w * sizeof(float));
+                }
             }
 
+            unsigned char* out_rgba = (unsigned char*)output_pixels;
             int dst_x = tile_x0 * scale;
             int dst_y = tile_y0 * scale;
-            copyRoiToMat(valid_out, outimage, dst_x, dst_y);
+
+            for (int y = 0; y < valid_h; y++)
+            {
+                const float* ptr_r = valid_out.channel(0) + y * valid_w;
+                const float* ptr_g = valid_out.channel(1) + y * valid_w;
+                const float* ptr_b = valid_out.channel(2) + y * valid_w;
+
+                unsigned char* row = out_rgba +
+                    (dst_y + y) * out_info.stride + dst_x * 4;
+
+                for (int x = 0; x < valid_w; x++)
+                {
+                    float r = ptr_r[x];
+                    float g = ptr_g[x];
+                    float b = ptr_b[x];
+                    row[x * 4 + 0] = (unsigned char)(r < 0.f ? 0 : r > 255.f ? 255 : r);
+                    row[x * 4 + 1] = (unsigned char)(g < 0.f ? 0 : g > 255.f ? 255 : g);
+                    row[x * 4 + 2] = (unsigned char)(b < 0.f ? 0 : b > 255.f ? 255 : b);
+                    row[x * 4 + 3] = 255;
+                }
+            }
         }
 
         completed += xtiles;
-        if (on_progress_mid && progress_listener)
-        {
-            float progress = (float)completed / total_tiles;
-            reportProgress(env, progress_listener, on_progress_mid, progress);
-        }
+        reportProgress(env, progress_listener, on_progress_mid,
+                       (float)completed / total_tiles);
     }
 
-    if (on_progress_mid && progress_listener)
-        reportProgress(env, progress_listener, on_progress_mid, 1.0f);
+    AndroidBitmap_unlockPixels(env, out_bitmap);
+    AndroidBitmap_unlockPixels(env, bitmap);
 
-    jobject out_bitmap = nullptr;
-    if (!ncnnMatToBitmap(env, outimage, out_w, out_h, &out_bitmap))
-    {
-        LOGE("ncnnMatToBitmap failed");
-        return nullptr;
-    }
+    reportProgress(env, progress_listener, on_progress_mid, 1.0f);
 
     LOGI("Enhancement complete");
     return out_bitmap;
@@ -588,7 +453,9 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeCleanup(
         delete g_net;
         g_net = nullptr;
     }
-    g_scale = 2;
+    g_scale = 4;
+    g_input_blob_name.clear();
+    g_output_blob_name.clear();
     LOGI("Cleanup done");
 }
 

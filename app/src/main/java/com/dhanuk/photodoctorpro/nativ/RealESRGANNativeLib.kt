@@ -2,6 +2,8 @@ package com.dhanuk.photodoctorpro.nativ
 
 import android.content.Context
 import android.graphics.Bitmap
+import java.io.File
+import java.io.FileOutputStream
 
 interface ProgressCallback {
     fun onProgress(progress: Float)
@@ -29,9 +31,8 @@ object RealESRGANNativeLib {
     }
 
     private external fun nativeInit(
-        assetManager: Any,
-        modelDir: String,
-        modelName: String,
+        paramPath: String,
+        modelPath: String,
         scale: Int,
         gpuId: Int
     ): Int
@@ -45,6 +46,31 @@ object RealESRGANNativeLib {
 
     external fun isVulkanAvailable(): Boolean
 
+    private fun copyModelToCache(
+        context: Context,
+        modelDir: String,
+        modelName: String
+    ): Pair<String, String>? {
+        val cacheDir = File(context.cacheDir, "ncnn_models/$modelDir")
+        cacheDir.mkdirs()
+
+        val paramFile = File(cacheDir, "$modelName.param")
+        val binFile = File(cacheDir, "$modelName.bin")
+
+        try {
+            context.assets.open("models/$modelDir/$modelName.param").use { input ->
+                FileOutputStream(paramFile).use { output -> input.copyTo(output) }
+            }
+            context.assets.open("models/$modelDir/$modelName.bin").use { input ->
+                FileOutputStream(binFile).use { output -> input.copyTo(output) }
+            }
+        } catch (e: Exception) {
+            return null
+        }
+
+        return Pair(paramFile.absolutePath, binFile.absolutePath)
+    }
+
     fun initialize(
         context: Context,
         modelDir: String = "realesrgan-x4plus-anime",
@@ -55,8 +81,9 @@ object RealESRGANNativeLib {
         if (!nativeAvailable) return false
         if (isInitialized) return true
 
+        val paths = copyModelToCache(context, modelDir, modelName) ?: return false
         val gpuId = if (useGpu && isVulkanAvailable()) 0 else -1
-        val result = nativeInit(context.assets, modelDir, modelName, scale, gpuId)
+        val result = nativeInit(paths.first, paths.second, scale, gpuId)
         isInitialized = result == 0
         currentScale = scale
         return isInitialized
