@@ -11,7 +11,6 @@ import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
-import com.dhanuk.photodoctorpro.nativ.ProgressCallback
 
 object ImageEnhancer {
 
@@ -100,13 +99,11 @@ object ImageEnhancer {
         scaleFactor: Int,
         onProgress: ((Float) -> Unit)? = null
     ): Bitmap? {
-        val progressWrapper = object : ProgressCallback {
-            override fun onProgress(progress: Float) {
-                onProgress?.invoke(progress * 0.9f)
-            }
-        }
+        val progressLambda: ((Float) -> Unit)? = if (onProgress != null) {
+            { progress: Float -> onProgress(progress * 0.9f) }
+        } else null
 
-        val x4Result = RealESRGANNativeLib.enhance(bitmap, progressWrapper) ?: return null
+        val x4Result = RealESRGANNativeLib.enhance(bitmap, progressLambda) ?: return null
 
         return when (scaleFactor) {
             2 -> {
@@ -122,7 +119,8 @@ object ImageEnhancer {
                 val targetH = bitmap.height * scaleFactor
 
                 if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
-                    val src = Utils.bitmapToMat(x4Result)
+                    val src = Mat()
+                    Utils.bitmapToMat(x4Result, src)
                     val dst = Mat()
                     Imgproc.resize(src, dst, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
                     val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
