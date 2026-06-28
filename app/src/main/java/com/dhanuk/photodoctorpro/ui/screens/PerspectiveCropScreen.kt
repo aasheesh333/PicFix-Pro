@@ -72,7 +72,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
 import org.opencv.core.Core
-import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
@@ -369,19 +368,20 @@ class PerspectiveCropViewModel(
         val heightB = kotlin.math.sqrt(((br.x - bl.x) * (br.x - bl.x)) + ((br.y - bl.y) * (br.y - bl.y)))
         val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
 
-        val srcMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
-        srcMat.put(0, 0, doubleArrayOf(tl.x.toDouble(), tl.y.toDouble()))
-        srcMat.put(1, 0, doubleArrayOf(tr.x.toDouble(), tr.y.toDouble()))
-        srcMat.put(2, 0, doubleArrayOf(br.x.toDouble(), br.y.toDouble()))
-        srcMat.put(3, 0, doubleArrayOf(bl.x.toDouble(), bl.y.toDouble()))
+        val srcPts = org.opencv.core.MatOfPoint2f(
+            org.opencv.core.Point(tl.x.toDouble(), tl.y.toDouble()),
+            org.opencv.core.Point(tr.x.toDouble(), tr.y.toDouble()),
+            org.opencv.core.Point(br.x.toDouble(), br.y.toDouble()),
+            org.opencv.core.Point(bl.x.toDouble(), bl.y.toDouble())
+        )
+        val dstPts = org.opencv.core.MatOfPoint2f(
+            org.opencv.core.Point(0.0, 0.0),
+            org.opencv.core.Point(maxWidth.toDouble(), 0.0),
+            org.opencv.core.Point(maxWidth.toDouble(), maxHeight.toDouble()),
+            org.opencv.core.Point(0.0, maxHeight.toDouble())
+        )
 
-        val dstMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
-        dstMat.put(0, 0, doubleArrayOf(0.0, 0.0))
-        dstMat.put(1, 0, doubleArrayOf(maxWidth.toDouble(), 0.0))
-        dstMat.put(2, 0, doubleArrayOf(maxWidth.toDouble(), maxHeight.toDouble()))
-        dstMat.put(3, 0, doubleArrayOf(0.0, maxHeight.toDouble()))
-
-        val transform = Imgproc.getPerspectiveTransform(srcMat, dstMat)
+        val transform = Imgproc.getPerspectiveTransform(srcPts, dstPts)
 
         val srcBmpMat = Mat()
         Utils.bitmapToMat(source, srcBmpMat)
@@ -400,8 +400,8 @@ class PerspectiveCropViewModel(
         val output = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(dstMatImg, output)
 
-        srcMat.release()
-        dstMat.release()
+        srcPts.release()
+        dstPts.release()
         transform.release()
         srcBmpMat.release()
         dstMatImg.release()
