@@ -628,7 +628,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                                             drawPath(
                                                 path = dimPath,
                                                 color = ComposeColor.Black.copy(alpha = 0.55f),
-                                                style = androidx.compose.ui.graphics.Fill
+                                                style = androidx.compose.ui.graphics.drawscope.Fill
                                             )
                                             for (i in mappedCorners.indices) {
                                                 drawLine(
