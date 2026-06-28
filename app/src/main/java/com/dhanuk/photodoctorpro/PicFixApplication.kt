@@ -49,12 +49,13 @@ class PicFixApplication : Application() {
             }
             OpenCVInitialized = ok
             OpenCVInitializedFlow.value = ok
-            if (ok) {
-                if (BuildConfig.DEBUG) Log.d("PicFix", "OpenCV loaded successfully")
-            } else {
-                OpenCVInitFailureFlow.value = true
-                Log.e("PicFix", "OpenCV initialization failed!")
-            }
+        if (ok) {
+            if (BuildConfig.DEBUG) Log.d("PicFix", "OpenCV loaded successfully")
+        } else {
+            OpenCVInitFailureFlow.value = true
+            ErrorBanner.openCvFailed(this@PicFixApplication)
+            Log.e("PicFix", "OpenCV initialization failed!")
+        }
         }
     }
 

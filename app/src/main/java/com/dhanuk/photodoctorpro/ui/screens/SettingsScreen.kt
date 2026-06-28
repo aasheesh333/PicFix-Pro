@@ -246,21 +246,21 @@ fun SettingsScreen(navController: NavController) {
                 }
             )
 
-            LuminaListItem(
-                title = stringResource(R.string.terms_conditions),
-                leading = Icons.Outlined.Policy,
-                trailing = {
-                    Icon(
-                        imageVector = Icons.Outlined.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Terms-and-Conditions.html"))
-                    context.startActivity(intent)
-                }
-            )
+        LuminaListItem(
+            title = stringResource(R.string.open_source_licenses),
+            subtitle = stringResource(R.string.open_source_licenses_subtitle),
+            leading = Icons.Outlined.Info,
+            trailing = {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            onClick = { navController.navigate("open_source_licenses") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
             LuminaListItem(
                 title = stringResource(R.string.app_version),

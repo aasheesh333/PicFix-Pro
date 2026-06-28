@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dhanuk.photodoctorpro.ui.components.GlobalBannerAd
+import com.dhanuk.photodoctorpro.utils.ErrorBanner
+import com.dhanuk.photodoctorpro.utils.LocalGlobalNavigationState
+import androidx.compose.foundation.layout.Column
 
 @Composable
 fun AppScaffold() {
@@ -30,8 +33,9 @@ fun AppScaffold() {
         CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
             bottomBar = {
-                Column {
-                    GlobalBannerAd(navController)
+        Column {
+            ErrorBanner.GlobalErrorBanner()
+            GlobalBannerAd(navController)
                     AnimatedVisibility(
                         visible = showBottomBar,
                         enter = slideInVertically(

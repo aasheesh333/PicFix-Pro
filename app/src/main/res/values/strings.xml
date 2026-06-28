@@ -258,10 +258,18 @@
     <string name="share_to_whatsapp">Share to WhatsApp</string>
     <string name="opencv_not_ready">Image processing engine is not ready yet. Please try again in a moment.</string>
     <string name="could_not_allocate_bitmap">Could not allocate bitmap</string>
-    <string name="higher_scales_disabled">Higher scales disabled for very large images.</string>
-    <string name="quality_standard">Standard</string>
-    <string name="quality_hd">HD Quality</string>
-    <string name="download_hd_model">Download HD Model</string>
+    <string name="open_source_licenses">Open Source Licenses</string>
+    <string name="open_source_licenses_subtitle">Used libraries and licenses</string>
+    <string name="license_opencv">OpenCV 4.9.0</string>
+    <string name="license_opencv_text">Licensed under BSD 3-clause. Copyright (c) 2000-2024, Intel Corporation, OpenCV Foundation.</string>
+    <string name="license_ncnn">ncnn 20260526</string>
+    <string name="license_ncnn_text">Licensed under BSD 3-clause. Copyright (c) 2017-2026 Tencent/ncnn Authors.</string>
+    <string name="license_coil">Coil 2.6.0</string>
+    <string name="license_coil_text">Apache 2.0. Copyright (c) 2021 Coil Contributors.</string>
+    <string name="license_onesignal">OneSignal 5.1.0</string>
+    <string name="license_onesignal_text">BSD 2-clause + Expat. Copyright (c) 2021 OneSignal.</string>
+    <string name="license_material">Material 3</string>
+    <string name="license_material_text">Apache 2.0. Copyright © Google Inc.</string>
     <string name="download_hd_model_message">Download the HD enhancement model for better photo quality? (%1$.0f MB)</string>
     <string name="model_loading">Loading enhancement model…</string>
     <string name="enhance_gpu">GPU</string>
@@ -269,3 +277,4 @@
     <string name="enhance_fallback">Basic</string>
     <string name="enhance_engine_fmt">Engine: %1$s</string>
 </resources>
+<string name="open_source_licenses">Open Source Licenses</string>

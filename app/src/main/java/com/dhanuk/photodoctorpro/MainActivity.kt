@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.SystemClock
+import android.widget.Toast
+import com.dhanuk.photodoctorpro.R
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -94,19 +96,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var lastRationalePromptMs: Long = 0L
+    private var lastSettingsIntentMs: Long = 0L
     private fun maybeRepromptForDeniedPermissions() {
         if (deniedStatuses.isEmpty()) return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastRationalePromptMs < 5 * 60 * 1000L) return
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+        if (now - lastRationalePromptMs < 5 * 60 * 1000L || now - lastSettingsIntentMs < 5 * 60 * 1000L) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
 
         val stillDenied = deniedStatuses.firstOrNull { perm ->
             checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED
         } ?: return
 
+        val shouldShowRationale = shouldShowRequestPermissionRationale(stillDenied)
+        if (stillDenied == Manifest.permission.READ_MEDIA_IMAGES && 
+            !shouldShowRationale && 
+            android.provider.Settings.System.canWrite(this)
+        ) {
+            lastSettingsIntentMs = now
+            deniedStatuses.remove(stillDenied)
+                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    Toast.makeText(this, R.string.this_app_requires_storage_access_to_function, Toast.LENGTH_LONG).show()
+                    return
+        }
+
         lastRationalePromptMs = now
-        if (stillDenied == Manifest.permission.READ_MEDIA_IMAGES ||
+        if ((stillDenied == Manifest.permission.READ_MEDIA_IMAGES && shouldShowRationale) ||
             stillDenied == Manifest.permission.POST_NOTIFICATIONS
         ) {
             deniedStatuses.remove(stillDenied)
