@@ -230,21 +230,37 @@ fun SettingsScreen(navController: NavController) {
             LuminaSectionLabel(stringResource(R.string.about))
             Spacer(modifier = Modifier.height(4.dp))
 
-            LuminaListItem(
-                title = stringResource(R.string.privacy_policy),
-                leading = Icons.Outlined.Policy,
-                trailing = {
-                    Icon(
-                        imageVector = Icons.Outlined.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PhotoDoctor-Pro/Privacy-Policy.html?i=1"))
-                    context.startActivity(intent)
-                }
-            )
+        LuminaListItem(
+            title = stringResource(R.string.privacy_policy),
+            leading = Icons.Outlined.Policy,
+            trailing = {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Privacy-Policy.html"))
+                context.startActivity(intent)
+            }
+        )
+
+        LuminaListItem(
+            title = stringResource(R.string.terms_conditions),
+            leading = Icons.Outlined.Policy,
+            trailing = {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Terms.html"))
+                context.startActivity(intent)
+            }
+        )
 
         LuminaListItem(
             title = stringResource(R.string.open_source_licenses),
