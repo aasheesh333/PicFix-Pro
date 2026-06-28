@@ -257,7 +257,7 @@ fun SettingsScreen(navController: NavController) {
                 )
             },
             onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Terms.html"))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Terms-and-Conditions.html"))
                 context.startActivity(intent)
             }
         )
