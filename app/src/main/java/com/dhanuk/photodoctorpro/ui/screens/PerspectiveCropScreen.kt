@@ -844,7 +844,18 @@ fun PerspectiveCropScreen(navController: NavController) {
                         Text(stringResource(R.string.action_new))
                     }
                     if (uiState.processedBitmap == null) {
-                        Button(onClick = { viewModel.applyCrop() }, modifier = Modifier.weight(1f)) {
+                        Button(
+                            onClick = {
+                                if (!openCvReady) {
+                                    snackbarMessage = com.dhanuk.photodoctorpro.utils.getOpenCvNotReadyMessage()
+                                    snackbarType = SnackbarType.ERROR
+                                } else {
+                                    viewModel.applyCrop()
+                                }
+                            },
+                            enabled = openCvReady,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(stringResource(R.string.action_crop))
                         }
                     } else {

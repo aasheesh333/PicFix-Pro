@@ -257,13 +257,29 @@ fun resolveFileUri(path: String, context: Context): Uri {
 
 fun createShareIntent(path: String, context: Context, packageName: String? = null, mimeType: String = "image/*"): Intent {
     val uri = resolveFileUri(path, context)
+    val resolvedPackage = if (packageName == WHATSAPP_PACKAGE) resolveWhatsAppPackage(context) else packageName
     return Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (packageName != null) setPackage(packageName)
+        if (resolvedPackage != null) setPackage(resolvedPackage)
     }
 }
+
+fun resolveWhatsAppPackage(context: Context): String? {
+    val pm = context.packageManager
+    val candidates = listOf("com.whatsapp", "com.whatsapp.w4b")
+    for (pkg in candidates) {
+        try {
+            pm.getPackageInfo(pkg, 0)
+            return pkg
+        } catch (_: Exception) {
+        }
+    }
+    return null
+}
+
+private const val WHATSAPP_PACKAGE = "com.whatsapp"
 
 fun createOpenIntent(path: String, context: Context): Intent {
     val uri = resolveFileUri(path, context)

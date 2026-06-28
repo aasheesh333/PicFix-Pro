@@ -1,6 +1,8 @@
 package com.dhanuk.photodoctorpro
 
 import android.app.Application
+import android.app.ActivityManager
+import android.os.Build
 import android.util.Log
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
@@ -32,22 +34,25 @@ class PicFixApplication : Application() {
             OneSignal.Debug.logLevel = LogLevel.NONE
         }
 
-        if (BuildConfig.ONESIGNAL_APP_ID.isNotEmpty()) {
-            OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
-            requestNotificationPermission()
-        } else {
-            Log.w("PicFix", "OneSignal APP_ID is empty - push notifications disabled")
+        if (isMainProcess()) {
+            initializeOneSignal()
         }
     }
 
     private fun initOpenCvAsync() {
         applicationScope.launch(Dispatchers.IO) {
-            val ok = OpenCVLoader.initDebug()
+            val ok = try {
+                OpenCVLoader.initDebug()
+            } catch (e: Throwable) {
+                if (BuildConfig.DEBUG) Log.e("PicFix", "OpenCV init threw", e)
+                false
+            }
             OpenCVInitialized = ok
             OpenCVInitializedFlow.value = ok
             if (ok) {
                 if (BuildConfig.DEBUG) Log.d("PicFix", "OpenCV loaded successfully")
             } else {
+                OpenCVInitFailureFlow.value = true
                 Log.e("PicFix", "OpenCV initialization failed!")
             }
         }
@@ -59,13 +64,42 @@ class PicFixApplication : Application() {
         }
     }
 
+    private fun isMainProcess(): Boolean {
+        val currentProcessName = getCurrentProcessName()
+        return currentProcessName == packageName
+    }
+
+    private fun getCurrentProcessName(): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return getProcessName()
+        }
+        val pid = android.os.Process.myPid()
+        val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val processes = am.runningAppProcesses ?: return packageName
+        for (info in processes) {
+            if (info.pid == pid) return info.processName
+        }
+        return packageName
+    }
+
+    private fun initializeOneSignal() {
+        if (BuildConfig.ONESIGNAL_APP_ID.isEmpty()) {
+            Log.w("PicFix", "OneSignal APP_ID is empty - push notifications disabled")
+            return
+        }
+        OneSignal.initWithContext(this, BuildConfig.ONESIGNAL_APP_ID)
+        requestNotificationPermission()
+    }
+
     companion object {
         @Volatile
         var OpenCVInitialized: Boolean = false
             private set
 
         val OpenCVInitializedFlow = MutableStateFlow(false)
+        val OpenCVInitFailureFlow = MutableStateFlow(false)
         val openCVInitialized: StateFlow<Boolean> get() = OpenCVInitializedFlow
+        val openCVInitFailed: StateFlow<Boolean> get() = OpenCVInitFailureFlow
 
         private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }

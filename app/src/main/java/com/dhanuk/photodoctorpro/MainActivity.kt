@@ -21,7 +21,18 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val denied = permissions.filterValues { !it }.keys
+            if (denied.isNotEmpty()) {
+                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                    android.util.Log.w("MainActivity", "Permissions denied: $denied")
+                }
+                deniedStatuses.addAll(denied)
+            }
         }
+
+    private val deniedStatuses = mutableSetOf<String>()
+
+    fun isPermissionDenied(perm: String): Boolean = deniedStatuses.contains(perm)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -53,6 +64,29 @@ class MainActivity : ComponentActivity() {
         if (ConsentManager.canRequestAds()) {
             AdManager.onAppForeground(this)
         }
+        maybeRepromptForDeniedPermissions()
+    }
+
+    private var lastRationalePromptMs: Long = 0L
+    private fun maybeRepromptForDeniedPermissions() {
+        if (deniedStatuses.isEmpty()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastRationalePromptMs < 5 * 60 * 1000L) return
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+
+        val stillDenied = deniedStatuses.firstOrNull { perm ->
+            checkSelfPermission(perm) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        } ?: return
+
+        lastRationalePromptMs = now
+        if (stillDenied == Manifest.permission.READ_MEDIA_IMAGES ||
+            stillDenied == Manifest.permission.POST_NOTIFICATIONS
+        ) {
+            deniedStatuses.remove(stillDenied)
+            requestPermissionLauncher.launch(arrayOf(stillDenied))
+        }
+    }
+}
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

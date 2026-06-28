@@ -35,6 +35,7 @@ import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
+import com.dhanuk.photodoctorpro.utils.resolveWhatsAppPackage
 import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
@@ -92,10 +93,11 @@ fun ImageToPdfScreen(navController: NavController) {
             onShareWhatsApp = {
                 try {
                     val uri = resolveFileUri(path, context)
+                    val waPkg = resolveWhatsAppPackage(context)
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
-                        setPackage("com.whatsapp")
+                        if (waPkg != null) setPackage(waPkg)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     context.startActivity(intent)
