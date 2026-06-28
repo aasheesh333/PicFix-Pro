@@ -1,19 +1,22 @@
 package com.dhanuk.photodoctorpro
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
-import android.widget.Toast
-import com.dhanuk.photodoctorpro.R
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.dhanuk.photodoctorpro.R
 import com.dhanuk.photodoctorpro.ui.navigation.AppScaffold
 import com.dhanuk.photodoctorpro.ui.theme.PicFixProTheme
 import com.dhanuk.photodoctorpro.utils.AdManager
@@ -97,6 +100,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var lastSettingsIntentMs: Long = 0L
+    private var lastRationalePromptMs: Long = 0L
     private fun maybeRepromptForDeniedPermissions() {
         if (deniedStatuses.isEmpty()) return
         val now = SystemClock.elapsedRealtime()

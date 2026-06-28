@@ -18,7 +18,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dhanuk.photodoctorpro.ui.components.GlobalBannerAd
 import com.dhanuk.photodoctorpro.utils.ErrorBanner
-import com.dhanuk.photodoctorpro.utils.LocalGlobalNavigationState
+import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import androidx.compose.foundation.layout.Column
 
 @Composable

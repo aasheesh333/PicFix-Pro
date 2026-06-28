@@ -13,8 +13,6 @@ import com.dhanuk.photodoctorpro.ui.screens.*
 
 private const val ANIM_DURATION = 300
 
-private const val ANIM_DURATION = 300
-
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
     val slideEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
@@ -111,7 +109,6 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
     composable("open_source_licenses",
         enterTransition = slideEnter, exitTransition = fadeExit,
         popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
-    )
-    { OpenSourceLicensesScreen(navController) }
+    ) { OpenSourceLicensesScreen(navController) }
 }
 }

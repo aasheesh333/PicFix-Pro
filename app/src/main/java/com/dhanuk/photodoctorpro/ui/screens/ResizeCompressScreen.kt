@@ -470,7 +470,7 @@ private fun SizeSummaryRow(
     ) {
         Column(horizontalAlignment = Alignment.Start) {
             Text(
-                stringResource(R.string.original_label),
+                        stringResource(R.string.original),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
 import com.dhanuk.photodoctorpro.utils.CrashReporter
+import com.dhanuk.photodoctorpro.utils.ErrorBanner
 import com.dhanuk.photodoctorpro.utils.NotificationHelper
 import com.dhanuk.photodoctorpro.utils.ThemeController
 import kotlinx.coroutines.flow.MutableStateFlow

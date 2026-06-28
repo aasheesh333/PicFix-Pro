@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.dhanuk.photodoctorpro.ui.components.LuminaFlatErrorBanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -23,7 +24,7 @@ object ErrorBanner {
     fun GlobalErrorBanner() {
         val picFixApp = com.dhanuk.photodoctorpro.PicFixApplication
         val openCvFailed by picFixApp.openCVInitFailed.collectAsState(false)
-        val openCvErrorDismissed by openCvErrorShown.collectAsState(false)
+        val openCvErrorDismissed by _openCvErrorShown.collectAsState(false)
 
         if (openCvFailed && !openCvErrorDismissed) {
             LuminaFlatErrorBanner(
