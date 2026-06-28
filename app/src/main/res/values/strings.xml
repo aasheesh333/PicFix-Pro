@@ -77,7 +77,20 @@
     <string name="target_size">Target size</string>
     <string name="quality">Quality</string>
     <string name="save_compressed">Save optimized</string>
-    <string name="original_label">Original</string>
+
+    <!-- Open Source Licenses -->
+    <string name="open_source_licenses">Open Source Licenses</string>
+    <string name="open_source_licenses_subtitle">Used libraries and licenses</string>
+    <string name="license_opencv">OpenCV 4.9.0</string>
+    <string name="license_opencv_text">Licensed under BSD 3-clause. Copyright (c) 2000-2024, Intel Corporation, OpenCV Foundation.</string>
+    <string name="license_ncnn">ncnn 20260526</string>
+    <string name="license_ncnn_text">Licensed under BSD 3-clause. Copyright (c) 2017-2026 Tencent/ncnn Authors.</string>
+    <string name="license_coil">Coil 2.6.0</string>
+    <string name="license_coil_text">Apache 2.0. Copyright (c) 2021 Coil Contributors.</string>
+    <string name="license_onesignal">OneSignal 5.1.0</string>
+    <string name="license_onesignal_text">BSD 2-clause + Expat. Copyright (c) 2021 OneSignal.</string>
+    <string name="license_material">Material 3</string>
+    <string name="license_material_text">Apache 2.0. Copyright © Google Inc.</string>
     <string name="optimized">Optimized</string>
     <string name="saved_pct">Saved: %1$s</string>
     <string name="brightness">Brightness</string>
@@ -277,4 +290,3 @@
     <string name="enhance_fallback">Basic</string>
     <string name="enhance_engine_fmt">Engine: %1$s</string>
 </resources>
-<string name="open_source_licenses">Open Source Licenses</string>
