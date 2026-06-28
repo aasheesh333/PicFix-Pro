@@ -383,8 +383,17 @@ class PerspectiveCropViewModel(
 
         val transform = Imgproc.getPerspectiveTransform(srcPts, dstPts)
 
+        val srcBitmap = if (source.config != Bitmap.Config.ARGB_8888) {
+            val converted = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(converted)
+            c.drawBitmap(source, 0f, 0f, null)
+            converted
+        } else {
+            source
+        }
+
         val srcBmpMat = Mat()
-        Utils.bitmapToMat(source, srcBmpMat)
+        Utils.bitmapToMat(srcBitmap, srcBmpMat)
 
         val dstMatImg = Mat()
         Imgproc.warpPerspective(
