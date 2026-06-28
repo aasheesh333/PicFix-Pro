@@ -355,13 +355,8 @@ class PerspectiveCropViewModel(
 
         val (tl, tr, br, bl) = sortCornersForWarp(corners)
 
-        val widthTop = dist(tl, tr)
-        val widthBottom = dist(bl, br)
-        val heightLeft = dist(tl, bl)
-        val heightRight = dist(tr, br)
-
-        val outW = ((widthTop + widthBottom) / 2f).toInt().coerceAtLeast(1)
-        val outH = ((heightLeft + heightRight) / 2f).toInt().coerceAtLeast(1)
+        val outW = dist(tl, tr).toInt().coerceAtLeast(1)
+        val outH = dist(tr, br).toInt().coerceAtLeast(1)
 
         val srcPts = org.opencv.core.MatOfPoint2f(
             org.opencv.core.Point(tl.x.toDouble(), tl.y.toDouble()),
