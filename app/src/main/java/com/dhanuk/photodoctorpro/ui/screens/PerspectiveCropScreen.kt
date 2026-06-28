@@ -370,16 +370,16 @@ class PerspectiveCropViewModel(
         val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
 
         val srcMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
-        srcMat.put(0, 0, tl.x, tl.y)
-        srcMat.put(1, 0, tr.x, tr.y)
-        srcMat.put(2, 0, br.x, br.y)
-        srcMat.put(3, 0, bl.x, bl.y)
+        srcMat.put(0, 0, doubleArrayOf(tl.x.toDouble(), tl.y.toDouble()))
+        srcMat.put(1, 0, doubleArrayOf(tr.x.toDouble(), tr.y.toDouble()))
+        srcMat.put(2, 0, doubleArrayOf(br.x.toDouble(), br.y.toDouble()))
+        srcMat.put(3, 0, doubleArrayOf(bl.x.toDouble(), bl.y.toDouble()))
 
         val dstMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
-        dstMat.put(0, 0, 0.0, 0.0)
-        dstMat.put(1, 0, maxWidth.toDouble(), 0.0)
-        dstMat.put(2, 0, maxWidth.toDouble(), maxHeight.toDouble())
-        dstMat.put(3, 0, 0.0, maxHeight.toDouble())
+        dstMat.put(0, 0, doubleArrayOf(0.0, 0.0))
+        dstMat.put(1, 0, doubleArrayOf(maxWidth.toDouble(), 0.0))
+        dstMat.put(2, 0, doubleArrayOf(maxWidth.toDouble(), maxHeight.toDouble()))
+        dstMat.put(3, 0, doubleArrayOf(0.0, maxHeight.toDouble()))
 
         val transform = Imgproc.getPerspectiveTransform(srcMat, dstMat)
 
