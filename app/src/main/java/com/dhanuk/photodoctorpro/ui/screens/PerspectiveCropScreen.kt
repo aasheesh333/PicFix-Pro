@@ -729,19 +729,30 @@ fun PerspectiveCropScreen(navController: NavController) {
                                         }
                                     }
 
+                                    val currentCorners by rememberUpdatedState(uiState.corners)
+                                    val currentScale by rememberUpdatedState(iScale)
+                                    val currentOffX by rememberUpdatedState(offX)
+                                    val currentOffY by rememberUpdatedState(offY)
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .pointerInput(canvasSize, uiState.corners) {
+                                            .pointerInput(canvasSize) {
                                                 var activeCorner = -1
                                                 detectDragGestures(
                                                     onDragStart = { offset ->
-                                                        if (mappedCorners.size == 4) {
+                                                        val corners = currentCorners
+                                                        val s = currentScale
+                                                        val ox = currentOffX
+                                                        val oy = currentOffY
+                                                        if (corners.size == 4) {
                                                             var minDist = Float.MAX_VALUE
                                                             var closestIdx = -1
-                                                            mappedCorners.forEachIndexed { idx, corner ->
-                                                                val dx = offset.x - corner.x
-                                                                val dy = offset.y - corner.y
+                                                            corners.forEachIndexed { idx, corner ->
+                                                                val sx = ox + corner.x * s
+                                                                val sy = oy + corner.y * s
+                                                                val dx = offset.x - sx
+                                                                val dy = offset.y - sy
                                                                 val dist = kotlin.math.sqrt(dx * dx + dy * dy)
                                                                 if (dist < minDist) {
                                                                     minDist = dist
