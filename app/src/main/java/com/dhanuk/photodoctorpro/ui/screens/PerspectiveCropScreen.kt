@@ -732,7 +732,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .pointerInput(canvasSize) {
+                                            .pointerInput(canvasSize, uiState.corners) {
                                                 var activeCorner = -1
                                                 detectDragGestures(
                                                     onDragStart = { offset ->
