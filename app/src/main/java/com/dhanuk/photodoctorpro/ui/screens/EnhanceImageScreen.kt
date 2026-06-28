@@ -34,6 +34,7 @@ import com.dhanuk.photodoctorpro.ui.components.rememberZoomableBoxState
 import com.dhanuk.photodoctorpro.ui.components.AnimatedSnackbar
 import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
+import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
 import kotlinx.coroutines.launch
@@ -160,6 +161,7 @@ fun EnhanceImageScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+            (context as? android.app.Activity)?.let { AdManager.showInterstitialOnSave(it) }
             showSaveSuccessDialog = path
             viewModel.onSavedMessageShown()
         }

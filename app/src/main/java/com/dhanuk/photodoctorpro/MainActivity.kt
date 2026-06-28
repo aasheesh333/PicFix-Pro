@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ThemeController.init(this)
+        AdManager.setCurrentActivity(this)
         notifySystemDarkMode()
         if (ConsentManager.canRequestAds()) {
             AdManager.onAppForeground(this)

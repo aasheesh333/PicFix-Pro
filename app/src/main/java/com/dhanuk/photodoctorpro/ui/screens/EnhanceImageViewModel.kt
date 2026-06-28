@@ -140,7 +140,6 @@ class EnhanceImageViewModel(
                     timestamp = System.currentTimeMillis()
                 )
             )
-            AdManager.showInterstitialAd(activity)
             _uiState.update { it.copy(savedFilePath = filePath) }
             true
         } catch (ce: kotlinx.coroutines.CancellationException) {

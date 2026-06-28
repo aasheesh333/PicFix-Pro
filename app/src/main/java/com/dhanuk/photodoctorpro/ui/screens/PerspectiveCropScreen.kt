@@ -64,6 +64,7 @@ import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.utils.viewModelExceptionHandler
 import com.dhanuk.photodoctorpro.utils.createShareIntent
+import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -604,6 +605,7 @@ fun PerspectiveCropScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+            (context as? android.app.Activity)?.let { AdManager.showInterstitialOnSave(it) }
             showSaveSuccessDialog = path
             viewModel.onSavedMessageShown()
         }
@@ -727,12 +729,11 @@ fun PerspectiveCropScreen(navController: NavController) {
                                         }
                                     }
 
-                                    var draggedCornerIndex by remember { mutableStateOf(-1) }
-
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .pointerInput(canvasSize) {
+                                                var activeCorner = -1
                                                 detectDragGestures(
                                                     onDragStart = { offset ->
                                                         if (mappedCorners.size == 4) {
@@ -747,18 +748,14 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                                     closestIdx = idx
                                                                 }
                                                             }
-                                                            if (minDist < 80f) {
-                                                                draggedCornerIndex = closestIdx
-                                                            } else {
-                                                                draggedCornerIndex = -1
-                                                            }
+                                                            activeCorner = if (minDist < 80f) closestIdx else -1
                                                         }
                                                     },
                                                     onDrag = { change, _ ->
-                                                        if (draggedCornerIndex >= 0) {
+                                                        if (activeCorner >= 0) {
                                                             change.consume()
                                                             viewModel.updateCorner(
-                                                                draggedCornerIndex,
+                                                                activeCorner,
                                                                 change.position.x,
                                                                 change.position.y,
                                                                 canvasSize
@@ -766,10 +763,10 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                         }
                                                     },
                                                     onDragEnd = {
-                                                        draggedCornerIndex = -1
+                                                        activeCorner = -1
                                                     },
                                                     onDragCancel = {
-                                                        draggedCornerIndex = -1
+                                                        activeCorner = -1
                                                     }
                                                 )
                                             }

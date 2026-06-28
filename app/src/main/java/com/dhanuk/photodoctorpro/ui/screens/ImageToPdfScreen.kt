@@ -35,6 +35,7 @@ import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.AnimatedLoadingIndicator
 import com.dhanuk.photodoctorpro.utils.resolveFileUri
+import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.findActivity
 import com.dhanuk.photodoctorpro.ui.screens.ViewModelFactory
 
@@ -78,8 +79,9 @@ fun ImageToPdfScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
-             showSaveSuccessDialog = path
-             viewModel.onSavedMessageShown()
+            (context as? android.app.Activity)?.let { AdManager.showInterstitialOnSave(it) }
+            showSaveSuccessDialog = path
+            viewModel.onSavedMessageShown()
         }
     }
 

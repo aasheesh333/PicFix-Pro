@@ -124,7 +124,6 @@ class ImageToPdfViewModel(
                     )
                 )
                 _uiState.update { it.copy(isCreating = false, pdfCreationSuccess = true, savedFilePath = filePath) }
-                AdManager.showInterstitialAd(activity)
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {

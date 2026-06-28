@@ -74,6 +74,7 @@ import com.dhanuk.photodoctorpro.ui.components.SnackbarType
 import com.dhanuk.photodoctorpro.ui.components.SaveSuccessDialog
 import com.dhanuk.photodoctorpro.ui.components.luminaGlass
 import com.dhanuk.photodoctorpro.ui.components.rememberBitmap
+import com.dhanuk.photodoctorpro.utils.AdManager
 import com.dhanuk.photodoctorpro.utils.createOpenIntent
 import com.dhanuk.photodoctorpro.utils.createShareIntent
 import java.text.DecimalFormat
@@ -113,6 +114,7 @@ fun ResizeCompressScreen(navController: NavController) {
 
     LaunchedEffect(uiState.savedFilePath) {
         uiState.savedFilePath?.let { path ->
+            (context as? android.app.Activity)?.let { AdManager.showInterstitialOnSave(it) }
             showSaveSuccessDialog = path
             viewModel.onSavedMessageShown()
         }
