@@ -84,6 +84,7 @@ enum class AspectRatioLock(val displayName: String, val ratio: Float?) {
     RATIO_4_3("4:3", 4f / 3f),
     RATIO_3_2("3:2", 3f / 2f),
     RATIO_16_9("16:9", 16f / 9f),
+    RATIO_9_16("9:16", 9f / 16f),
     A4("A4", 210f / 297f)
 }
 
@@ -817,12 +818,13 @@ fun PerspectiveCropScreen(navController: NavController) {
                                 label = {
                                     Text(
                                         when (lock) {
-                                            AspectRatioLock.FREE -> stringResource(R.string.aspect_ratio_free)
-                                            AspectRatioLock.SQUARE -> stringResource(R.string.aspect_ratio_1_1)
-                                            AspectRatioLock.RATIO_4_3 -> stringResource(R.string.aspect_ratio_4_3)
-                                            AspectRatioLock.RATIO_3_2 -> stringResource(R.string.aspect_ratio_3_2)
-                                            AspectRatioLock.RATIO_16_9 -> stringResource(R.string.aspect_ratio_16_9)
-                                            AspectRatioLock.A4 -> stringResource(R.string.aspect_ratio_a4)
+            AspectRatioLock.FREE -> stringResource(R.string.aspect_ratio_free)
+            AspectRatioLock.SQUARE -> stringResource(R.string.aspect_ratio_1_1)
+            AspectRatioLock.RATIO_4_3 -> stringResource(R.string.aspect_ratio_4_3)
+            AspectRatioLock.RATIO_3_2 -> stringResource(R.string.aspect_ratio_3_2)
+            AspectRatioLock.RATIO_16_9 -> stringResource(R.string.aspect_ratio_16_9)
+            AspectRatioLock.RATIO_9_16 -> stringResource(R.string.aspect_ratio_9_16)
+            AspectRatioLock.A4 -> stringResource(R.string.aspect_ratio_a4)
                                         }
                                     )
                                 }

@@ -111,4 +111,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
     composable("open_source_licenses",
         enterTransition = slideEnter, exitTransition = fadeExit,
         popEnterTransition = fadePopEnter, popExitTransition = slidePopExit
-    ) { OpenSourceLicensesScreen(navController) }
+    )
+    { OpenSourceLicensesScreen(navController) }
+}
+}
