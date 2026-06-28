@@ -3,9 +3,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Matrix
-import android.graphics.Paint
 import android.graphics.PointF
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -74,8 +71,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Point
+import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 
@@ -352,35 +352,73 @@ class PerspectiveCropViewModel(
 
     private fun warpPerspective(source: Bitmap, corners: List<PointF>): Bitmap {
         if (corners.size != 4) return source
-        val src = floatArrayOf(
-            corners[0].x, corners[0].y,
-            corners[1].x, corners[1].y,
-            corners[2].x, corners[2].y,
-            corners[3].x, corners[3].y
+        if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) return source
+
+        val sorted = sortCornersForWarp(corners)
+
+        val tl = sorted[0]
+        val tr = sorted[1]
+        val br = sorted[2]
+        val bl = sorted[3]
+
+        val widthA = kotlin.math.sqrt(((tr.x - br.x) * (tr.x - br.x)) + ((tr.y - br.y) * (tr.y - br.y)))
+        val widthB = kotlin.math.sqrt(((tl.x - bl.x) * (tl.x - bl.x)) + ((tl.y - bl.y) * (tl.y - bl.y)))
+        val maxWidth = kotlin.math.max(widthA, widthB).toInt().coerceAtLeast(1)
+
+        val heightA = kotlin.math.sqrt(((tr.x - tl.x) * (tr.x - tl.x)) + ((tr.y - tl.y) * (tr.y - tl.y)))
+        val heightB = kotlin.math.sqrt(((br.x - bl.x) * (br.x - bl.x)) + ((br.y - bl.y) * (br.y - bl.y)))
+        val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
+
+        val srcMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
+        srcMat.put(0, 0, tl.x, tl.y)
+        srcMat.put(1, 0, tr.x, tr.y)
+        srcMat.put(2, 0, br.x, br.y)
+        srcMat.put(3, 0, bl.x, bl.y)
+
+        val dstMat = Mat(4, 1, org.opencv.core.CvType.CV_32FC2)
+        dstMat.put(0, 0, 0.0, 0.0)
+        dstMat.put(1, 0, maxWidth.toDouble(), 0.0)
+        dstMat.put(2, 0, maxWidth.toDouble(), maxHeight.toDouble())
+        dstMat.put(3, 0, 0.0, maxHeight.toDouble())
+
+        val transform = Imgproc.getPerspectiveTransform(srcMat, dstMat)
+
+        val srcBmpMat = Mat()
+        Utils.bitmapToMat(source, srcBmpMat)
+
+        val dstMatImg = Mat()
+        Imgproc.warpPerspective(
+            srcBmpMat,
+            dstMatImg,
+            transform,
+            Size(maxWidth.toDouble(), maxHeight.toDouble()),
+            Imgproc.INTER_LINEAR,
+            org.opencv.core.Core.BORDER_CONSTANT,
+            org.opencv.core.Scalar(0.0, 0.0, 0.0, 0.0)
         )
 
-        val widthTop = kotlin.math.sqrt(((src[2] - src[0]) * (src[2] - src[0])) + ((src[3] - src[1]) * (src[3] - src[1])))
-        val widthBottom = kotlin.math.sqrt(((src[4] - src[6]) * (src[4] - src[6])) + ((src[5] - src[7]) * (src[5] - src[7])))
-        val heightLeft = kotlin.math.sqrt(((src[6] - src[0]) * (src[6] - src[0])) + ((src[7] - src[1]) * (src[7] - src[1])))
-        val heightRight = kotlin.math.sqrt(((src[4] - src[2]) * (src[4] - src[2])) + ((src[5] - src[3]) * (src[5] - src[3])))
+        val output = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(dstMatImg, output)
 
-        val outW = ((widthTop + widthBottom) / 2f).toInt().coerceAtLeast(1)
-        val outH = ((heightLeft + heightRight) / 2f).toInt().coerceAtLeast(1)
+        srcMat.release()
+        dstMat.release()
+        transform.release()
+        srcBmpMat.release()
+        dstMatImg.release()
 
-        val dst = floatArrayOf(
-            0f, 0f,
-            outW.toFloat(), 0f,
-            outW.toFloat(), outH.toFloat(),
-            0f, outH.toFloat()
-        )
-
-        val matrix = Matrix()
-        matrix.setPolyToPoly(src, 0, dst, 0, 4)
-        val output = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
-        canvas.drawBitmap(source, matrix, paint)
         return output
+    }
+
+    private fun sortCornersForWarp(corners: List<PointF>): List<PointF> {
+        if (corners.size != 4) return corners
+        val cx = corners.map { it.x }.average().toFloat()
+        val cy = corners.map { it.y }.average().toFloat()
+        val sorted = corners.sortedBy { corner ->
+            val angle = kotlin.math.atan2((corner.y - cy).toDouble(), (corner.x - cx).toDouble())
+            ((angle + Math.PI * 0.75) % (Math.PI * 2))
+        }
+        if (sorted.size != 4) return corners
+        return sorted
     }
 
     fun saveImage(context: android.content.Context) {
