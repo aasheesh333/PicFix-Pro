@@ -278,13 +278,15 @@ fun SettingsScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-            LuminaListItem(
-                title = stringResource(R.string.app_version),
-                subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                leading = Icons.Outlined.Info
-            )
+        Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(40.dp))
-        }
+        LuminaListItem(
+            title = stringResource(R.string.app_version),
+            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            leading = Icons.Outlined.Info
+        )
+
+        Spacer(modifier = Modifier.height(40.dp))
     }
+}
 }
