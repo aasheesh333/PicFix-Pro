@@ -277,10 +277,118 @@ class PerspectiveCropViewModel(
         val scale = displayedW / bitmapW
         val bitmapX = ((x - offsetX) / scale).coerceIn(0f, bitmapW)
         val bitmapY = ((y - offsetY) / scale).coerceIn(0f, bitmapH)
-        val updated = _uiState.value.corners.toMutableList()
-        if (index !in updated.indices) return
-        updated[index] = PointF(bitmapX, bitmapY)
-        _uiState.update { it.copy(corners = updated) }
+
+        val lock = _uiState.value.aspectRatio
+        if (lock.ratio == null) {
+            val updated = _uiState.value.corners.toMutableList()
+            if (index !in updated.indices) return
+            updated[index] = PointF(bitmapX, bitmapY)
+            _uiState.update { it.copy(corners = updated) }
+        } else {
+            rectangularResizeCorner(index, bitmapX, bitmapY, lock.ratio)
+        }
+    }
+
+    private fun rectangularResizeCorner(dragIndex: Int, dragX: Float, dragY: Float, ratio: Float) {
+        val bitmap = _uiState.value.originalBitmap ?: return
+        val bitmapW = bitmap.width.toFloat()
+        val bitmapH = bitmap.height.toFloat()
+        val corners = _uiState.value.corners.toMutableList()
+        if (corners.size != 4) return
+
+        val oppositeIndex = (dragIndex + 2) % 4
+        val fixed = corners[oppositeIndex]
+
+        val rawW = kotlin.math.abs(dragX - fixed.x)
+        val rawH = kotlin.math.abs(dragY - fixed.y)
+        if (rawW < 10f || rawH < 10f) return
+
+        val newW: Float
+        val newH: Float
+        if (rawW / rawH > ratio) {
+            newW = rawW
+            newH = newW / ratio
+        } else {
+            newH = rawH
+            newW = newH * ratio
+        }
+        if (newW < 10f || newH < 10f) return
+
+        val tlX: Float
+        val tlY: Float
+        when (dragIndex) {
+            0 -> { tlX = fixed.x - newW; tlY = fixed.y - newH }
+            1 -> { tlX = fixed.x; tlY = fixed.y - newH }
+            2 -> { tlX = fixed.x; tlY = fixed.y }
+            3 -> { tlX = fixed.x - newW; tlY = fixed.y }
+            else -> return
+        }
+
+        val cTlX = tlX.coerceIn(0f, bitmapW)
+        val cTlY = tlY.coerceIn(0f, bitmapH)
+        val cBrX = (tlX + newW).coerceIn(0f, bitmapW)
+        val cBrY = (tlY + newH).coerceIn(0f, bitmapH)
+        if (cBrX - cTlX < 10f || cBrY - cTlY < 10f) return
+
+        corners[0] = PointF(cTlX, cTlY)
+        corners[1] = PointF(cBrX, cTlY)
+        corners[2] = PointF(cBrX, cBrY)
+        corners[3] = PointF(cTlX, cBrY)
+
+        _uiState.update { it.copy(corners = corners) }
+    }
+
+    fun rectangularResizeEdge(edgeIndex: Int, dragX: Float, dragY: Float, ratio: Float) {
+        val bitmap = _uiState.value.originalBitmap ?: return
+        val bitmapW = bitmap.width.toFloat()
+        val bitmapH = bitmap.height.toFloat()
+        val corners = _uiState.value.corners.toMutableList()
+        if (corners.size != 4) return
+
+        val tl = corners[0]; val tr = corners[1]; val br = corners[2]; val bl = corners[3]
+        val centerX = (tl.x + tr.x + br.x + bl.x) / 4f
+        val centerY = (tl.y + tr.y + bl.y + br.y) / 4f
+
+        var newW = br.x - tl.x
+        var newH = br.y - tl.y
+        when (edgeIndex) {
+            0 -> {
+                val topY = dragY.coerceAtMost(br.y - 10f)
+                newH = 2f * (centerY - topY)
+                newW = newH * ratio
+            }
+            1 -> {
+                val rightX = dragX.coerceAtLeast(tl.x + 10f)
+                newW = 2f * (rightX - centerX)
+                newH = newW / ratio
+            }
+            2 -> {
+                val bottomY = dragY.coerceAtLeast(tl.y + 10f)
+                newH = 2f * (bottomY - centerY)
+                newW = newH * ratio
+            }
+            3 -> {
+                val leftX = dragX.coerceAtMost(br.x - 10f)
+                newW = 2f * (centerX - leftX)
+                newH = newW / ratio
+            }
+        }
+        if (newW < 10f || newH < 10f) return
+
+        val halfW = newW / 2f
+        val halfH = newH / 2f
+        val nTlX = (centerX - halfW).coerceIn(0f, bitmapW)
+        val nTlY = (centerY - halfH).coerceIn(0f, bitmapH)
+        val nBrX = (centerX + halfW).coerceIn(0f, bitmapW)
+        val nBrY = (centerY + halfH).coerceIn(0f, bitmapH)
+        if (nBrX - nTlX < 10f || nBrY - nTlY < 10f) return
+
+        corners[0] = PointF(nTlX, nTlY)
+        corners[1] = PointF(nBrX, nTlY)
+        corners[2] = PointF(nBrX, nBrY)
+        corners[3] = PointF(nTlX, nBrY)
+
+        _uiState.update { it.copy(corners = corners) }
     }
 
     fun moveAllCorners(dx: Float, dy: Float) {
@@ -691,6 +799,16 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                 drawCircle(color = ComposeColor(0xFF7C5CF7), radius = 16f, center = p)
                                                 drawCircle(color = ComposeColor.White, radius = 8f, center = p)
                                             }
+                                            if (uiState.aspectRatio.ratio != null) {
+                                                for (i in 0..3) {
+                                                    val mid = Offset(
+                                                        (mappedCorners[i].x + mappedCorners[(i + 1) % 4].x) / 2f,
+                                                        (mappedCorners[i].y + mappedCorners[(i + 1) % 4].y) / 2f
+                                                    )
+                                                    drawCircle(color = ComposeColor(0xFF7C5CF7), radius = 10f, center = mid)
+                                                    drawCircle(color = ComposeColor.White, radius = 5f, center = mid)
+                                                }
+                                            }
                                         }
                                     }
 
@@ -698,12 +816,14 @@ fun PerspectiveCropScreen(navController: NavController) {
                                     val currentScale by rememberUpdatedState(iScale)
                                     val currentOffX by rememberUpdatedState(offX)
                                     val currentOffY by rememberUpdatedState(offY)
+                                    val currentAspectRatio by rememberUpdatedState(uiState.aspectRatio)
 
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .pointerInput(canvasSize) {
                                                 var activeCorner = -1
+                                                var activeEdge = -1
                                                 var isBodyDrag = false
                                                 var lastDragX = 0f
                                                 var lastDragY = 0f
@@ -713,6 +833,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                         val s = currentScale
                                                         val ox = currentOffX
                                                         val oy = currentOffY
+                                                        val isRatioLocked = currentAspectRatio.ratio != null
                                                         if (corners.size == 4) {
                                                             var minDist = Float.MAX_VALUE
                                                             var closestIdx = -1
@@ -729,18 +850,55 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                             }
                                                             if (minDist < 80f) {
                                                                 activeCorner = closestIdx
+                                                                activeEdge = -1
                                                                 isBodyDrag = false
-                                                            } else {
-                                                                val pts = corners.map { c ->
-                                                                    Offset(ox + c.x * s, oy + c.y * s)
+                                                            } else if (isRatioLocked) {
+                                                                val edgeMidpoints = listOf(
+                                                                    Offset(ox + (corners[0].x + corners[1].x) / 2f * s, oy + (corners[0].y + corners[1].y) / 2f * s),
+                                                                    Offset(ox + (corners[1].x + corners[2].x) / 2f * s, oy + (corners[1].y + corners[2].y) / 2f * s),
+                                                                    Offset(ox + (corners[2].x + corners[3].x) / 2f * s, oy + (corners[2].y + corners[3].y) / 2f * s),
+                                                                    Offset(ox + (corners[3].x + corners[0].x) / 2f * s, oy + (corners[3].y + corners[0].y) / 2f * s)
+                                                                )
+                                                                var minEdgeDist = Float.MAX_VALUE
+                                                                var closestEdge = -1
+                                                                edgeMidpoints.forEachIndexed { idx, mp ->
+                                                                    val dx = offset.x - mp.x
+                                                                    val dy = offset.y - mp.y
+                                                                    val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                                                                    if (dist < minEdgeDist) {
+                                                                        minEdgeDist = dist
+                                                                        closestEdge = idx
+                                                                    }
                                                                 }
+                                                                if (minEdgeDist < 80f) {
+                                                                    activeCorner = -1
+                                                                    activeEdge = closestEdge
+                                                                    isBodyDrag = false
+                                                                } else {
+                                                                    val pts = corners.map { c -> Offset(ox + c.x * s, oy + c.y * s) }
+                                                                    if (pointInQuad(offset, pts)) {
+                                                                        activeCorner = -1
+                                                                        activeEdge = -1
+                                                                        isBodyDrag = true
+                                                                        lastDragX = offset.x
+                                                                        lastDragY = offset.y
+                                                                    } else {
+                                                                        activeCorner = -1
+                                                                        activeEdge = -1
+                                                                        isBodyDrag = false
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                val pts = corners.map { c -> Offset(ox + c.x * s, oy + c.y * s) }
                                                                 if (pointInQuad(offset, pts)) {
                                                                     activeCorner = -1
+                                                                    activeEdge = -1
                                                                     isBodyDrag = true
                                                                     lastDragX = offset.x
                                                                     lastDragY = offset.y
                                                                 } else {
                                                                     activeCorner = -1
+                                                                    activeEdge = -1
                                                                     isBodyDrag = false
                                                                 }
                                                             }
@@ -755,6 +913,16 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                                 change.position.y,
                                                                 canvasSize
                                                             )
+                                                        } else if (activeEdge >= 0) {
+                                                            val lock = currentAspectRatio
+                                                            val s = currentScale
+                                                            val ox = currentOffX
+                                                            val oy = currentOffY
+                                                            if (lock.ratio != null && s > 0f) {
+                                                                val bitmapX = ((change.position.x - ox) / s)
+                                                                val bitmapY = ((change.position.y - oy) / s)
+                                                                viewModel.rectangularResizeEdge(activeEdge, bitmapX, bitmapY, lock.ratio)
+                                                            }
                                                         } else if (isBodyDrag) {
                                                             val dx = change.position.x - lastDragX
                                                             val dy = change.position.y - lastDragY
@@ -768,10 +936,12 @@ fun PerspectiveCropScreen(navController: NavController) {
                                                     },
                                                     onDragEnd = {
                                                         activeCorner = -1
+                                                        activeEdge = -1
                                                         isBodyDrag = false
                                                     },
                                                     onDragCancel = {
                                                         activeCorner = -1
+                                                        activeEdge = -1
                                                         isBodyDrag = false
                                                     }
                                                 )
