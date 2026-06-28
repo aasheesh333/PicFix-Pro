@@ -353,20 +353,15 @@ class PerspectiveCropViewModel(
         if (corners.size != 4) return source
         if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) return source
 
-        val sorted = sortCornersForWarp(corners)
+        val (tl, tr, br, bl) = sortCornersForWarp(corners)
 
-        val tl = sorted[0]
-        val tr = sorted[1]
-        val br = sorted[2]
-        val bl = sorted[3]
+        val widthTop = dist(tl, tr)
+        val widthBottom = dist(bl, br)
+        val heightLeft = dist(tl, bl)
+        val heightRight = dist(tr, br)
 
-        val widthA = kotlin.math.sqrt(((tr.x - br.x) * (tr.x - br.x)) + ((tr.y - br.y) * (tr.y - br.y)))
-        val widthB = kotlin.math.sqrt(((tl.x - bl.x) * (tl.x - bl.x)) + ((tl.y - bl.y) * (tl.y - bl.y)))
-        val maxWidth = kotlin.math.max(widthA, widthB).toInt().coerceAtLeast(1)
-
-        val heightA = kotlin.math.sqrt(((tr.x - tl.x) * (tr.x - tl.x)) + ((tr.y - tl.y) * (tr.y - tl.y)))
-        val heightB = kotlin.math.sqrt(((br.x - bl.x) * (br.x - bl.x)) + ((br.y - bl.y) * (br.y - bl.y)))
-        val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
+        val outW = ((widthTop + widthBottom) / 2f).toInt().coerceAtLeast(1)
+        val outH = ((heightLeft + heightRight) / 2f).toInt().coerceAtLeast(1)
 
         val srcPts = org.opencv.core.MatOfPoint2f(
             org.opencv.core.Point(tl.x.toDouble(), tl.y.toDouble()),
@@ -376,9 +371,9 @@ class PerspectiveCropViewModel(
         )
         val dstPts = org.opencv.core.MatOfPoint2f(
             org.opencv.core.Point(0.0, 0.0),
-            org.opencv.core.Point(maxWidth.toDouble(), 0.0),
-            org.opencv.core.Point(maxWidth.toDouble(), maxHeight.toDouble()),
-            org.opencv.core.Point(0.0, maxHeight.toDouble())
+            org.opencv.core.Point(outW.toDouble(), 0.0),
+            org.opencv.core.Point(outW.toDouble(), outH.toDouble()),
+            org.opencv.core.Point(0.0, outH.toDouble())
         )
 
         val transform = Imgproc.getPerspectiveTransform(srcPts, dstPts)
@@ -400,13 +395,13 @@ class PerspectiveCropViewModel(
             srcBmpMat,
             dstMatImg,
             transform,
-            Size(maxWidth.toDouble(), maxHeight.toDouble()),
+            Size(outW.toDouble(), outH.toDouble()),
             Imgproc.INTER_LINEAR,
             org.opencv.core.Core.BORDER_CONSTANT,
             org.opencv.core.Scalar(0.0, 0.0, 0.0, 0.0)
         )
 
-        val output = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
+        val output = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(dstMatImg, output)
 
         srcPts.release()
@@ -418,16 +413,28 @@ class PerspectiveCropViewModel(
         return output
     }
 
+    private fun dist(a: PointF, b: PointF): Float {
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        return kotlin.math.sqrt(dx * dx + dy * dy)
+    }
+
     private fun sortCornersForWarp(corners: List<PointF>): List<PointF> {
         if (corners.size != 4) return corners
-        val cx = corners.map { it.x }.average().toFloat()
-        val cy = corners.map { it.y }.average().toFloat()
-        val sorted = corners.sortedBy { corner ->
-            val angle = kotlin.math.atan2((corner.y - cy).toDouble(), (corner.x - cx).toDouble())
-            ((angle + Math.PI * 0.75) % (Math.PI * 2))
+        var tl = corners[0]; var tr = corners[0]; var br = corners[0]; var bl = corners[0]
+        var minSum = Float.MAX_VALUE
+        var maxSum = Float.MIN_VALUE
+        var minDiff = Float.MAX_VALUE
+        var maxDiff = Float.MIN_VALUE
+        for (c in corners) {
+            val sum = c.x + c.y
+            val diff = c.x - c.y
+            if (sum < minSum) { minSum = sum; tl = c }
+            if (sum > maxSum) { maxSum = sum; br = c }
+            if (diff > maxDiff) { maxDiff = diff; tr = c }
+            if (diff < minDiff) { minDiff = diff; bl = c }
         }
-        if (sorted.size != 4) return corners
-        return sorted
+        return listOf(tl, tr, br, bl)
     }
 
     fun saveImage(context: android.content.Context) {
