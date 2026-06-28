@@ -257,8 +257,6 @@ class PerspectiveCropViewModel(
         val canvasH = canvasSize.height.toFloat()
         if (canvasW <= 0f || canvasH <= 0f) return
 
-        // Match the screen's ContentScale.Fit: compute the displayed image rect
-        // (letterboxed if the image aspect doesn't match the canvas).
         val viewAspect = canvasW / canvasH
         val imageAspect = bitmapW / bitmapH
         val displayedW: Float
@@ -276,122 +274,34 @@ class PerspectiveCropViewModel(
             offsetX = (canvasW - displayedW) / 2f
             offsetY = 0f
         }
-        // Convert the click position (canvas coords) to the displayed image rect,
-        // clamp, then scale to bitmap coordinates.
-        val localX = (x - offsetX).coerceIn(0f, displayedW)
-        val localY = (y - offsetY).coerceIn(0f, displayedH)
         val scale = displayedW / bitmapW
-        val bitmapX = (localX / scale).coerceIn(0f, bitmapW)
-        val bitmapY = (localY / scale).coerceIn(0f, bitmapH)
+        val bitmapX = ((x - offsetX) / scale).coerceIn(0f, bitmapW)
+        val bitmapY = ((y - offsetY) / scale).coerceIn(0f, bitmapH)
         val updated = _uiState.value.corners.toMutableList()
         if (index !in updated.indices) return
-        val lock = _uiState.value.aspectRatio
-        if (lock.ratio != null && updated.size == 4) {
-            val newRect = rectangleForDrag(updated, index, bitmapX, bitmapY, lock.ratio, bitmapW, bitmapH)
-            _uiState.update { it.copy(corners = newRect) }
-        } else {
-            updated[index] = PointF(bitmapX, bitmapY)
-            _uiState.update { it.copy(corners = updated) }
-        }
+        updated[index] = PointF(bitmapX, bitmapY)
+        _uiState.update { it.copy(corners = updated) }
     }
 
-    private fun rectangleForDrag(
-        current: List<PointF>,
-        index: Int,
-        newX: Float,
-        newY: Float,
-        ratio: Float,
-        bitmapW: Float,
-        bitmapH: Float
-    ): List<PointF> {
-        if (current.size != 4) return current
-        val oppositeIndex = (index + 2) % 4
-        val anchor = current[oppositeIndex]
-        val draggedX = newX.coerceIn(0f, bitmapW)
-        val draggedY = newY.coerceIn(0f, bitmapH)
-        val leftX: Float
-        val rightX: Float
-        val topY: Float
-        val bottomY: Float
-        when (index) {
-            0 -> {
-                var lxL = draggedX
-                var rxL = anchor.x
-                var tyL = draggedY
-                var byL = anchor.y
-                if (lxL > rxL) { val t = lxL; lxL = rxL; rxL = t }
-                if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
-                leftX = lxL; rightX = rxL; topY = tyL; bottomY = byL
-            }
-            1 -> {
-                var rxL = draggedX
-                var lxL = anchor.x
-                var tyL = draggedY
-                var byL = anchor.y
-                if (rxL < lxL) { val t = rxL; rxL = lxL; lxL = t }
-                if (tyL > byL) { val t = tyL; tyL = byL; byL = t }
-                rightX = rxL; leftX = lxL; topY = tyL; bottomY = byL
-            }
-            2 -> {
-                var rxL = draggedX
-                var lxL = anchor.x
-                var byL = draggedY
-                var tyL = anchor.y
-                if (rxL < lxL) { val t = rxL; rxL = lxL; lxL = t }
-                if (byL < tyL) { val t = byL; byL = tyL; tyL = t }
-                rightX = rxL; leftX = lxL; bottomY = byL; topY = tyL
-            }
-            3 -> {
-                var lxL = draggedX
-                var rxL = anchor.x
-                var byL = draggedY
-                var tyL = anchor.y
-                if (lxL > rxL) { val t = lxL; lxL = rxL; rxL = t }
-                if (byL < tyL) { val t = byL; byL = tyL; tyL = t }
-                leftX = lxL; rightX = rxL; bottomY = byL; topY = tyL
-            }
-            else -> return current
+    fun resetCorners() {
+        val bitmap = _uiState.value.originalBitmap ?: return
+        val w = bitmap.width.toFloat()
+        val h = bitmap.height.toFloat()
+        val padding = 0.03f
+        val oldProcessed = _uiState.value.processedBitmap
+        _uiState.update {
+            it.copy(
+                corners = listOf(
+                    PointF(w * padding, h * padding),
+                    PointF(w * (1 - padding), h * padding),
+                    PointF(w * (1 - padding), h * (1 - padding)),
+                    PointF(w * padding, h * (1 - padding))
+                ),
+                processedBitmap = null,
+                aspectRatio = AspectRatioLock.FREE
+            )
         }
-        val lx = leftX.coerceIn(0f, bitmapW)
-        val rx = rightX.coerceIn(lx + 1f, bitmapW)
-        val ty = topY.coerceIn(0f, bitmapH)
-        val by = bottomY.coerceIn(ty + 1f, bitmapH)
-
-        val rectW = rx - lx
-        val rectH = by - ty
-        val adjustedH = if (rectW > 0 && ratio > 0) rectW / ratio else rectH
-        val finalBy = (ty + adjustedH).coerceIn(ty + 1f, bitmapH)
-        val finalTy = (by - adjustedH).coerceIn(0f, by - 1f)
-
-        val adjBy: Float
-        val adjTy: Float
-        val adjLx: Float
-        val adjRx: Float
-        if (ty + adjustedH <= bitmapH) {
-            adjTy = ty
-            adjBy = ty + adjustedH
-            adjLx = lx
-            adjRx = rx
-        } else if (by - adjustedH >= 0f) {
-            adjTy = by - adjustedH
-            adjBy = by
-            adjLx = lx
-            adjRx = rx
-        } else {
-            val maxH = bitmapH
-            val maxW = maxH * ratio
-            adjTy = 0f
-            adjBy = maxH
-            adjLx = if (index == 0 || index == 3) (rx - maxW).coerceIn(0f, bitmapW) else lx
-            adjRx = if (index == 1 || index == 2) (lx + maxW).coerceIn(0f, bitmapW) else rx
-        }
-
-        return listOf(
-            PointF(adjLx, adjTy),
-            PointF(adjRx, adjTy),
-            PointF(adjRx, adjBy),
-            PointF(adjLx, adjBy)
-        )
+        if (oldProcessed != null && !oldProcessed.isRecycled) oldProcessed.recycle()
     }
 
     fun autoDetect() {
@@ -409,7 +319,8 @@ class PerspectiveCropViewModel(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val result = withContext(Dispatchers.Default) {
-                    warpPerspective(bitmap, corners)
+                    val aligned = alignCornersToRect(corners, bitmap.width.toFloat(), bitmap.height.toFloat())
+                    warpPerspective(bitmap, aligned)
                 }
                 val old = _uiState.value.processedBitmap
                 _uiState.update { it.copy(processedBitmap = result, isLoading = false) }
@@ -425,41 +336,37 @@ class PerspectiveCropViewModel(
         }
     }
 
+    private fun alignCornersToRect(corners: List<PointF>, bitmapW: Float, bitmapH: Float): List<PointF> {
+        if (corners.size != 4) return corners
+        val minX = corners.minOf { it.x }.coerceIn(0f, bitmapW)
+        val maxX = corners.maxOf { it.x }.coerceIn(0f, bitmapW)
+        val minY = corners.minOf { it.y }.coerceIn(0f, bitmapH)
+        val maxY = corners.maxOf { it.y }.coerceIn(0f, bitmapH)
+        if (maxX - minX < 1f || maxY - minY < 1f) return corners
+        return listOf(
+            PointF(minX, minY),
+            PointF(maxX, minY),
+            PointF(maxX, maxY),
+            PointF(minX, maxY)
+        )
+    }
+
     private fun warpPerspective(source: Bitmap, corners: List<PointF>): Bitmap {
+        if (corners.size != 4) return source
         val src = floatArrayOf(
             corners[0].x, corners[0].y,
             corners[1].x, corners[1].y,
             corners[2].x, corners[2].y,
             corners[3].x, corners[3].y
         )
-        // Compute natural content dimensions from the quadrilateral.
-        // Average the top/bottom edges for width, left/right edges for height.
-        val widthTop = distance(src[0], src[1], src[2], src[3]) // TL-TR
-        val widthBottom = distance(src[6], src[7], src[4], src[5]) // BL-BR
-        val heightLeft = distance(src[0], src[1], src[6], src[7]) // TL-BL
-        val heightRight = distance(src[2], src[3], src[4], src[5]) // TR-BR
-        val naturalW = (widthTop + widthBottom) / 2f
-        val naturalH = (heightLeft + heightRight) / 2f
 
-        val lock = _uiState.value.aspectRatio
-        val (warpW, warpH) = if (lock.ratio != null) {
-            val contentRatio = if (naturalH > 0) naturalW / naturalH else lock.ratio
-            val targetRatio = lock.ratio
-            // Fit the content into the target ratio with letterboxing.
-            // Determine which dimension is the limiting factor.
-            if (contentRatio > targetRatio) {
-                // Content is wider than target → width is limiting, height will have padding
-                naturalW to (naturalW / targetRatio)
-            } else {
-                // Content is taller than target → height is limiting, width will have padding
-                (naturalH * targetRatio) to naturalH
-            }
-        } else {
-            naturalW to naturalH
-        }
+        val minX = corners.minOf { it.x }
+        val maxX = corners.maxOf { it.x }
+        val minY = corners.minOf { it.y }
+        val maxY = corners.maxOf { it.y }
 
-        val outW = warpW.toInt().coerceAtLeast(1)
-        val outH = warpH.toInt().coerceAtLeast(1)
+        val outW = (maxX - minX).toInt().coerceAtLeast(1)
+        val outH = (maxY - minY).toInt().coerceAtLeast(1)
 
         val dst = floatArrayOf(
             0f, 0f,
@@ -475,12 +382,6 @@ class PerspectiveCropViewModel(
         val paint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
         canvas.drawBitmap(source, matrix, paint)
         return output
-    }
-
-    private fun distance(x1: Float, y1: Float, x2: Float, y2: Float): Float {
-        val dx = x2 - x1
-        val dy = y2 - y1
-        return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
     fun saveImage(context: android.content.Context) {
@@ -528,6 +429,9 @@ class PerspectiveCropViewModel(
 
     private fun snapToRectangle(corners: List<PointF>, ratio: Float): List<PointF> {
         if (corners.size != 4) return corners
+        val bitmap = _uiState.value.originalBitmap ?: return corners
+        val bitmapW = bitmap.width.toFloat()
+        val bitmapH = bitmap.height.toFloat()
         val minX = corners.minOf { it.x }
         val maxX = corners.maxOf { it.x }
         val minY = corners.minOf { it.y }
@@ -536,26 +440,23 @@ class PerspectiveCropViewModel(
         val cy = (minY + maxY) / 2f
         val currentW = maxX - minX
         val currentH = maxY - minY
-        // Keep the area, adjust to match the requested ratio.
         val currentRatio = if (currentH > 0) currentW / currentH else ratio
         val newW: Float
         val newH: Float
         if (currentRatio > ratio) {
-            // currently wider than ratio → reduce width
             newH = currentH
             newW = newH * ratio
         } else {
-            // currently taller than ratio → reduce height
             newW = currentW
             newH = newW / ratio
         }
         val halfW = newW / 2f
         val halfH = newH / 2f
         return listOf(
-            PointF(cx - halfW, cy - halfH), // TL
-            PointF(cx + halfW, cy - halfH), // TR
-            PointF(cx + halfW, cy + halfH), // BR
-            PointF(cx - halfW, cy + halfH)  // BL
+            PointF((cx - halfW).coerceIn(0f, bitmapW), (cy - halfH).coerceIn(0f, bitmapH)),
+            PointF((cx + halfW).coerceIn(0f, bitmapW), (cy - halfH).coerceIn(0f, bitmapH)),
+            PointF((cx + halfW).coerceIn(0f, bitmapW), (cy + halfH).coerceIn(0f, bitmapH)),
+            PointF((cx - halfW).coerceIn(0f, bitmapW), (cy + halfH).coerceIn(0f, bitmapH))
         )
     }
 
@@ -641,7 +542,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                 },
                 actions = {
                     if (originalImage != null) {
-                        IconButton(onClick = { viewModel.autoDetect() }) {
+                        IconButton(onClick = { viewModel.resetCorners() }) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringResource(R.string.reset)
@@ -712,8 +613,23 @@ fun PerspectiveCropScreen(navController: NavController) {
                                         Offset(offX + corner.x * iScale, offY + corner.y * iScale)
                                     }
 
+                                    val dimPath = remember { androidx.compose.ui.graphics.Path() }
                                     Canvas(modifier = Modifier.fillMaxSize()) {
                                         if (mappedCorners.size == 4) {
+                                            dimPath.reset()
+                                            dimPath.addRect(androidx.compose.ui.geometry.Rect(offX, offY, offX + drawW, offY + drawH))
+                                            val cropPath = androidx.compose.ui.graphics.Path()
+                                            cropPath.moveTo(mappedCorners[0].x, mappedCorners[0].y)
+                                            cropPath.lineTo(mappedCorners[1].x, mappedCorners[1].y)
+                                            cropPath.lineTo(mappedCorners[2].x, mappedCorners[2].y)
+                                            cropPath.lineTo(mappedCorners[3].x, mappedCorners[3].y)
+                                            cropPath.close()
+                                            dimPath.op(dimPath, cropPath, androidx.compose.ui.graphics.PathOperation.Difference)
+                                            drawPath(
+                                                path = dimPath,
+                                                color = ComposeColor.Black.copy(alpha = 0.55f),
+                                                style = androidx.compose.ui.graphics.Fill
+                                            )
                                             for (i in mappedCorners.indices) {
                                                 drawLine(
                                                     color = ComposeColor(0xFF7C5CF7),
