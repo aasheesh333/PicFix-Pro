@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -19,7 +22,6 @@ import androidx.navigation.compose.rememberNavController
 import com.dhanuk.photodoctorpro.ui.components.GlobalBannerAd
 import com.dhanuk.photodoctorpro.utils.ErrorBanner
 import com.dhanuk.photodoctorpro.ui.navigation.LocalGlobalNavigationState
-import androidx.compose.foundation.layout.Column
 
 @Composable
 fun AppScaffold() {
@@ -33,7 +35,10 @@ fun AppScaffold() {
     CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
             bottomBar = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                ) {
                     ErrorBanner.GlobalErrorBanner()
                     GlobalBannerAd(navController)
                     AnimatedVisibility(
