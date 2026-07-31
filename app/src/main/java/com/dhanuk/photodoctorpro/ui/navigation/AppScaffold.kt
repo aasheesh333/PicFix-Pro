@@ -30,12 +30,12 @@ fun AppScaffold() {
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "history", "settings")
 
-        CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
+    CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
             bottomBar = {
-        Column {
-            ErrorBanner.GlobalErrorBanner()
-            GlobalBannerAd(navController)
+                Column {
+                    ErrorBanner.GlobalErrorBanner()
+                    GlobalBannerAd(navController)
                     AnimatedVisibility(
                         visible = showBottomBar,
                         enter = slideInVertically(
