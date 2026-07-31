@@ -199,7 +199,7 @@ class ColorAdjustmentsViewModel(
     fun onErrorShown() { _uiState.update { it.copy(error = null) } }
     fun onSavedMessageShown() { _uiState.update { it.copy(savedFilePath = null) } }
 
-    fun saveImage(context: android.content.Context) {
+    fun saveImage(context: android.content.Context, options: com.dhanuk.photodoctorpro.utils.SaveOptions = com.dhanuk.photodoctorpro.utils.SaveOptions()) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
         viewModelScope.launch(viewModelExceptionHandler("ColorVM") + Dispatchers.IO) {
@@ -211,7 +211,7 @@ class ColorAdjustmentsViewModel(
                     operationType = "Color Adjustments",
                     inputUriString = state.selectedImageUri?.toString() ?: "",
                     repository = repository,
-                    format = android.graphics.Bitmap.CompressFormat.PNG
+                    options = options
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (ce: kotlinx.coroutines.CancellationException) {

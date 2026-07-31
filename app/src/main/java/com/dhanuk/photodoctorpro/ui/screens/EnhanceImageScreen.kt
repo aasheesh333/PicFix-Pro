@@ -54,6 +54,7 @@ fun EnhanceImageScreen(navController: NavController) {
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var showSaveOptionsSheet by remember { mutableStateOf(false) }
     val hasUnsavedChanges = uiState.enhancedBitmap != null && uiState.savedFilePath == null
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
@@ -63,12 +64,10 @@ fun EnhanceImageScreen(navController: NavController) {
 
     var isHoldingOriginal by remember { mutableStateOf(false) }
 
-    var showHdDownloadDialog by remember { mutableStateOf(false) }
-
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
         if (hasUnsavedChanges) {
-            globalState.onSave = { viewModel.saveImage(activity) }
+            globalState.onSave = { viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)) }
             globalState.onDiscard = { viewModel.reset() }
         } else {
             globalState.clear()
@@ -87,7 +86,7 @@ fun EnhanceImageScreen(navController: NavController) {
             confirmButton = {
                 Button(onClick = {
                     scope.launch {
-                        val success = viewModel.saveImage(activity)
+                        val success = viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context))
                         if (success) {
                             showUnsavedDialog = false
                             navController.popBackStack()
@@ -108,20 +107,22 @@ fun EnhanceImageScreen(navController: NavController) {
         )
     }
 
-    if (showHdDownloadDialog) {
-        AlertDialog(
-            onDismissRequest = { showHdDownloadDialog = false },
-            title = { Text("Download HD Model") },
-            text = { Text("Download HD enhancement model? (32 MB)") },
-            confirmButton = {
-                Button(onClick = {
-                    showHdDownloadDialog = false
-                    viewModel.setQualityMode("hd")
-                }) { Text("Download") }
+    if (showSaveOptionsSheet) {
+        val initialOptions = remember {
+            com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)
+        }
+        com.dhanuk.photodoctorpro.ui.components.SaveOptionsSheet(
+            initial = initialOptions,
+            hasTransparency = false,
+            onConfirm = { options ->
+                com.dhanuk.photodoctorpro.utils.UserPreferences.setSaveOptions(context, options)
+                showSaveOptionsSheet = false
+                scope.launch {
+                    val success = viewModel.saveImage(activity, options)
+                    if (!success) showUnsavedDialog = false
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { showHdDownloadDialog = false }) { Text(stringResource(R.string.cancel)) }
-            }
+            onDismiss = { showSaveOptionsSheet = false }
         )
     }
 
@@ -147,7 +148,7 @@ fun EnhanceImageScreen(navController: NavController) {
     }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { viewModel.onImageSelected(it, context) }
     }
@@ -233,7 +234,16 @@ fun EnhanceImageScreen(navController: NavController) {
             }
 
             if (uiState.originalBitmap == null) {
-                Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        imagePickerLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.select_image))
                 }
             } else if (uiState.enhancedBitmap == null) {
@@ -247,17 +257,14 @@ fun EnhanceImageScreen(navController: NavController) {
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    ) { Text("Standard") }
+                    ) { Text(stringResource(R.string.quality_fast)) }
                     Spacer(Modifier.width(8.dp))
                     TextButton(
-                        onClick = {
-                            if (!isStandard) return@TextButton
-                            showHdDownloadDialog = true
-                        },
+                        onClick = { viewModel.setQualityMode("hd") },
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = if (!isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    ) { Text("HD Quality") }
+                    ) { Text(stringResource(R.string.quality_high)) }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -274,7 +281,7 @@ fun EnhanceImageScreen(navController: NavController) {
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { scope.launch { viewModel.saveImage(activity) } }, modifier = Modifier.weight(1f)) {
+                    Button(onClick = { showSaveOptionsSheet = true }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.action_save))
                     }
                     Spacer(Modifier.width(16.dp))

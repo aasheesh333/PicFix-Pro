@@ -26,6 +26,8 @@ import androidx.compose.material.icons.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -142,6 +144,8 @@ fun SettingsScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(4.dp))
 
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
+            val isFollowSystem = remember(context) { UserPreferences.isFollowSystem(context) }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -155,20 +159,34 @@ fun SettingsScreen(navController: NavController) {
                 Spacer(modifier = Modifier.size(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.dark_mode),
+                        text = stringResource(R.string.theme),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isDarkTheme) stringResource(R.string.dark_mode_on) else stringResource(R.string.dark_mode_off),
+                        text = when {
+                            isFollowSystem -> stringResource(R.string.theme_system)
+                            isDarkTheme -> stringResource(R.string.theme_dark)
+                            else -> stringResource(R.string.theme_light)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(
-                    checked = isDarkTheme,
-                    onCheckedChange = { ThemeController.setDarkTheme(context, it) }
-                )
+                Row {
+                    androidx.compose.material3.TextButton(
+                        onClick = { ThemeController.setDarkTheme(context, false) },
+                        content = { Text(stringResource(R.string.theme_light)) }
+                    )
+                    androidx.compose.material3.TextButton(
+                        onClick = { ThemeController.setDarkTheme(context, true) },
+                        content = { Text(stringResource(R.string.theme_dark)) }
+                    )
+                    androidx.compose.material3.TextButton(
+                        onClick = { ThemeController.setFollowSystem(context, true) },
+                        content = { Text(stringResource(R.string.theme_system)) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -211,9 +229,7 @@ fun SettingsScreen(navController: NavController) {
             LuminaListItem(
                 title = stringResource(R.string.default_save_location),
                 subtitle = viewModel.saveDirectory?.let {
-                    try {
-                        Uri.parse(it).path ?: it
-                    } catch (e: Exception) { it }
+                    stringResource(R.string.save_location_unknown)
                 } ?: stringResource(R.string.default_save_location_label),
                 leading = Icons.Outlined.Folder,
                 trailing = {
@@ -274,6 +290,29 @@ fun SettingsScreen(navController: NavController) {
                 )
             },
             onClick = { navController.navigate("open_source_licenses") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LuminaListItem(
+            title = stringResource(R.string.rate_app),
+            subtitle = stringResource(R.string.rate_app_subtitle),
+            leading = Icons.Outlined.Star,
+            onClick = {
+                com.dhanuk.photodoctorpro.utils.InAppReviewManager.requestReviewIfNeeded(context)
+            }
+        )
+
+        LuminaListItem(
+            title = stringResource(R.string.send_feedback),
+            subtitle = stringResource(R.string.send_feedback_subtitle),
+            leading = Icons.Outlined.Email,
+            onClick = {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("mailto:support@dhanuk.page.gd?subject=PicFix%20Pro%20Feedback")
+                }
+                context.startActivity(intent)
+            }
         )
 
         Spacer(modifier = Modifier.height(8.dp))

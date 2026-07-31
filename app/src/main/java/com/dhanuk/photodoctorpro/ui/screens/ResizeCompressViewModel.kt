@@ -335,13 +335,12 @@ class ResizeCompressViewModel(
         return Bitmap.createScaledBitmap(source, targetW, targetH, true)
     }
 
-    fun saveImage(context: android.content.Context) {
+    fun saveImage(context: android.content.Context, options: com.dhanuk.photodoctorpro.utils.SaveOptions? = null) {
         val state = _uiState.value
         val bitmap = state.processedBitmap ?: return
         viewModelScope.launch(viewModelExceptionHandler("ResizeVM") + Dispatchers.IO) {
             try {
-                val format = if (state.preset == ResizePreset.ORIGINAL)
-                    android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG
+                val resolvedOptions = options ?: com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)
                 val savedPath = com.dhanuk.photodoctorpro.utils.UnifiedSaveHelper.saveAndRecordNoAd(
                     context = context,
                     bitmap = bitmap,
@@ -349,7 +348,7 @@ class ResizeCompressViewModel(
                     operationType = "Resize (${state.preset.label})",
                     inputUriString = state.selectedUri?.toString() ?: "",
                     repository = repository,
-                    format = format,
+                    options = resolvedOptions
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (ce: kotlinx.coroutines.CancellationException) {

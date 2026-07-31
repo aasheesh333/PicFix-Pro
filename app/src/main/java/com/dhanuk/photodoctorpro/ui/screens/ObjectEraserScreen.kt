@@ -85,6 +85,7 @@ fun ObjectEraserScreen(navController: NavController) {
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var showSaveOptionsSheet by remember { mutableStateOf(false) }
     val hasUnsavedChanges = (uiState.processedBitmap != null || uiState.paths.isNotEmpty()) && uiState.savedFilePath == null
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
@@ -92,7 +93,7 @@ fun ObjectEraserScreen(navController: NavController) {
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
         if (hasUnsavedChanges) {
-            globalState.onSave = { viewModel.saveImage(activity) }
+            globalState.onSave = { viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)) }
             globalState.onDiscard = { viewModel.reset() }
         } else {
             globalState.clear()
@@ -114,7 +115,7 @@ fun ObjectEraserScreen(navController: NavController) {
                          if (uiState.paths.isNotEmpty()) {
                              viewModel.eraseObjectsSuspend()
                          }
-                         val success = viewModel.saveImage(activity)
+                         val success = viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context))
                          if (success) {
                              showUnsavedDialog = false
                              navController.popBackStack()
@@ -157,8 +158,24 @@ fun ObjectEraserScreen(navController: NavController) {
         )
     }
 
+    if (showSaveOptionsSheet) {
+        val initialOptions = remember {
+            com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)
+        }
+        com.dhanuk.photodoctorpro.ui.components.SaveOptionsSheet(
+            initial = initialOptions,
+            hasTransparency = false,
+            onConfirm = { options ->
+                com.dhanuk.photodoctorpro.utils.UserPreferences.setSaveOptions(context, options)
+                showSaveOptionsSheet = false
+                scope.launch { viewModel.saveImage(activity, options) }
+            },
+            onDismiss = { showSaveOptionsSheet = false }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { viewModel.onImageSelected(it, context) }
     }
@@ -253,7 +270,16 @@ fun ObjectEraserScreen(navController: NavController) {
             }
 
             if (uiState.originalBitmap == null) {
-                Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        imagePickerLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.select_image))
                 }
             } else {
@@ -296,8 +322,8 @@ fun ObjectEraserScreen(navController: NavController) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Button(onClick = { scope.launch { viewModel.saveImage(activity) } }, modifier = Modifier.weight(1f)) {
-                            Text(stringResource(R.string.action_save))
+                        Button(onClick = { showSaveOptionsSheet = true }, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.save_as))
                         }
                         Spacer(Modifier.width(16.dp))
                         OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.weight(1f)) {

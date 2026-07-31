@@ -98,7 +98,7 @@ fun ResizeCompressScreen(navController: NavController) {
     val processedImage = rememberBitmap(uiState.processedBitmap)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(Unit) {
@@ -166,7 +166,7 @@ fun ResizeCompressScreen(navController: NavController) {
                         }
                     }
                     if (uiState.originalBitmap != null) {
-                        IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        IconButton(onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.new_image))
                         }
                     }
@@ -212,7 +212,7 @@ fun ResizeCompressScreen(navController: NavController) {
                         )
                         Spacer(Modifier.height(16.dp))
                         Button(
-                            onClick = { imagePickerLauncher.launch("image/*") },
+                            onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Text(stringResource(R.string.pick_image))

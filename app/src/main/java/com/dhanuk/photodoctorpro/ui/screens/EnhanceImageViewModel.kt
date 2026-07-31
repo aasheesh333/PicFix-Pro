@@ -81,6 +81,15 @@ class EnhanceImageViewModel(
         val original = _uiState.value.originalBitmap ?: return
         if (original.isRecycled) return
 
+        val maxOutputPixels = maxOutputPixelsForDevice(context)
+        val outputPixels = original.width.toLong() * original.height.toLong() * scaleFactor.toLong()
+        if (outputPixels > maxOutputPixels) {
+            _uiState.update { it.copy(
+                error = context.getString(com.dhanuk.photodoctorpro.R.string.enhance_too_large, scaleFactor)
+            ) }
+            return
+        }
+
         _uiState.update { it.copy(isLoading = true, error = null, progress = 0f) }
 
         enhanceJob?.cancel()
@@ -123,15 +132,28 @@ class EnhanceImageViewModel(
 
     private suspend fun checkActive() = kotlinx.coroutines.currentCoroutineContext().ensureActive()
 
-    suspend fun saveImage(activity: Activity): Boolean {
+    /**
+     * Output-pixel budget derived from the device's per-app memory class. Prevents OOM
+     * when the user requests a large upscale (e.g. 8x) on a big source bitmap.
+     */
+    private fun maxOutputPixelsForDevice(context: Context): Long {
+        val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val memoryClassMb = activityManager?.memoryClass ?: 96
+        // Reserve ~60% of the heap for one ARGB_8888 output bitmap (4 bytes/px).
+        val usableBytes = (memoryClassMb.toLong() * 1024L * 1024L * 60L) / 100L
+        return (usableBytes / 4L).coerceAtLeast(8_000_000L)
+    }
+
+    suspend fun saveImage(activity: Activity, options: com.dhanuk.photodoctorpro.utils.SaveOptions = com.dhanuk.photodoctorpro.utils.SaveOptions()): Boolean {
         val state = _uiState.value
         val bitmap = state.enhancedBitmap ?: return false
         val uri = state.selectedImageUri ?: return false
         _uiState.update { it.copy(isLoading = true) }
 
         return try {
-            val fileName = "PicFixPro_Enhanced_${System.currentTimeMillis()}"
-            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
+            val baseName = options.fileNameHint?.takeIf { it.isNotBlank() }
+                ?: "PicFixPro_Enhanced_${System.currentTimeMillis()}"
+            val filePath = BitmapUtils.saveBitmap(activity, bitmap, baseName, options)
             repository.addHistory(
                 History(
                     operationType = "Enhance x${_uiState.value.scaleFactor}",

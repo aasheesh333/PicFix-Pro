@@ -541,7 +541,7 @@ class PerspectiveCropViewModel(
         return listOf(tl, tr, br, bl)
     }
 
-    fun saveImage(context: android.content.Context) {
+    fun saveImage(context: android.content.Context, options: com.dhanuk.photodoctorpro.utils.SaveOptions = com.dhanuk.photodoctorpro.utils.SaveOptions()) {
         val bitmap = _uiState.value.processedBitmap ?: return
         viewModelScope.launch(viewModelExceptionHandler("PerspectiveCropVM") + Dispatchers.IO) {
             try {
@@ -552,9 +552,7 @@ class PerspectiveCropViewModel(
                     operationType = "Document Scan",
                     inputUriString = "",
                     repository = repository,
-                    // Save as PNG so any transparent areas in the warped output
-                    // are preserved (JPEG would flatten them to white).
-                    format = android.graphics.Bitmap.CompressFormat.PNG,
+                    options = options
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -651,7 +649,7 @@ fun PerspectiveCropScreen(navController: NavController) {
     var compareMode by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
@@ -959,7 +957,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(stringResource(R.string.drag_corners_to_adjust), color = MaterialTheme.colorScheme.secondary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        Button(onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                             Text(stringResource(R.string.pick_image))
                         }
                     }
@@ -1012,7 +1010,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.action_auto))
                     }
-                    OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.action_new))
                     }
                     if (uiState.processedBitmap == null) {
@@ -1032,7 +1030,7 @@ fun PerspectiveCropScreen(navController: NavController) {
                         }
                     } else {
                         Button(
-                            onClick = { viewModel.saveImage(context) },
+                            onClick = { viewModel.saveImage(context, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)) },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Save, contentDescription = stringResource(R.string.cd_save_directory))

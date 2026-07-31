@@ -124,7 +124,7 @@ class ExifStripperViewModel(
         }
     }
 
-    fun saveCleanImage(context: android.content.Context) {
+    fun saveCleanImage(context: android.content.Context, options: com.dhanuk.photodoctorpro.utils.SaveOptions = com.dhanuk.photodoctorpro.utils.SaveOptions()) {
         val state = _uiState.value
         val bitmap = state.previewBitmap ?: return
         viewModelScope.launch(viewModelExceptionHandler("ExifStripperVM") + Dispatchers.IO) {
@@ -136,7 +136,7 @@ class ExifStripperViewModel(
                     operationType = "EXIF Strip",
                     inputUriString = state.selectedUri?.toString() ?: "",
                     repository = repository,
-                    format = android.graphics.Bitmap.CompressFormat.JPEG,
+                    options = options
                 )
                 _uiState.update { it.copy(savedFilePath = savedPath) }
             } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -173,7 +173,7 @@ fun ExifStripperScreen(navController: NavController) {
     val previewImage = rememberBitmap(uiState.previewBitmap)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? -> uri?.let { viewModel.onImageSelected(it, context) } }
 
     LaunchedEffect(uiState.error) {
@@ -247,7 +247,7 @@ fun ExifStripperScreen(navController: NavController) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(stringResource(R.string.exif_metadata_header), color = MaterialTheme.colorScheme.secondary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        Button(onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                             Text(stringResource(R.string.pick_image))
                         }
                     }
@@ -283,12 +283,12 @@ fun ExifStripperScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.new_image))
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Button(
-                            onClick = { viewModel.saveCleanImage(context) },
+                            onClick = { viewModel.saveCleanImage(context, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)) },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Save, contentDescription = stringResource(R.string.cd_save_directory))

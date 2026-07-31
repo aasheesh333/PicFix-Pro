@@ -26,6 +26,13 @@ target_compile_options(realesrgan_jni PRIVATE
     -fexceptions
 )
 
+# Align the rebuilt shared library to a 16 KB page size so it loads on 16 KB-page
+# Android 15+ devices (Play Console requirement for apps targeting API 35+).
+target_link_options(realesrgan_jni PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384"
+)
+
 set_target_properties(realesrgan_jni PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON

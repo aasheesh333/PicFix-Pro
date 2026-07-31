@@ -11,8 +11,9 @@ interface ProgressCallback {
 
 object RealESRGANNativeLib {
 
-    private var isInitialized = false
-    private var currentScale = 4
+    @Volatile private var isInitialized = false
+    private val initLock = Any()
+    @Volatile private var currentScale = 4
 
     var nativeAvailable = true
         private set
@@ -79,14 +80,16 @@ object RealESRGANNativeLib {
         useGpu: Boolean = true
     ): Boolean {
         if (!nativeAvailable) return false
-        if (isInitialized) return true
+        synchronized(initLock) {
+            if (isInitialized) return true
 
-        val paths = copyModelToCache(context, modelDir, modelName) ?: return false
-        val gpuId = if (useGpu && isVulkanAvailable()) 0 else -1
-        val result = nativeInit(paths.first, paths.second, scale, gpuId)
-        isInitialized = result == 0
-        currentScale = scale
-        return isInitialized
+            val paths = copyModelToCache(context, modelDir, modelName) ?: return false
+            val gpuId = if (useGpu && isVulkanAvailable()) 0 else -1
+            val result = nativeInit(paths.first, paths.second, scale, gpuId)
+            isInitialized = result == 0
+            currentScale = scale
+            return isInitialized
+        }
     }
 
     fun enhance(
@@ -107,9 +110,11 @@ object RealESRGANNativeLib {
     }
 
     fun cleanup() {
-        if (nativeAvailable && isInitialized) {
-            nativeCleanup()
-            isInitialized = false
+        synchronized(initLock) {
+            if (nativeAvailable && isInitialized) {
+                nativeCleanup()
+                isInitialized = false
+            }
         }
     }
 }

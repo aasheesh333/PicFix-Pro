@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 object AdManager {
@@ -35,10 +37,24 @@ object AdManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     @Volatile private var autoAdJob: kotlinx.coroutines.Job? = null
 
+    private val initialized = AtomicBoolean(false)
+
+    @Volatile private var currentActivityRef: WeakReference<Activity>? = null
+
+    fun setCurrentActivity(activity: Activity?) {
+        currentActivityRef = if (activity != null) WeakReference(activity) else null
+    }
+
+    private fun currentActivity(): Activity? = currentActivityRef?.get()
+
     fun initialize(context: Context) {
-        MobileAds.initialize(context) {}
-        loadInterstitialAd(context)
-        startAutoAdTimer(context)
+        if (initialized.compareAndSet(false, true)) {
+            MobileAds.initialize(context) {}
+            loadInterstitialAd(context)
+            startAutoAdTimer(context)
+        } else {
+            if (BuildConfig.DEBUG) Log.d(TAG, "AdManager already initialized — skipping duplicate init")
+        }
     }
 
     private fun startAutoAdTimer(context: Context) {
@@ -46,7 +62,7 @@ object AdManager {
         autoAdJob = scope.launch {
             while (true) {
                 delay(AUTO_AD_INTERVAL_MS)
-                val activity = currentActivity ?: continue
+                val activity = currentActivity() ?: continue
                 if (!ConsentManager.canRequestAds()) continue
                 if (InAppReviewManager.isReviewInProgress) continue
                 val ad = interstitialAd ?: continue
@@ -59,18 +75,14 @@ object AdManager {
         }
     }
 
-    @Volatile private var currentActivity: Activity? = null
-
-    fun setCurrentActivity(activity: Activity?) {
-        currentActivity = activity
-    }
-
     private fun safeShowAd(ad: InterstitialAd, activity: Activity) {
         try {
             ad.show(activity)
         } catch (_: Exception) {}
         lastAdShowTime = System.currentTimeMillis()
         majorActionCount.set(0)
+        isAdLoaded = false
+        interstitialAd = null
         loadInterstitialAd(activity)
     }
 
@@ -205,5 +217,6 @@ object AdManager {
         isAdLoaded = false
         lastLoadError = "Cleaned up"
         majorActionCount.set(0)
+        currentActivityRef = null
     }
 }

@@ -7,11 +7,10 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,6 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         splashScreen.setKeepOnScreenCondition { false }
         ConsentManager.init(this)
         if (ConsentManager.canRequestAds()) {
@@ -89,21 +89,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRequiredPermissions() {
-        val permissions = mutableListOf<String>()
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        if (permissions.isNotEmpty()) {
-            requestPermissionLauncher.launch(permissions.toTypedArray())
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
     }
 
     private var lastSettingsIntentMs: Long = 0L
     private var lastRationalePromptMs: Long = 0L
     private fun maybeRepromptForDeniedPermissions() {
         if (deniedStatuses.isEmpty()) return
-        val now = SystemClock.elapsedRealtime()
+        val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastRationalePromptMs < 5 * 60 * 1000L || now - lastSettingsIntentMs < 5 * 60 * 1000L) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
 
@@ -112,24 +106,19 @@ class MainActivity : ComponentActivity() {
         } ?: return
 
         val shouldShowRationale = shouldShowRequestPermissionRationale(stillDenied)
-        if (stillDenied == Manifest.permission.READ_MEDIA_IMAGES && 
-            !shouldShowRationale && 
-            android.provider.Settings.System.canWrite(this)
-        ) {
+
+        if (stillDenied == Manifest.permission.POST_NOTIFICATIONS && !shouldShowRationale) {
             lastSettingsIntentMs = now
             deniedStatuses.remove(stillDenied)
-                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                    Toast.makeText(this, R.string.this_app_requires_storage_access_to_function, Toast.LENGTH_LONG).show()
-                    return
+            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+            return
         }
 
         lastRationalePromptMs = now
-        if ((stillDenied == Manifest.permission.READ_MEDIA_IMAGES && shouldShowRationale) ||
-            stillDenied == Manifest.permission.POST_NOTIFICATIONS
-        ) {
+        if (stillDenied == Manifest.permission.POST_NOTIFICATIONS) {
             deniedStatuses.remove(stillDenied)
             requestPermissionLauncher.launch(arrayOf(stillDenied))
         }

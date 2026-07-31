@@ -10,6 +10,9 @@ object UserPreferences {
     private const val KEY_HAS_REQUESTED_REVIEW = "has_requested_review"
     private const val KEY_FIRST_SAVE_COMPLETED = "first_save_completed"
     private const val KEY_REMINDERS_ENABLED = "reminders_enabled"
+    private const val KEY_SAVE_FORMAT = "save_format"
+    private const val KEY_SAVE_QUALITY = "save_quality"
+    private const val KEY_SAVE_BG_COLOR = "save_bg_color"
 
     fun getSaveDirectory(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -79,5 +82,29 @@ object UserPreferences {
     fun setRemindersEnabled(context: Context, enabled: Boolean) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_REMINDERS_ENABLED, enabled).apply()
+    }
+
+    fun getSaveOptions(context: Context): SaveOptions {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val formatName = prefs.getString(KEY_SAVE_FORMAT, SaveFormat.JPEG.name) ?: SaveFormat.JPEG.name
+        val format = runCatching { SaveFormat.valueOf(formatName) }.getOrDefault(SaveFormat.JPEG)
+        val quality = prefs.getInt(KEY_SAVE_QUALITY, 95).coerceIn(1, 100)
+        val bgColor = if (prefs.contains(KEY_SAVE_BG_COLOR)) prefs.getInt(KEY_SAVE_BG_COLOR, 0xFFFFFFFF.toInt()) else null
+        return SaveOptions(format = format, quality = quality, bgColor = bgColor)
+    }
+
+    fun setSaveOptions(context: Context, options: SaveOptions) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_SAVE_FORMAT, options.format.name)
+            .putInt(KEY_SAVE_QUALITY, options.quality)
+            .apply()
+        val editor = prefs.edit()
+        if (options.bgColor != null) {
+            editor.putInt(KEY_SAVE_BG_COLOR, options.bgColor)
+        } else {
+            editor.remove(KEY_SAVE_BG_COLOR)
+        }
+        editor.apply()
     }
 }

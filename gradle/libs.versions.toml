@@ -1,19 +1,21 @@
 [versions]
-androidApplication = "8.2.0"
-jetbrainsKotlinAndroid = "1.9.22"
-coreKtx = "1.13.1"
-lifecycleRuntimeKtx = "2.7.0"
-activityCompose = "1.9.0"
-composeBom = "2024.06.00"
-navigationCompose = "2.7.7"
-room = "2.6.1"
-coil = "2.6.0"
+androidApplication = "8.9.3"
+jetbrainsKotlinAndroid = "2.1.20"
+kotlinComposePlugin = "2.1.20"
+ksp = "2.1.20-2.0.0"
+coreKtx = "1.15.0"
+lifecycleRuntimeKtx = "2.8.7"
+activityCompose = "1.9.3"
+composeBom = "2025.04.01"
+navigationCompose = "2.8.5"
+room = "2.7.1"
+coil = "2.7.0"
 mlkitSegmentation = "16.0.0-beta1"
-playServicesAds = "23.1.0"
+playServicesAds = "23.6.0"
 opencv = "4.9.0"
 junit = "4.13.2"
-androidxTestExtJunit = "1.1.5"
-espressoCore = "3.5.1"
+androidxTestExtJunit = "1.2.1"
+espressoCore = "3.6.1"
 onesignal = "5.1.6"
 documentfile = "1.0.1"
 tensorflowLite = "2.14.0"
@@ -25,8 +27,8 @@ mockk = "1.13.10"
 coroutinesTest = "1.7.3"
 turbine = "1.0.0"
 robolectric = "4.12.2"
-userMessagingPlatform = "2.0.1"
-playReview = "2.0.1"
+userMessagingPlatform = "3.0.0"
+playReview = "2.0.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -52,7 +54,6 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-# reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version = "2.4.1" }
 onesignal = { group = "com.onesignal", name = "OneSignal", version.ref = "onesignal" }
 documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tensorflowLite" }
@@ -73,3 +74,5 @@ play-review-ktx = { group = "com.google.android.play", name = "review-ktx", vers
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidApplication" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "jetbrainsKotlinAndroid" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlinComposePlugin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

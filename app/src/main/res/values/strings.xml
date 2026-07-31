@@ -272,4 +272,33 @@
     <string name="share_to_whatsapp">Share to WhatsApp</string>
     <string name="opencv_not_ready">Image processing engine is not ready yet. Please try again in a moment.</string>
     <string name="could_not_allocate_bitmap">Could not allocate bitmap</string>
+
+    <!-- v2: Save options / format picker -->
+    <string name="save_options_title">Save options</string>
+    <string name="save_format">Format</string>
+    <string name="save_quality">Quality: %1$d%%</string>
+    <string name="save_format_no_alpha_hint">Transparency will be flattened onto a white background.</string>
+    <string name="save_as">Save As</string>
+
+    <!-- v2: Settings theme -->
+    <string name="theme">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">Follow system</string>
+
+    <!-- v2: Settings rate / feedback -->
+    <string name="rate_app">Rate PicFix Pro</string>
+    <string name="rate_app_subtitle">Enjoying the app? Leave a rating</string>
+    <string name="send_feedback">Send Feedback</string>
+    <string name="send_feedback_subtitle">Report a bug or suggest a feature</string>
+
+    <!-- v2: Enhance quality toggle -->
+    <string name="quality_fast">Fast</string>
+    <string name="quality_high">High Quality</string>
+
+    <!-- v2: Pixel budget guard -->
+    <string name="enhance_too_large">This image is too large to upscale %1$dx on this device. Try a smaller scale or a smaller image.</string>
+
+    <!-- v2: Save directory -->
+    <string name="save_location_unknown">Custom folder</string>
 </resources>

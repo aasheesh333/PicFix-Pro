@@ -149,6 +149,7 @@ fun BottomNavigationBar(navController: NavController) {
                     label = item.label,
                     selected = selected,
                     onClick = {
+                        if (selected) return@NavPill
                         if (globalState.hasUnsavedChanges) {
                             pendingRoute = item.route
                             showDialog = true

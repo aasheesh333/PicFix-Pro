@@ -15,6 +15,7 @@ object InAppReviewManager {
         if (UserPreferences.hasRequestedReview(context)) return
         val activity = context as? Activity ?: return
 
+        if (isReviewInProgress) return
         isReviewInProgress = true
         try {
             val reviewManager = ReviewManagerFactory.create(context)
@@ -24,6 +25,9 @@ object InAppReviewManager {
                     val reviewInfo = task.result
                     reviewManager.launchReviewFlow(activity, reviewInfo).addOnCompleteListener {
                         isReviewInProgress = false
+                        // Only mark as requested after the flow has actually completed,
+                        // so transient failures can retry on a future save.
+                        UserPreferences.setHasRequestedReview(context)
                         if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                             Log.d(TAG, "In-App Review flow completed")
                         }

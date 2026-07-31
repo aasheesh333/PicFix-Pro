@@ -73,6 +73,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSaveSuccessDialog by remember { mutableStateOf<String?>(null) }
+    var showSaveOptionsSheet by remember { mutableStateOf(false) }
     val hasUnsavedChanges = uiState.processedBitmap != null && uiState.savedFilePath == null
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var snackbarType by remember { mutableStateOf(SnackbarType.INFO) }
@@ -83,7 +84,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
     LaunchedEffect(hasUnsavedChanges) {
         globalState.hasUnsavedChanges = hasUnsavedChanges
         if (hasUnsavedChanges) {
-            globalState.onSave = { viewModel.saveImage(activity) }
+            globalState.onSave = { viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)) }
             globalState.onDiscard = { viewModel.reset() }
         } else {
             globalState.clear()
@@ -106,7 +107,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
             confirmButton = {
                 Button(onClick = {
                      scope.launch {
-                         val success = viewModel.saveImage(activity)
+                         val success = viewModel.saveImage(activity, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context))
                          if (success) {
                              showUnsavedDialog = false
                              navController.popBackStack()
@@ -157,8 +158,24 @@ fun RemoveBackgroundScreen(navController: NavController) {
         )
     }
 
+    if (showSaveOptionsSheet) {
+        val initialOptions = remember {
+            com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context)
+        }
+        com.dhanuk.photodoctorpro.ui.components.SaveOptionsSheet(
+            initial = initialOptions,
+            hasTransparency = true,
+            onConfirm = { options ->
+                com.dhanuk.photodoctorpro.utils.UserPreferences.setSaveOptions(context, options)
+                showSaveOptionsSheet = false
+                scope.launch { viewModel.saveImage(activity, options) }
+            },
+            onDismiss = { showSaveOptionsSheet = false }
+        )
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { viewModel.onImageSelected(it, context) }
     }
@@ -257,7 +274,16 @@ fun RemoveBackgroundScreen(navController: NavController) {
 
             if (!uiState.isRefining) {
                 if (uiState.originalBitmap == null) {
-                    Button(onClick = { imagePickerLauncher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            imagePickerLauncher.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(stringResource(R.string.select_image))
                     }
                 } else if (uiState.processedBitmap == null) {
@@ -274,10 +300,10 @@ fun RemoveBackgroundScreen(navController: NavController) {
                             Text(stringResource(R.string.refine_edges))
                         }
                         Button(
-                            onClick = { scope.launch { viewModel.saveImage(activity) } },
+                            onClick = { showSaveOptionsSheet = true },
                             enabled = !uiState.isLoading
                         ) {
-                            Text(stringResource(R.string.save_png))
+                            Text(stringResource(R.string.save_as))
                         }
                     }
                     OutlinedButton(

@@ -5,13 +5,12 @@ import org.gradle.api.GradleException
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
-    id("kotlin-kapt")
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
-kapt {
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 // Helper to get properties from local.properties or environment variables
@@ -43,16 +42,12 @@ fun getProperty(key: String, defaultValue: String = ""): String {
 
 android {
     namespace = "com.dhanuk.photodoctorpro"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.dhanuk.photodoctorpro"
         minSdk = 24
-        targetSdk = 35
-
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
+        targetSdk = 36
 
         externalNativeBuild {
             cmake {
@@ -61,8 +56,16 @@ android {
             }
         }
 
-        val vCode = getProperty("VERSION_CODE", "2").toIntOrNull() ?: 2
-        val vName = getProperty("VERSION_NAME", "1.1")
+        // 16 KB page size compatibility for 64-bit devices (Play Console requirement for API 35+).
+        // The rebuilt shared lib (realesrgan_jni) is aligned to 16 KB. The prebuilt libncnn.so
+        // remains 4 KB aligned; android:pageSizeCompat="true" in the manifest opts the app into
+        // the platform compatibility mode for those libraries on 16 KB-page devices.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+
+        val vCode = getProperty("VERSION_CODE", "3").toIntOrNull() ?: 3
+        val vName = getProperty("VERSION_NAME", "2.0")
 
         versionCode = vCode
         versionName = vName
@@ -144,18 +147,15 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -197,7 +197,7 @@ dependencies {
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
 
     // Coil
     implementation(libs.coil.compose)

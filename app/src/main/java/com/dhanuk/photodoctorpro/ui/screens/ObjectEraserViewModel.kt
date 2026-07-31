@@ -348,14 +348,15 @@ class ObjectEraserViewModel(
         }
     }
 
-    suspend fun saveImage(activity: Activity): Boolean {
+    suspend fun saveImage(activity: Activity, options: com.dhanuk.photodoctorpro.utils.SaveOptions = com.dhanuk.photodoctorpro.utils.SaveOptions()): Boolean {
         val bitmap = _uiState.value.processedBitmap ?: return false
         val uri = _uiState.value.selectedImageUri ?: return false
         _uiState.update { it.copy(isLoading = true) }
 
         return try {
-            val fileName = "PicFixPro_Erased_${System.currentTimeMillis()}"
-            val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, Bitmap.CompressFormat.PNG)
+            val baseName = options.fileNameHint?.takeIf { it.isNotBlank() }
+                ?: "PicFixPro_Erased_${System.currentTimeMillis()}"
+            val filePath = BitmapUtils.saveBitmap(activity, bitmap, baseName, options)
             repository.addHistory(
                 History(
                     operationType = "Object Erased",

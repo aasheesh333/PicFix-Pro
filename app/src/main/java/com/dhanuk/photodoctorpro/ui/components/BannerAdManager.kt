@@ -4,18 +4,18 @@ import android.app.Activity
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import android.widget.FrameLayout
 import com.dhanuk.photodoctorpro.BuildConfig
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.LoadAdError
+import java.lang.ref.WeakReference
 
 class BannerAdManager private constructor() {
 
     private var adView: AdView? = null
-    private var activity: Activity? = null
+    private var activityRef: WeakReference<Activity>? = null
     private var isVisible = false
     private val handler = Handler(Looper.getMainLooper())
     private val refreshRunnable = Runnable { refreshAd() }
@@ -28,8 +28,12 @@ class BannerAdManager private constructor() {
     }
 
     fun initialize(activity: Activity) {
-        if (this.activity != null && this.activity == activity && adView != null) return
-        this.activity = activity
+        val current = activityRef?.get()
+        if (current != null && current === activity && adView != null) return
+        if (adView != null && current !== activity) {
+            destroy()
+        }
+        activityRef = WeakReference(activity)
         if (adView == null) {
             createAdView(activity)
         }
@@ -43,6 +47,12 @@ class BannerAdManager private constructor() {
                 override fun onAdLoaded() {
                     if (isVisible) scheduleRefresh()
                 }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
+                        android.util.Log.w("BannerAdManager", "Banner failed: ${adError.message}")
+                    }
+                }
             }
         }
         loadAd()
@@ -53,13 +63,14 @@ class BannerAdManager private constructor() {
     }
 
     private fun refreshAd() {
-        if (isVisible && adView != null) {
+        if (isVisible && adView != null && activityRef?.get() != null) {
             loadAd()
         }
     }
 
     private fun scheduleRefresh() {
         handler.removeCallbacks(refreshRunnable)
+        if (!isVisible) return
         handler.postDelayed(refreshRunnable, 2 * 60 * 1000)
     }
 
@@ -84,6 +95,7 @@ class BannerAdManager private constructor() {
         handler.removeCallbacks(refreshRunnable)
         adView?.destroy()
         adView = null
-        activity = null
+        activityRef = null
+        isVisible = false
     }
 }

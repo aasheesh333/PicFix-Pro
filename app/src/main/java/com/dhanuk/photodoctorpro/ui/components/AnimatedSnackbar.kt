@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,7 +53,7 @@ fun AnimatedSnackbar(
     val iconVector = when (type) {
         SnackbarType.SUCCESS -> Icons.Filled.CheckCircle
         SnackbarType.ERROR -> Icons.Filled.Error
-        SnackbarType.INFO -> Icons.Filled.Error
+        SnackbarType.INFO -> Icons.Filled.Info
     }
 
     AnimatedVisibility(

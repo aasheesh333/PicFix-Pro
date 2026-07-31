@@ -121,106 +121,144 @@ object BitmapUtils {
      * Returns the URI string of the saved file.
      * Handles Auto-Increment for filename collisions.
      */
-    suspend fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String, format: Bitmap.CompressFormat): String = withContext(Dispatchers.IO) {
+    suspend fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String, format: Bitmap.CompressFormat): String =
+        saveBitmap(context, bitmap, fileName, SaveOptions(format = SaveFormat.entries.first { it.compressFormat == format }, quality = 95, bgColor = null))
+
+    /**
+     * v2 save flow: honours the user-selected [SaveOptions] (format, quality, background fill).
+     *
+     * When [SaveFormat.supportsAlpha] is false and the source bitmap has an alpha channel,
+     * transparency is flattened onto [SaveOptions.bgColor] (default white) so JPEG/HEIF output
+     * is not rendered with a black background.
+     */
+    suspend fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String, options: SaveOptions): String = withContext(Dispatchers.IO) {
+        val format = options.format
+        val outputBitmap = flattenAlphaIfNeeded(bitmap, format)
+        val ownsOutput = outputBitmap !== bitmap
+
         val saveDirUriString = UserPreferences.getSaveDirectory(context)
-        val mimeType = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
-        val extension = if (format == Bitmap.CompressFormat.PNG) ".png" else ".jpg"
+        val mimeType = format.mimeType
+        val extension = format.extension
 
         // Ensure filename doesn't have extension duplicated
         val baseName = if (fileName.endsWith(extension, ignoreCase = true)) fileName.dropLast(extension.length) else fileName
 
-        // 1. Try Custom User Directory (SAF)
-        if (!saveDirUriString.isNullOrEmpty()) {
-            try {
-                val treeUri = Uri.parse(saveDirUriString)
-                val docFile = DocumentFile.fromTreeUri(context, treeUri)
+        try {
+            // 1. Try Custom User Directory (SAF)
+            if (!saveDirUriString.isNullOrEmpty()) {
+                try {
+                    val treeUri = Uri.parse(saveDirUriString)
+                    val docFile = DocumentFile.fromTreeUri(context, treeUri)
 
-                if (docFile != null && docFile.canWrite()) {
-                    // Auto-increment logic
-                    var finalName = "$baseName$extension"
-                    var counter = 1
-                    while (docFile.findFile(finalName) != null) {
-                        finalName = "$baseName($counter)$extension"
-                        counter++
-                    }
-
-                    val file = docFile.createFile(mimeType, finalName)
-                    if (file != null) {
-                        context.contentResolver.openOutputStream(file.uri)?.use { out ->
-                            bitmap.compress(format, 95, out)
+                    if (docFile != null && docFile.canWrite()) {
+                        var finalName = "$baseName$extension"
+                        var counter = 1
+                        while (docFile.findFile(finalName) != null) {
+                            finalName = "$baseName($counter)$extension"
+                            counter++
                         }
-                        return@withContext file.uri.toString()
+
+                        val file = docFile.createFile(mimeType, finalName)
+                        if (file != null) {
+                            context.contentResolver.openOutputStream(file.uri)?.use { out ->
+                                compressWithQuality(outputBitmap, format, options.quality, out)
+                            }
+                            return@withContext file.uri.toString()
+                        }
                     }
+                } catch (e: Exception) {
+                    if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
+                    // Fallback will happen below
+                }
+            }
+
+            // 2. Fallback to MediaStore (DCIM/PicFixPro)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val finalName = "$baseName$extension"
+
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/PicFixPro")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+
+                val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    try {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            compressWithQuality(outputBitmap, format, options.quality, out)
+                        }
+                        contentValues.clear()
+                        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                        context.contentResolver.update(uri, contentValues, null, null)
+                        return@withContext uri.toString()
+                    } catch (e: Exception) {
+                        context.contentResolver.delete(uri, null, null)
+                        throw e
+                    }
+                }
+            }
+
+            // 3. Fallback for older Android versions (Direct File)
+            val imagesDir = resolveWritableDir(context, "PicFixPro")
+            if (!imagesDir.exists()) imagesDir.mkdirs()
+
+            var finalName = "$baseName$extension"
+            var counter = 1
+            var file = File(imagesDir, finalName)
+            while (file.exists()) {
+                finalName = "$baseName($counter)$extension"
+                file = File(imagesDir, finalName)
+                counter++
+            }
+
+            try {
+                FileOutputStream(file).use { out ->
+                    compressWithQuality(outputBitmap, format, options.quality, out)
                 }
             } catch (e: Exception) {
-                if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) android.util.Log.e("BitmapUtils", "operation failed", e)
-                // Fallback will happen below
+                if (file.exists()) file.delete()
+                throw e
             }
+
+            MediaScannerConnectionWrapper.scan(context, file.absolutePath)
+
+            return@withContext FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                file
+            ).toString()
+        } finally {
+            if (ownsOutput && !outputBitmap.isRecycled) outputBitmap.recycle()
         }
+    }
 
-        // 2. Fallback to MediaStore (DCIM/PicFixPro)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var finalName = "$baseName$extension"
-            // Note: MediaStore automatically handles duplicates by adding (1), (2) usually,
-            // but for strict consistency we can rely on system behavior or try to check.
-            // Querying MediaStore to check existence is complex.
-            // We will trust MediaStore's native auto-increment or collision handling for now,
-            // as it generally behaves correctly (adding unique suffix).
-
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
-                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/PicFixPro")
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-
-            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-            if (uri != null) {
-                try {
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        bitmap.compress(format, 95, out)
-                    }
-                    contentValues.clear()
-                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                    context.contentResolver.update(uri, contentValues, null, null)
-                    return@withContext uri.toString()
-                } catch (e: Exception) {
-                    // Cleanup empty file
-                    context.contentResolver.delete(uri, null, null)
-                    throw e
+    private fun compressWithQuality(bitmap: Bitmap, format: SaveFormat, quality: Int, out: OutputStream) {
+        when (format) {
+            SaveFormat.PNG, SaveFormat.WEBP_LOSSLESS -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && format == SaveFormat.WEBP_LOSSLESS) {
+                    bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, out)
+                } else {
+                    bitmap.compress(format.compressFormat, 100, out)
                 }
             }
+            else -> bitmap.compress(format.compressFormat, quality.coerceIn(1, 100), out)
         }
+    }
 
-        // 3. Fallback for older Android versions (Direct File)
-        val imagesDir = resolveWritableDir(context, "PicFixPro")
-        if (!imagesDir.exists()) imagesDir.mkdirs()
-
-        var finalName = "$baseName$extension"
-        var counter = 1
-        var file = File(imagesDir, finalName)
-        while (file.exists()) {
-            finalName = "$baseName($counter)$extension"
-            file = File(imagesDir, finalName)
-            counter++
-        }
-
-        try {
-            FileOutputStream(file).use { out ->
-                bitmap.compress(format, 95, out)
-            }
-        } catch (e: Exception) {
-            if (file.exists()) file.delete()
-            throw e
-        }
-
-        MediaScannerConnectionWrapper.scan(context, file.absolutePath)
-
-        return@withContext FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            file
-        ).toString()
+    /**
+     * Flattens transparency onto a solid background when the target format cannot store alpha.
+     */
+    private fun flattenAlphaIfNeeded(source: Bitmap, format: SaveFormat): Bitmap {
+        if (format.supportsAlpha) return source
+        if (!source.hasAlpha()) return source
+        val bg = 0xFFFFFFFF.toInt()
+        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(result)
+        canvas.drawColor(bg)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        return result
     }
 }
 

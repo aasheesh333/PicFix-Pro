@@ -13,11 +13,14 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
 
     - name: Decode Keystore
       env:
@@ -69,9 +72,12 @@ jobs:
         PACKAGE_NAME: ${{ secrets.PACKAGE_NAME || secrets.APP_PACKAGE_NAME }}
 
         # Version code/name might be vars or secrets
-        VERSION_CODE: ${{ vars.VERSION_CODE || secrets.VERSION_CODE || secrets.APP_VERSION_CODE || '1' }}
-        VERSION_NAME: ${{ vars.VERSION_NAME || secrets.VERSION_NAME || secrets.APP_VERSION_NAME || '1.0' }}
+        VERSION_CODE: ${{ vars.VERSION_CODE || secrets.VERSION_CODE || secrets.APP_VERSION_CODE || '3' }}
+        VERSION_NAME: ${{ vars.VERSION_NAME || secrets.VERSION_NAME || secrets.APP_VERSION_NAME || '2.0' }}
       run: ./gradlew --no-daemon clean assembleRelease bundleRelease
+
+    - name: Run Lint
+      run: ./gradlew --no-daemon lintRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -84,3 +90,18 @@ jobs:
       with:
         name: app-release-aab
         path: app/build/outputs/bundle/release/app-release.aab
+
+    - name: Upload ProGuard mapping
+      uses: actions/upload-artifact@v4
+      with:
+        name: mapping
+        path: app/build/outputs/mapping/release/mapping.txt
+        if-no-files-found: warn
+
+    - name: Upload lint results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: lint-report
+        path: app/build/reports/lint-results-release.html
+        if-no-files-found: warn

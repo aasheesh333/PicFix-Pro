@@ -20,9 +20,24 @@ object UnifiedSaveHelper {
         repository: HistoryRepository,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG,
         showAd: Boolean = true
+    ): String = saveAndRecord(
+        activity, bitmap, fileNamePrefix, operationType, inputUriString, repository,
+        SaveOptions(format = SaveFormat.entries.first { it.compressFormat == format }, quality = 95, bgColor = null),
+        showAd
+    )
+
+    suspend fun saveAndRecord(
+        activity: Activity,
+        bitmap: Bitmap,
+        fileNamePrefix: String,
+        operationType: String,
+        inputUriString: String,
+        repository: HistoryRepository,
+        options: SaveOptions,
+        showAd: Boolean = true
     ): String = withContext(Dispatchers.IO) {
         val fileName = "${fileNamePrefix}_${System.currentTimeMillis()}"
-        val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, format)
+        val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, options)
         repository.addHistory(
             History(
                 operationType = operationType,
@@ -42,9 +57,22 @@ object UnifiedSaveHelper {
         inputUriString: String,
         repository: HistoryRepository,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG
+    ): String = saveAndRecordNoAd(
+        context, bitmap, fileNamePrefix, operationType, inputUriString, repository,
+        SaveOptions(format = SaveFormat.entries.first { it.compressFormat == format }, quality = 95, bgColor = null)
+    )
+
+    suspend fun saveAndRecordNoAd(
+        context: Context,
+        bitmap: Bitmap,
+        fileNamePrefix: String,
+        operationType: String,
+        inputUriString: String,
+        repository: HistoryRepository,
+        options: SaveOptions
     ): String = withContext(Dispatchers.IO) {
         val fileName = "${fileNamePrefix}_${System.currentTimeMillis()}"
-        val filePath = BitmapUtils.saveBitmap(context, bitmap, fileName, format)
+        val filePath = BitmapUtils.saveBitmap(context, bitmap, fileName, options)
         repository.addHistory(
             History(
                 operationType = operationType,

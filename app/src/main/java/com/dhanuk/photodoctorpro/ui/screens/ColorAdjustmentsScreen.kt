@@ -96,9 +96,9 @@ fun ColorAdjustmentsScreen(navController: NavController) {
     val processedImage = rememberBitmap(uiState.processedBitmap)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { viewModel.setOriginal(it, context) }
+        uri?.let { viewModel.onImageSelected(it, context) }
     }
 
     LaunchedEffect(uiState.error) {
@@ -211,7 +211,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         )
                         Spacer(Modifier.height(16.dp))
                         Button(
-                            onClick = { imagePickerLauncher.launch("image/*") },
+                            onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Text(stringResource(R.string.select_image))
@@ -319,7 +319,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { imagePickerLauncher.launch("image/*") },
+                            onClick = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             modifier = Modifier.weight(1f).height(46.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -330,7 +330,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
                         Button(
                             onClick = {
                                 if (uiState.processedBitmap != null) {
-                                    scope.launch { viewModel.saveImage(context) }
+                                    viewModel.saveImage(context, com.dhanuk.photodoctorpro.utils.UserPreferences.getSaveOptions(context))
                                 }
                             },
                             enabled = uiState.processedBitmap != null && !uiState.isLoading,
