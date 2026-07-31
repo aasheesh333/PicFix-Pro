@@ -7,10 +7,7 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
-    <style name="Theme.PicFixPro.Starting" parent="Theme.PicFixPro">
-        <item name="android:windowSplashScreenBackground">@color/black</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="android:windowSplashScreenAnimationDuration">300</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">@color/black</item>
-    </style>
+    <!-- Base starting theme for API < 31 (core-splashscreen backports the splash UI).
+         API 31+ splash attributes live in res/values-v31/themes.xml. -->
+    <style name="Theme.PicFixPro.Starting" parent="Theme.PicFixPro" />
 </resources>
