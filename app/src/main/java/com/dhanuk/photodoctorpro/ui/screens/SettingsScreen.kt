@@ -310,11 +310,13 @@ fun SettingsScreen(navController: NavController) {
             subtitle = stringResource(R.string.share_app_subtitle),
             leading = Icons.Outlined.Share,
             onClick = {
+                val shareText = context.getString(R.string.share_app_text)
+                val shareTitle = context.getString(R.string.share_app)
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, stringResource(R.string.share_app_text))
+                    putExtra(Intent.EXTRA_TEXT, shareText)
                 }
-                safeStartActivity(context, Intent.createChooser(intent, stringResource(R.string.share_app)))
+                safeStartActivity(context, Intent.createChooser(intent, shareTitle))
             }
         )
 
