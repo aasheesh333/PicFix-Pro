@@ -77,6 +77,12 @@ jobs:
       run: ./gradlew --no-daemon clean assembleRelease bundleRelease
 
     - name: Run Lint
+      env:
+        # lintRelease triggers the Release-variant AdMob-ID guard in app/build.gradle.kts,
+        # so the same secrets/vars used by the build step must be present here too.
+        ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID || secrets.APP_ADMOB_APP_ID }}
+        ADMOB_BANNER_ID: ${{ secrets.ADMOB_BANNER_ID || secrets.APP_ADMOB_BANNER_ID }}
+        ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID || secrets.APP_ADMOB_INTERSTITIAL_ID }}
       run: ./gradlew --no-daemon lintRelease
 
     - name: Upload APK
