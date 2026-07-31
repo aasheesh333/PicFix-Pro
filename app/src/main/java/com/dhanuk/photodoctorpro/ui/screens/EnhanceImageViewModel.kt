@@ -198,7 +198,9 @@ class EnhanceImageViewModel(
         super.onCleared()
         enhanceJob?.cancel()
         enhanceJob = null
-        ImageEnhancer.shutdown()
+        // Do not call ImageEnhancer.shutdown() here: onCleared fires on back-navigation,
+        // which would tear down the shared native net mid-inference (use-after-free) and
+        // force a costly re-init on return. MainActivity.onDestroy handles real teardown.
         val state = _uiState.value
         val original = state.originalBitmap
         val enhanced = state.enhancedBitmap

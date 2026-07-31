@@ -37,7 +37,7 @@ object UnifiedSaveHelper {
         showAd: Boolean = true
     ): String = withContext(Dispatchers.IO) {
         val fileName = "${fileNamePrefix}_${System.currentTimeMillis()}"
-        val filePath = BitmapUtils.saveBitmap(activity, bitmap, fileName, options)
+        val filePath = BitmapUtils.saveBitmap(activity.applicationContext, bitmap, fileName, options)
         repository.addHistory(
             History(
                 operationType = operationType,

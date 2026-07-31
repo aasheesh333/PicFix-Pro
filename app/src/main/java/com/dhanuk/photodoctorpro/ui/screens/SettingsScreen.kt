@@ -144,7 +144,7 @@ fun SettingsScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(4.dp))
 
             val isDarkTheme by ThemeController.isDarkTheme.collectAsState()
-            val isFollowSystem = remember(context) { UserPreferences.isFollowSystem(context) }
+            val isFollowSystem = UserPreferences.isFollowSystem(context)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -258,7 +258,7 @@ fun SettingsScreen(navController: NavController) {
             },
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Privacy-Policy.html"))
-                context.startActivity(intent)
+                safeStartActivity(context, intent)
             }
         )
 
@@ -274,7 +274,7 @@ fun SettingsScreen(navController: NavController) {
             },
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://dhanuk.page.gd/PicFix-Pro/Terms-and-Conditions.html"))
-                context.startActivity(intent)
+                safeStartActivity(context, intent)
             }
         )
 
@@ -311,7 +311,7 @@ fun SettingsScreen(navController: NavController) {
                 val intent = Intent(Intent.ACTION_SENDTO).apply {
                     data = Uri.parse("mailto:support@dhanuk.page.gd?subject=PicFix%20Pro%20Feedback")
                 }
-                context.startActivity(intent)
+                safeStartActivity(context, intent)
             }
         )
 
@@ -328,4 +328,16 @@ fun SettingsScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(40.dp))
     }
 }
+}
+
+private fun safeStartActivity(context: Context, intent: Intent) {
+    try {
+        context.startActivity(intent)
+    } catch (_: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(
+            context,
+            "No app available to handle this action",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
 }

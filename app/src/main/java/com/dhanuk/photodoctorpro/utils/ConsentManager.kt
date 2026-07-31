@@ -46,11 +46,15 @@ object ConsentManager {
         UserMessagingPlatform.loadConsentForm(
             activity,
             { consentForm ->
-                consentForm.show(activity) { formError ->
-                    if (formError != null) {
-                        Log.e(TAG, "Consent form error: ${formError.message}")
-                    }
+                if (activity.isFinishing || activity.isDestroyed) {
                     checkConsentAndInitAds(activity)
+                } else {
+                    consentForm.show(activity) { formError ->
+                        if (formError != null) {
+                            Log.e(TAG, "Consent form error: ${formError.message}")
+                        }
+                        checkConsentAndInitAds(activity)
+                    }
                 }
             },
             { formError: FormError ->

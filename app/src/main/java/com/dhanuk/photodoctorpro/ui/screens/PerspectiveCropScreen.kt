@@ -493,6 +493,7 @@ class PerspectiveCropViewModel(
 
         val srcBmpMat = Mat()
         Utils.bitmapToMat(srcBitmap, srcBmpMat)
+        if (srcBitmap !== source && !srcBitmap.isRecycled) srcBitmap.recycle()
 
         val dstMatImg = Mat()
         Imgproc.warpPerspective(

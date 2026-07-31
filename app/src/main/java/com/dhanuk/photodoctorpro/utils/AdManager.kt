@@ -31,11 +31,7 @@ object AdManager {
         private set
 
     private const val AD_FREQUENCY_CAP_MS = 2 * 60 * 1000L
-    private const val AUTO_AD_INTERVAL_MS = 5 * 60 * 1000L
     private const val MAJOR_ACTION_COUNT_CAP = 2
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    @Volatile private var autoAdJob: kotlinx.coroutines.Job? = null
 
     private val initialized = AtomicBoolean(false)
 
@@ -51,27 +47,8 @@ object AdManager {
         if (initialized.compareAndSet(false, true)) {
             MobileAds.initialize(context) {}
             loadInterstitialAd(context)
-            startAutoAdTimer(context)
         } else {
             if (BuildConfig.DEBUG) Log.d(TAG, "AdManager already initialized — skipping duplicate init")
-        }
-    }
-
-    private fun startAutoAdTimer(context: Context) {
-        autoAdJob?.cancel()
-        autoAdJob = scope.launch {
-            while (true) {
-                delay(AUTO_AD_INTERVAL_MS)
-                val activity = currentActivity() ?: continue
-                if (!ConsentManager.canRequestAds()) continue
-                if (InAppReviewManager.isReviewInProgress) continue
-                val ad = interstitialAd ?: continue
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastAdShowTime >= AD_FREQUENCY_CAP_MS) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "Showing auto periodic Interstitial Ad")
-                    safeShowAd(ad, activity)
-                }
-            }
         }
     }
 
@@ -211,12 +188,11 @@ object AdManager {
     }
 
     fun cleanup() {
-        autoAdJob?.cancel()
-        autoAdJob = null
         interstitialAd = null
         isAdLoaded = false
         lastLoadError = "Cleaned up"
         majorActionCount.set(0)
         currentActivityRef = null
+        initialized.set(false)
     }
 }

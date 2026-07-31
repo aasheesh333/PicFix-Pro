@@ -15,6 +15,8 @@ object RealESRGANNativeLib {
     private val initLock = Any()
     @Volatile private var currentScale = 4
 
+    private const val MAX_OUTPUT_PIXELS = 36_000_000L
+
     var nativeAvailable = true
         private set
 
@@ -97,6 +99,10 @@ object RealESRGANNativeLib {
         onProgress: ((Float) -> Unit)? = null
     ): Bitmap? {
         if (!nativeAvailable || !isInitialized) return null
+
+        val outPixels = bitmap.width.toLong() * currentScale * bitmap.height.toLong() * currentScale
+        val heapBudget = Runtime.getRuntime().maxMemory() / 4L
+        if (outPixels > MAX_OUTPUT_PIXELS || outPixels > heapBudget) return null
 
         val callback = onProgress?.let { cb ->
             object : ProgressCallback {

@@ -2,7 +2,6 @@ package com.dhanuk.photodoctorpro.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.combinedClickable
@@ -218,7 +217,7 @@ fun HistoryScreen(navController: NavController) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
-                            .animateItemPlacement(tween(300))
+                            .animateItem()
                             .combinedClickable(
                                 onClick = { selectedItem = item },
                                 onLongClick = { pendingDelete = item }

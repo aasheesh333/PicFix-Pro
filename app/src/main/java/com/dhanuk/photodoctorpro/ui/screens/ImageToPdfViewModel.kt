@@ -127,7 +127,7 @@ class ImageToPdfViewModel(
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (e: Exception) {
-                _uiState.update { it.copy(isCreating = false, error = e.message) }
+                _uiState.update { it.copy(isCreating = false, error = e.message ?: activity.getString(com.dhanuk.photodoctorpro.R.string.error_unknown)) }
             } finally {
                 pdfDocument?.close()
             }

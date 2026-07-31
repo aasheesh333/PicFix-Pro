@@ -75,7 +75,16 @@ class ObjectEraserViewModel(
                 redoStack.clear()
                 val oldOriginal = _uiState.value.originalBitmap
                 val oldProcessed = _uiState.value.processedBitmap
-                _uiState.value = ObjectEraserUiState(selectedImageUri = uri, originalBitmap = bitmap, isLoading = false, progress = 0f)
+                _uiState.value = _uiState.value.copy(
+                    selectedImageUri = uri,
+                    originalBitmap = bitmap,
+                    processedBitmap = null,
+                    paths = emptyList(),
+                    isLoading = false,
+                    progress = 0f,
+                    canUndo = false,
+                    canRedo = false
+                )
                 if (oldProcessed != null && oldProcessed !== oldOriginal && !oldProcessed.isRecycled) oldProcessed.recycle()
                 if (oldOriginal != null && oldOriginal !== bitmap && !oldOriginal.isRecycled) oldOriginal.recycle()
             }
@@ -266,7 +275,14 @@ class ObjectEraserViewModel(
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("ObjectEraserVM", "eraseObjects failed", e)
             }
-            if (synchronized(stackLock) { undoStack.isNotEmpty() }) synchronized(stackLock) { undoStack.removeLast() }
+            synchronized(stackLock) {
+                if (undoStack.isNotEmpty()) {
+                    val (bmp, _) = undoStack.removeLast()
+                    val currentProcessed = _uiState.value.processedBitmap
+                    val currentOriginal = _uiState.value.originalBitmap
+                    if (bmp !== currentProcessed && bmp !== currentOriginal && !bmp.isRecycled) bmp.recycle()
+                }
+            }
             _uiState.update { it.copy(isErasing = false, progress = 0f, error = e.message) }
         }
     }

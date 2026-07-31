@@ -95,11 +95,9 @@ object UserPreferences {
 
     fun setSaveOptions(context: Context, options: SaveOptions) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
+        val editor = prefs.edit()
             .putString(KEY_SAVE_FORMAT, options.format.name)
             .putInt(KEY_SAVE_QUALITY, options.quality)
-            .apply()
-        val editor = prefs.edit()
         if (options.bgColor != null) {
             editor.putInt(KEY_SAVE_BG_COLOR, options.bgColor)
         } else {

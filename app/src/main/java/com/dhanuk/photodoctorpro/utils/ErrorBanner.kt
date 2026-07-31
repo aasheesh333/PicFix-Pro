@@ -17,7 +17,9 @@ object ErrorBanner {
     }
 
     fun openCvFailed(context: Application) {
-        _openCvErrorShown.value = true
+        // Intentional no-op. Banner visibility is driven by
+        // PicFixApplication.openCVInitFailed. Setting the dismissed flag here
+        // would immediately hide the failure banner (logic inversion).
     }
 
     @Composable

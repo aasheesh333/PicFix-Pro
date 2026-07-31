@@ -85,7 +85,7 @@ class ResizeCompressViewModel(
                     val bitmap = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(restored.selectedUri!!, context, 4000)
                     if (bitmap != null) {
                         val bytes = try {
-                            context.contentResolver.openInputStream(restored.selectedUri!!)?.use { it.available().toLong() } ?: 0L
+                            context.contentResolver.openAssetFileDescriptor(restored.selectedUri!!, "r")?.use { it.length } ?: 0L
                         } catch (_: Exception) { 0L }
                         _uiState.update {
                             it.copy(
@@ -122,9 +122,7 @@ class ResizeCompressViewModel(
             try {
                 val (bitmap, bytes) = run {
                     val realBytes = try {
-                        context.contentResolver.openInputStream(uri)?.use { stream ->
-                            stream.available().toLong()
-                        } ?: 0L
+                        context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0L
                     } catch (_: Exception) { 0L }
                     val bmp = com.dhanuk.photodoctorpro.utils.BitmapUtils.loadBitmapFromUri(uri, context, 4000)
                     Pair(bmp, realBytes)

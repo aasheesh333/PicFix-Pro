@@ -95,14 +95,14 @@ class RemoveBackgroundViewModel(
 
         removeBgJob?.cancel()
         removeBgJob = viewModelScope.launch(viewModelExceptionHandler("RemoveBGVM")) {
+            var allocatedInput: Bitmap? = null
             try {
-                val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val inputBitmap = rawBitmap.copy(Bitmap.Config.ARGB_8888, true).also { allocatedInput = it }
                 checkActive()
                 val mask = processToGetMask(inputBitmap)
                 checkActive()
                 val result = applyMaskToOriginal(inputBitmap, mask)
                 checkActive()
-                if (inputBitmap != rawBitmap && !inputBitmap.isRecycled) inputBitmap.recycle()
 
                 val oldProcessed = _uiState.value.processedBitmap
                 val oldMask = _uiState.value.maskBitmap
@@ -131,6 +131,8 @@ class RemoveBackgroundViewModel(
                     android.util.Log.e("RemoveBGVM", "removeBackground failed", e)
                 }
                 _uiState.update { it.copy(isLoading = false, error = e.message ?: context.getString(com.dhanuk.photodoctorpro.R.string.error_unknown)) }
+            } finally {
+                allocatedInput?.let { if (it != rawBitmap && !it.isRecycled) it.recycle() }
             }
         }
     }
@@ -286,7 +288,9 @@ class RemoveBackgroundViewModel(
     fun saveMaskStateForUndo() {
         val currentMask = _uiState.value.maskBitmap ?: return
         synchronized(stackLock) {
-            pushToUndoLocked(currentMask.copy(currentMask.config ?: Bitmap.Config.ALPHA_8, true))
+            val copy = currentMask.copy(currentMask.config ?: Bitmap.Config.ALPHA_8, true)
+            if (copy != null) pushToUndoLocked(copy)
+            redoStack.forEach { if (!it.isRecycled) it.recycle() }
             redoStack.clear()
         }
     }
@@ -414,6 +418,7 @@ class RemoveBackgroundViewModel(
             redoStack.clear()
         }
         _uiState.value = RemoveBackgroundUiState()
+        savedStateHandle.remove<String>(KEY_URI)
     }
 
     fun onErrorShown() {

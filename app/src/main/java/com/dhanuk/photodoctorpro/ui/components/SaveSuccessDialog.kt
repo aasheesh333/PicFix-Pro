@@ -87,8 +87,9 @@ fun SaveSuccessDialog(
             com.dhanuk.photodoctorpro.utils.NotificationHelper.scheduleReEngagement(context)
         }
         if (!UserPreferences.hasRequestedReview(context) && !wasFirstSave) {
+            // InAppReviewManager marks the review as requested in its completion
+            // callback; setting it synchronously here would defeat retry-on-failure.
             InAppReviewManager.requestReviewIfNeeded(context)
-            UserPreferences.setHasRequestedReview(context)
         }
     }
 

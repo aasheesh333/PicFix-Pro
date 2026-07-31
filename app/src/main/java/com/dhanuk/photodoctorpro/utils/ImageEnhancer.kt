@@ -3,6 +3,8 @@ package com.dhanuk.photodoctorpro.utils
 import android.content.Context
 import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -14,13 +16,15 @@ import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
 
 object ImageEnhancer {
 
-    private var tierInitialized = 0
+    @Volatile private var tierInitialized = 0
     private const val MODEL_DIR_STANDARD = "realesrgan-x4plus-anime"
     private const val MODEL_DIR_HD = "realesrgan-x4plus"
     private const val MODEL_NAME = "x4"
     private const val MODEL_SCALE = 4
 
-    private var currentModelDir: String = MODEL_DIR_STANDARD
+    @Volatile private var currentModelDir: String = MODEL_DIR_STANDARD
+
+    private val enhanceLock = Mutex()
 
     fun shutdown() {
         RealESRGANNativeLib.cleanup()
@@ -29,17 +33,19 @@ object ImageEnhancer {
     }
 
     suspend fun initializeIfNeeded(context: Context, modelDir: String) = withContext(Dispatchers.Default) {
-        val resolvedDir = when (modelDir) {
-            "hd" -> MODEL_DIR_HD
-            else -> MODEL_DIR_STANDARD
-        }
-        if (resolvedDir == currentModelDir && tierInitialized != 0) return@withContext
-        RealESRGANNativeLib.cleanup()
-        tierInitialized = 0
-        currentModelDir = resolvedDir
-        tryInitNcnn(context, useGpu = true)
-        if (tierInitialized == 0) {
-            tryInitNcnn(context, useGpu = false)
+        enhanceLock.withLock {
+            val resolvedDir = when (modelDir) {
+                "hd" -> MODEL_DIR_HD
+                else -> MODEL_DIR_STANDARD
+            }
+            if (resolvedDir == currentModelDir && tierInitialized != 0) return@withLock
+            RealESRGANNativeLib.cleanup()
+            tierInitialized = 0
+            currentModelDir = resolvedDir
+            tryInitNcnn(context, useGpu = true)
+            if (tierInitialized == 0) {
+                tryInitNcnn(context, useGpu = false)
+            }
         }
     }
 
@@ -49,32 +55,37 @@ object ImageEnhancer {
         scaleFactor: Int,
         onProgress: ((Float) -> Unit)? = null
     ): Bitmap = withContext(Dispatchers.Default) {
-        onProgress?.invoke(0.05f)
+        enhanceLock.withLock {
+            onProgress?.invoke(0.05f)
 
-        if (tryInitNcnn(context, useGpu = true)) {
-            try {
-                val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
-                if (result != null) {
-                    onProgress?.invoke(1.0f)
-                    return@withContext result
-                }
-            } catch (_: Exception) {}
+            if (tryInitNcnn(context, useGpu = true)) {
+                try {
+                    val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
+                    if (result != null) {
+                        onProgress?.invoke(1.0f)
+                        return@withLock result
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // Re-init on CPU if GPU path failed: release the (possibly GPU) net first.
+            RealESRGANNativeLib.cleanup()
+            tierInitialized = 0
+            if (tryInitNcnn(context, useGpu = false)) {
+                try {
+                    val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
+                    if (result != null) {
+                        onProgress?.invoke(1.0f)
+                        return@withLock result
+                    }
+                } catch (_: Exception) {}
+            }
+
+            onProgress?.invoke(0.3f)
+            val result = enhanceWithOpenCv(bitmap, scaleFactor)
+            onProgress?.invoke(1.0f)
+            result
         }
-
-        if (tryInitNcnn(context, useGpu = false)) {
-            try {
-                val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
-                if (result != null) {
-                    onProgress?.invoke(1.0f)
-                    return@withContext result
-                }
-            } catch (_: Exception) {}
-        }
-
-        onProgress?.invoke(0.3f)
-        val result = enhanceWithOpenCv(bitmap, scaleFactor)
-        onProgress?.invoke(1.0f)
-        return@withContext result
     }
 
     private fun tryInitNcnn(context: Context, useGpu: Boolean): Boolean {

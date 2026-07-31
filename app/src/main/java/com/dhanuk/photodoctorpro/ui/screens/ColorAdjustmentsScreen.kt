@@ -98,7 +98,7 @@ fun ColorAdjustmentsScreen(navController: NavController) {
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { viewModel.onImageSelected(it, context) }
+        uri?.let { viewModel.setOriginal(it, context) }
     }
 
     LaunchedEffect(uiState.error) {

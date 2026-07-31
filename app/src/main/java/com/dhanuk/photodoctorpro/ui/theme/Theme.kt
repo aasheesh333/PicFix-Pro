@@ -121,17 +121,11 @@ fun PicFixProTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            window.navigationBarColor = colorScheme.background.toArgb()
+            // Only control icon appearance; let enableEdgeToEdge() manage bar transparency
+            // (setting statusBarColor/navigationBarColor here defeats edge-to-edge on API < 35
+            // and is a no-op on API 35+).
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
-        }
-
-        val window = (view.context as Activity).window
-        val bgArgb = targetColorScheme.background.toArgb()
-        if (window.statusBarColor != bgArgb) {
-            window.statusBarColor = bgArgb
-            window.navigationBarColor = bgArgb
         }
     }
 

@@ -44,7 +44,7 @@ class PicFixApplication : Application() {
         applicationScope.launch(Dispatchers.IO) {
             val ok = try {
                 OpenCVLoader.initDebug()
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e("PicFix", "OpenCV init threw", e)
                 false
             }

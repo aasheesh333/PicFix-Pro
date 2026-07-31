@@ -133,7 +133,7 @@ object BitmapUtils {
      */
     suspend fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String, options: SaveOptions): String = withContext(Dispatchers.IO) {
         val format = options.format
-        val outputBitmap = flattenAlphaIfNeeded(bitmap, format)
+        val outputBitmap = flattenAlphaIfNeeded(bitmap, format, options.bgColor)
         val ownsOutput = outputBitmap !== bitmap
 
         val saveDirUriString = UserPreferences.getSaveDirectory(context)
@@ -250,10 +250,10 @@ object BitmapUtils {
     /**
      * Flattens transparency onto a solid background when the target format cannot store alpha.
      */
-    private fun flattenAlphaIfNeeded(source: Bitmap, format: SaveFormat): Bitmap {
+    private fun flattenAlphaIfNeeded(source: Bitmap, format: SaveFormat, bgColor: Int?): Bitmap {
         if (format.supportsAlpha) return source
         if (!source.hasAlpha()) return source
-        val bg = 0xFFFFFFFF.toInt()
+        val bg = bgColor ?: 0xFFFFFFFF.toInt()
         val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(result)
         canvas.drawColor(bg)
@@ -277,14 +277,22 @@ object MediaScannerConnectionWrapper {
 }
 
 fun resolveFileUri(path: String, context: Context): Uri {
-    return if (path.startsWith("content://")) {
-        Uri.parse(path)
-    } else {
+    if (path.startsWith("content://")) return Uri.parse(path)
+
+    val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path ?: path else path
+    val file = File(cleanPath)
+    return try {
+        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    } catch (e: IllegalArgumentException) {
+        // File is outside the declared FileProvider paths. Copy it into the cache
+        // export dir (which IS exposed) and return a content:// uri. Never fall back
+        // to file:// — that throws FileUriExposedException on API 24+.
         try {
-            val cleanPath = if (path.startsWith("file://")) Uri.parse(path).path ?: path else path
-            val file = File(cleanPath)
-            FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-        } catch (e: IllegalArgumentException) {
+            val cacheDir = File(context.cacheDir, "export").apply { mkdirs() }
+            val dest = File(cacheDir, file.name)
+            file.inputStream().use { input -> FileOutputStream(dest).use { out -> input.copyTo(out) } }
+            FileProvider.getUriForFile(context, "${context.packageName}.provider", dest)
+        } catch (e2: Exception) {
             if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
                 android.util.Log.e("BitmapUtils", "resolveFileUri failed for path: $path", e)
             }
