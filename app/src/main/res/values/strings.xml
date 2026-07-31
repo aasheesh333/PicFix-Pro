@@ -291,6 +291,9 @@
     <string name="rate_app_subtitle">Enjoying the app? Leave a rating</string>
     <string name="send_feedback">Send Feedback</string>
     <string name="send_feedback_subtitle">Report a bug or suggest a feature</string>
+    <string name="share_app">Share App</string>
+    <string name="share_app_subtitle">Spread the word about PicFix Pro</string>
+    <string name="share_app_text">Check out PicFix Pro - an amazing photo editing app! https://play.google.com/store/apps/details?id=com.dhanuk.photodoctorpro</string>
 
     <!-- v2: Enhance quality toggle -->
     <string name="quality_fast">Fast</string>

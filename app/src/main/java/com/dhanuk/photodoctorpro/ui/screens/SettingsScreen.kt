@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -299,7 +300,21 @@ fun SettingsScreen(navController: NavController) {
             subtitle = stringResource(R.string.rate_app_subtitle),
             leading = Icons.Outlined.Star,
             onClick = {
-                com.dhanuk.photodoctorpro.utils.InAppReviewManager.requestReviewIfNeeded(context)
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${BuildConfig.APPLICATION_ID}"))
+                safeStartActivity(context, intent)
+            }
+        )
+
+        LuminaListItem(
+            title = stringResource(R.string.share_app),
+            subtitle = stringResource(R.string.share_app_subtitle),
+            leading = Icons.Outlined.Share,
+            onClick = {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, stringResource(R.string.share_app_text))
+                }
+                safeStartActivity(context, Intent.createChooser(intent, stringResource(R.string.share_app)))
             }
         )
 
@@ -309,7 +324,7 @@ fun SettingsScreen(navController: NavController) {
             leading = Icons.Outlined.Email,
             onClick = {
                 val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse("mailto:support@dhanuk.page.gd?subject=PicFix%20Pro%20Feedback")
+                    data = Uri.parse("mailto:support@dhanuksoftwares.com?subject=PicFix%20Pro%20Feedback")
                 }
                 safeStartActivity(context, intent)
             }
