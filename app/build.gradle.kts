@@ -57,11 +57,14 @@ android {
         }
 
         // 16 KB page size compatibility for 64-bit devices (Play Console requirement for API 35+).
-        // The rebuilt shared lib (realesrgan_jni) is aligned to 16 KB. The prebuilt libncnn.so
-        // remains 4 KB aligned; android:pageSizeCompat="true" in the manifest opts the app into
-        // the platform compatibility mode for those libraries on 16 KB-page devices.
+        // arm64-v8a is the only shipped ABI: librealesrgan_jni.so is built with
+        // -Wl,-z,max-page-size=16384 and the prebuilt arm64 libncnn.so is already
+        // 16 KB-aligned (PT_LOAD align = 0x4000). The old 4 KB-aligned armeabi-v7a
+        // libncnn.so was removed so the AAB passes Play Console's 16 KB validation.
+        // android:pageSizeCompat="enabled" in the manifest is kept as a safety net
+        // for any future 4 KB-aligned third-party dependency.
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += listOf("arm64-v8a")
         }
 
         val vCode = getProperty("VERSION_CODE", "3").toIntOrNull() ?: 3
