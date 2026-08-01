@@ -7,6 +7,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -48,6 +52,13 @@ fun AppScaffold() {
                     ) {
                         BottomNavigationBar(navController)
                     }
+                    // Always reserve space for the system navigation bar so the
+                    // banner ad never slides under it — regardless of whether the
+                    // bottom nav is visible. BottomNavigationBar no longer adds
+                    // its own navigationBars padding (removed to avoid double gap).
+                    Spacer(
+                        modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    )
                 }
             }
         ) { padding ->
