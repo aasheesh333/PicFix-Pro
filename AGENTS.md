@@ -3,7 +3,7 @@
 **NEVER EVER build APK/AAB locally.** Always push code to GitHub → let GitHub Actions build → monitor CI until green → download APK/AAB artifacts from Actions page.
 
 Single-module Android app (Kotlin + Jetpack Compose). One Gradle module: `:app`.
-Package: `com.dhanuk.photodoctorpro`. `compileSdk` 35, `minSdk` 24, `targetSdk` 35. JVM 1.8. `applicationId` and `namespace` match the package.
+Package: `com.dhanuk.photodoctorpro`. `compileSdk` 36, `minSdk` 24, `targetSdk` 36. JVM 17. `applicationId` and `namespace` match the package. Native code via CMake (`app/src/main/cpp/`), arm64-v8a only (armeabi-v7a dropped for 16 KB page-size compliance). OpenCV 4.13.0.
 
 ## Build / run commands
 
@@ -22,8 +22,8 @@ All builds go through the Gradle wrapper. There is no `gradle` wrapper property 
 **Release build guard:** `assembleRelease` / `bundleRelease` will fail with a `GradleException` if `ADMOB_APP_ID`, `ADMOB_INTERSTITIAL_ID`, or `ADMOB_BANNER_ID` is the Google test ID. Blank AdMob IDs also fail the build. See the "AdMob" section below for the source of truth.
 
 Key properties and defaults (from `app/build.gradle.kts`):
-- `VERSION_CODE` (int, default `1`) — `versionCode`
-- `VERSION_NAME` (string, default `"1.0"`) — `versionName`
+- `VERSION_CODE` (int, default `3`) — `versionCode`. Current CI value: `4` (GitHub variable).
+- `VERSION_NAME` (string, default `"2.0"`) — `versionName`. Current CI value: `"1.5.2"` (GitHub variable).
 - `ADMOB_APP_ID` (default `ca-app-pub-3940256099942544~3347511713` — Google test ID) — used as `manifestPlaceholders["ADMOB_APP_ID"]` and `BuildConfig.ADMOB_APP_ID`
 - `ADMOB_INTERSTITIAL_ID` (default test ID)
 - `ADMOB_BANNER_ID` (default test ID)
@@ -32,7 +32,7 @@ Key properties and defaults (from `app/build.gradle.kts`):
 
 ## CI / release flow
 
-`.github/workflows/android_release.yml` runs on every push to `main` / `release`, plus `workflow_dispatch`. It decodes `KEYSTORE_BASE64` (or `APP_KEYSTORE_BASE64`) to `keystore.jks`, then runs `assembleRelease bundleRelease`, uploading `app-release.apk` and `app-release.aab` as artifacts. JDK 17 (Temurin), `gradle` cache enabled. For feature branches, trigger manually: `gh workflow run android_release.yml --ref <branch>`.
+`.github/workflows/android_release.yml` runs on every push to `main` / `release`, plus `workflow_dispatch`. It decodes `KEYSTORE_BASE64` (or `APP_KEYSTORE_BASE64`) to `keystore.jks`, then runs `assembleRelease bundleRelease` + `lintRelease`, uploading `app-release.apk`, `app-release.aab`, ProGuard `mapping.txt`, and lint results as artifacts. JDK 17 (Temurin), `gradle` cache enabled. The `Run Lint` step also receives AdMob secrets (the release-variant guard in `build.gradle.kts` treats any task with "Release" in its name as a release build). For feature branches, trigger manually: `gh workflow run android_release.yml --ref <branch>`.
 
 ## Architecture notes
 
@@ -59,17 +59,17 @@ Persisted fields per ViewModel:
 Bitmaps and ML-Kit results are NOT persisted — they are reloaded on restore if a Uri is present.
 
 Source layout (under `app/src/main/java/com/dhanuk/photodoctorpro/`):
-- `data/local/` — Room: `AppDatabase`, `HistoryDao`, `History` entity. Uses `kapt(libs.androidx.room.compiler)`.
+- `data/local/` — Room: `AppDatabase`, `HistoryDao`, `History` entity. Uses `ksp(libs.androidx.room.compiler)`.
 - `data/repository/HistoryRepository.kt` — wraps the DAO.
 - `ui/screens/` — one file per Compose screen + a paired `*ViewModel.kt` for the heavier ones (`HistoryViewModel`, `ObjectEraserViewModel`, `RemoveBackgroundViewModel`, `EnhanceImageViewModel`, `ImageToPdfViewModel`, `ColorAdjustmentsViewModel`, `ResizeCompressViewModel`). `ViewModelFactory.kt` provides a single shared factory. `PerspectiveCropViewModel`, `ExifStripperViewModel` are declared inline in their respective screen files.
 - `ui/navigation/`, `ui/theme/`, `ui/components/ZoomableBox.kt`, `ui/components/rememberBitmap.kt`.
 - `utils/` — `AdManager`, `ConsentManager` (real UMP consent flow), `ThemeController`, `UserPreferences` (DataStore-style prefs), `BitmapUtils`, `ImageEnhancer`, `NotificationHelper`, `CrashReporter`.
 
-Image enhancement uses OpenCV only (Lanczos upscaling + unsharp mask + CLAHE + bilateral denoise). TFLite models and interpreters (`ESRGANHelper`, `FaceEnhancer`) have been removed. If real TFLite models are added back in the future, restore `assets/models/`, the TFLite Gradle deps, and `aaptOptions.noCompress += "tflite"`.
+Image enhancement uses both native RealESRGAN (via ncnn, `app/src/main/cpp/` + prebuilt `app/src/main/jniLibs/arm64-v8a/libncnn.so`) and OpenCV fallback (Lanczos upscaling + edgePreservingFilter + detailEnhance + CLAHE). The native path (`RealESRGANNativeLib`) loads `.param`/`.bin` model files from `assets/models/`; `ImageEnhancer` orchestrates GPU→CPU→OpenCV fallback with a `Mutex` for thread safety. TFLite models and interpreters have been removed.
 
 ## Permissions, manifest, FileProvider
 
-Permissions (`AndroidManifest.xml`): `INTERNET`, `READ_MEDIA_IMAGES`, legacy `READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE` capped via `android:maxSdkVersion`, `POST_NOTIFICATIONS`. `android:largeHeap="true"` is set. The app declares a `FileProvider` at `${applicationId}.provider` and `PicFixApplication` as the `Application` class.
+Permissions (`AndroidManifest.xml`): `INTERNET`, `READ_MEDIA_IMAGES`, legacy `READ_EXTERNAL_STORAGE`/`WRITE_EXTERNAL_STORAGE` capped via `android:maxSdkVersion`, `POST_NOTIFICATIONS`. `android:largeHeap="true"` is set. `android:pageSizeCompat="enabled"` is set for 16 KB page-size compatibility. The app declares a `FileProvider` at `${applicationId}.provider` and `PicFixApplication` as the `Application` class.
 
 FileProvider paths (`app/src/main/res/xml/provider_paths.xml`) are intentionally restricted to app-specific directories only — `external-files-path` (Pictures), `files-path` (Pictures), and `cache-path` (export/). Do not re-add `<external-path path=".">` or unrestricted `<cache-path path="/">`; these were removed for security in Phase 2F because they grant FileProvider access to the entire external storage and cache.
 
@@ -95,7 +95,7 @@ It writes `ic_launcher.png` and `ic_launcher_round.png` to each `mipmap-*dpi/` f
 
 ## Tests
 
-There is no `app/src/test/` or `app/src/androidTest/` source set, and no JUnit/Espresso test files in-tree despite the JUnit + Espresso dependencies in `app/build.gradle.kts`. `./gradlew test` will succeed vacuously; do not assume a test suite exists. Add tests under those standard paths if you need them — the Gradle config and runner (`androidx.test.runner.AndroidJUnitRunner`) are already wired.
+`app/src/test/` contains 8 JUnit + Robolectric unit tests (`HistoryRepositoryTest`, `ColorAdjustmentsViewModelRecycledBitmapTest`, `EnhanceImageViewModelTest`, `PerspectiveCropUpdateCornerTest`, `ObjectEraserViewModelTest`, `ImageToPdfViewModelReorderTest`, `BitmapUtilsMappingTest`, `ImageEnhancerGuardTest`). `app/src/androidTest/` contains 1 Espresso smoke test (`HomeScreenSmokeTest`). The Gradle config and runner (`androidx.test.runner.AndroidJUnitRunner`) are wired. Run with `./gradlew test`.
 
 ## Conventions specific to this repo
 

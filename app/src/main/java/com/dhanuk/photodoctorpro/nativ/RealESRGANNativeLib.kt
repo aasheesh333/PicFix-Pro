@@ -16,6 +16,7 @@ object RealESRGANNativeLib {
     @Volatile private var currentScale = 4
 
     private const val MAX_OUTPUT_PIXELS = 36_000_000L
+    private const val MAX_INPUT_DIM = 900 // 900*4=3600 → 3600*3600 ≈ 13M px (well under 36M)
 
     var nativeAvailable = true
         private set
@@ -100,7 +101,26 @@ object RealESRGANNativeLib {
     ): Bitmap? {
         if (!nativeAvailable || !isInitialized) return null
 
-        val outPixels = bitmap.width.toLong() * currentScale * bitmap.height.toLong() * currentScale
+        // Downscale the input if the x4 output would exceed the memory budget.
+        // This keeps ncnn viable for large phone photos instead of falling
+        // through to the slow OpenCV path.
+        var inputBitmap = bitmap
+        var maxDim = maxOf(bitmap.width, bitmap.height)
+        val outDim = maxDim * currentScale
+        if (outDim.toLong() * outDim.toLong() > MAX_OUTPUT_PIXELS) {
+            // Calculate the largest input dimension whose x4 output fits
+            val maxInputForBudget = kotlin.math.sqrt(MAX_OUTPUT_PIXELS.toDouble()).toInt() / currentScale
+            val safeMax = maxInputForBudget.coerceIn(256, MAX_INPUT_DIM)
+            if (maxDim > safeMax) {
+                val scale = safeMax.toFloat() / maxDim
+                val newW = (bitmap.width * scale).toInt().coerceAtLeast(1)
+                val newH = (bitmap.height * scale).toInt().coerceAtLeast(1)
+                inputBitmap = Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+                maxDim = maxOf(newW, newH)
+            }
+        }
+
+        val outPixels = inputBitmap.width.toLong() * currentScale * inputBitmap.height.toLong() * currentScale
         val heapBudget = Runtime.getRuntime().maxMemory() / 4L
         if (outPixels > MAX_OUTPUT_PIXELS || outPixels > heapBudget) return null
 
@@ -112,7 +132,19 @@ object RealESRGANNativeLib {
             }
         }
 
-        return nativeEnhance(bitmap, callback)
+        val result = nativeEnhance(inputBitmap, callback)
+
+        // If we downscaled the input, upscale the ncnn result back to the
+        // user's expected output size (original dimensions × scaleFactor).
+        if (inputBitmap !== bitmap && result != null) {
+            val targetW = bitmap.width * currentScale
+            val targetH = bitmap.height * currentScale
+            val upscaled = Bitmap.createScaledBitmap(result, targetW, targetH, true)
+            result.recycle()
+            return upscaled
+        }
+
+        return result
     }
 
     fun cleanup() {

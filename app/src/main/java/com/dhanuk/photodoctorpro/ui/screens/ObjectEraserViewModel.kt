@@ -130,7 +130,7 @@ class ObjectEraserViewModel(
         val old = _uiState.value.processedBitmap
         _uiState.update { it.copy(
             processedBitmap = prevBitmap,
-            paths = prevPaths,
+            paths = emptyList(),
             canUndo = canUndo,
             canRedo = true,
             pathsVersion = it.pathsVersion + 1
@@ -158,7 +158,7 @@ class ObjectEraserViewModel(
         val old = _uiState.value.processedBitmap
         _uiState.update { it.copy(
             processedBitmap = nextBitmap,
-            paths = nextPaths,
+            paths = emptyList(),
             canUndo = true,
             canRedo = canRedo,
             pathsVersion = it.pathsVersion + 1

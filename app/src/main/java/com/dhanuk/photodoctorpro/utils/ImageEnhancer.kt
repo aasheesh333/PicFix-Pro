@@ -9,7 +9,6 @@ import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.Mat
-import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.photo.Photo
 import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
@@ -142,28 +141,9 @@ object ImageEnhancer {
             6, 8 -> {
                 val targetW = bitmap.width * scaleFactor
                 val targetH = bitmap.height * scaleFactor
-
-                if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
-                    val src = Mat()
-                    Utils.bitmapToMat(x4Result, src)
-                    // bitmapToMat gives RGBA; resize doesn't care about channel order,
-                    // but matToBitmap expects RGBA, so convert back before output.
-                    Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
-                    val dst = Mat()
-                    Imgproc.resize(src, dst, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
-                    val rgba = Mat()
-                    Imgproc.cvtColor(dst, rgba, Imgproc.COLOR_BGR2RGBA)
-                    val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                    Utils.matToBitmap(rgba, result)
-                    src.release()
-                    dst.release()
-                    rgba.release()
-                    if (result !== x4Result) x4Result.recycle()
-                    result
-                } else {
-                    Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
-                        if (it !== x4Result) x4Result.recycle()
-                    }
+                // Simple Android-native resize — no channel-order headaches
+                Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
+                    if (it !== x4Result) x4Result.recycle()
                 }
             }
             else -> {
@@ -177,46 +157,38 @@ object ImageEnhancer {
     }
 
     private fun enhanceWithOpenCv(bitmap: Bitmap, scaleFactor: Int): Bitmap {
-        if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
-            return Bitmap.createScaledBitmap(
-                bitmap,
-                bitmap.width * scaleFactor,
-                bitmap.height * scaleFactor,
-                true
-            )
-        }
-
-        val src = Mat()
-        val upscaled = Mat()
-        Utils.bitmapToMat(bitmap, src)
-        // Utils.bitmapToMat produces RGBA; convert to BGR for OpenCV filters
-        Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
         val targetW = bitmap.width * scaleFactor
         val targetH = bitmap.height * scaleFactor
-        Imgproc.resize(src, upscaled, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
-        src.release()
 
-        var current = upscaled
-        var ownsCurrent = true
+        if (!com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
+            return Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+        }
+
+        // Use Android's built-in Lanczos via createScaledBitmap for the resize
+        // (fast, no channel-order issues), then apply OpenCV enhancement filters.
+        val upscaled = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+
+        val src = Mat()
+        Utils.bitmapToMat(upscaled, src)
+        // bitmapToMat gives RGBA; OpenCV Photo/Imgproc expect BGR
+        Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
+        upscaled.recycle()
+
+        var current = src
 
         val denoised = Mat()
         try {
             Photo.edgePreservingFilter(current, denoised, Photo.RECURS_FILTER, 60.0f, 0.4f)
-            if (ownsCurrent) current.release()
+            current.release()
             current = denoised
-            ownsCurrent = false
         } catch (_: Exception) {}
 
-        ownsCurrent = true
         val enhanced = Mat()
         try {
             Photo.detailEnhance(current, enhanced, 20.0f, 0.2f)
-            if (ownsCurrent) current.release()
+            current.release()
             current = enhanced
-            ownsCurrent = true
-        } catch (_: Exception) {
-            ownsCurrent = true
-        }
+        } catch (_: Exception) {}
 
         val lab = Mat()
         val out = Mat()
@@ -235,7 +207,7 @@ object ImageEnhancer {
             current = out
         } catch (_: Exception) {}
 
-        // Convert BGR back to RGBA for matToBitmap
+        // BGR → RGBA for matToBitmap
         val rgba = Mat()
         Imgproc.cvtColor(current, rgba, Imgproc.COLOR_BGR2RGBA)
         current.release()
