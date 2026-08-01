@@ -102,12 +102,12 @@ class ObjectEraserViewModel(
     }
 
     fun onPathsChanged(newPaths: List<EraserPath>) {
-        _uiState.update { it.copy(paths = newPaths) }
+        _uiState.update { it.copy(paths = newPaths, pathsVersion = it.pathsVersion + 1) }
     }
 
     fun addPath(path: EraserPath) {
         val currentPaths = _uiState.value.paths
-        _uiState.update { it.copy(paths = currentPaths + path) }
+        _uiState.update { it.copy(paths = currentPaths + path, pathsVersion = it.pathsVersion + 1) }
     }
 
     fun undo() {
@@ -132,7 +132,8 @@ class ObjectEraserViewModel(
             processedBitmap = prevBitmap,
             paths = prevPaths,
             canUndo = canUndo,
-            canRedo = true
+            canRedo = true,
+            pathsVersion = it.pathsVersion + 1
         ) }
         if (old != null && old != prevBitmap && !old.isRecycled) old.recycle()
     }
@@ -159,7 +160,8 @@ class ObjectEraserViewModel(
             processedBitmap = nextBitmap,
             paths = nextPaths,
             canUndo = true,
-            canRedo = canRedo
+            canRedo = canRedo,
+            pathsVersion = it.pathsVersion + 1
         ) }
         if (old != null && old != nextBitmap && !old.isRecycled) old.recycle()
     }
@@ -261,7 +263,8 @@ class ObjectEraserViewModel(
                 paths = emptyList(),
                 canUndo = true,
                 canRedo = false,
-                progress = 1f
+                progress = 1f,
+                pathsVersion = it.pathsVersion + 1
             ) }
             if (oldProcessed != null && oldProcessed != resultBitmap && !oldProcessed.isRecycled) {
                 oldProcessed.recycle()
@@ -435,7 +438,8 @@ data class ObjectEraserUiState(
     val resetPerformed: Boolean = false,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
-    val progress: Float = 0f
+    val progress: Float = 0f,
+    val pathsVersion: Int = 0
 )
 
 private const val KEY_URI = "selectedImageUri"

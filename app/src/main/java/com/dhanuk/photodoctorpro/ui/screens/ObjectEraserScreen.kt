@@ -479,6 +479,7 @@ fun EraserEditor(
                         contentScale = ContentScale.Fit
                     )
 
+                androidx.compose.runtime.key(uiState.pathsVersion, uiState.paths.size) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val viewAspectRatio = size.width / size.height
                     val imageAspectRatio = bitmapToShow.width.toFloat() / bitmapToShow.height.toFloat()
@@ -523,6 +524,7 @@ fun EraserEditor(
                     }
 
                     drawContext.canvas.restore()
+                }
                 }
                 }
             }

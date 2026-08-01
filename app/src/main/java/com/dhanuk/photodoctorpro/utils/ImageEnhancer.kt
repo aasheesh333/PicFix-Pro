@@ -58,7 +58,8 @@ object ImageEnhancer {
         enhanceLock.withLock {
             onProgress?.invoke(0.05f)
 
-            if (tryInitNcnn(context, useGpu = true)) {
+            // If already initialized, go straight to inference.
+            if (tierInitialized != 0) {
                 try {
                     val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
                     if (result != null) {
@@ -68,10 +69,8 @@ object ImageEnhancer {
                 } catch (_: Exception) {}
             }
 
-            // Re-init on CPU if GPU path failed: release the (possibly GPU) net first.
-            RealESRGANNativeLib.cleanup()
-            tierInitialized = 0
-            if (tryInitNcnn(context, useGpu = false)) {
+            // Not initialized or ncnn failed — try GPU init first.
+            if (tierInitialized == 0 && tryInitNcnn(context, useGpu = true)) {
                 try {
                     val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
                     if (result != null) {
@@ -79,6 +78,21 @@ object ImageEnhancer {
                         return@withLock result
                     }
                 } catch (_: Exception) {}
+            }
+
+            // GPU path failed: release the (possibly GPU) net and try CPU.
+            if (tierInitialized != 2) {
+                RealESRGANNativeLib.cleanup()
+                tierInitialized = 0
+                if (tryInitNcnn(context, useGpu = false)) {
+                    try {
+                        val result = enhanceWithNcnn(bitmap, scaleFactor, onProgress)
+                        if (result != null) {
+                            onProgress?.invoke(1.0f)
+                            return@withLock result
+                        }
+                    } catch (_: Exception) {}
+                }
             }
 
             onProgress?.invoke(0.3f)
@@ -132,12 +146,18 @@ object ImageEnhancer {
                 if (com.dhanuk.photodoctorpro.PicFixApplication.OpenCVInitialized) {
                     val src = Mat()
                     Utils.bitmapToMat(x4Result, src)
+                    // bitmapToMat gives RGBA; resize doesn't care about channel order,
+                    // but matToBitmap expects RGBA, so convert back before output.
+                    Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
                     val dst = Mat()
                     Imgproc.resize(src, dst, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
+                    val rgba = Mat()
+                    Imgproc.cvtColor(dst, rgba, Imgproc.COLOR_BGR2RGBA)
                     val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                    Utils.matToBitmap(dst, result)
+                    Utils.matToBitmap(rgba, result)
                     src.release()
                     dst.release()
+                    rgba.release()
                     if (result !== x4Result) x4Result.recycle()
                     result
                 } else {
@@ -169,6 +189,8 @@ object ImageEnhancer {
         val src = Mat()
         val upscaled = Mat()
         Utils.bitmapToMat(bitmap, src)
+        // Utils.bitmapToMat produces RGBA; convert to BGR for OpenCV filters
+        Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
         val targetW = bitmap.width * scaleFactor
         val targetH = bitmap.height * scaleFactor
         Imgproc.resize(src, upscaled, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_LANCZOS4)
@@ -213,9 +235,13 @@ object ImageEnhancer {
             current = out
         } catch (_: Exception) {}
 
-        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(current, result)
+        // Convert BGR back to RGBA for matToBitmap
+        val rgba = Mat()
+        Imgproc.cvtColor(current, rgba, Imgproc.COLOR_BGR2RGBA)
         current.release()
+        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(rgba, result)
+        rgba.release()
         return result
     }
 }
