@@ -11,10 +11,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.google.android.gms.ads.AdSize
 
 @Composable
 fun GlobalBannerAd(navController: NavHostController) {
@@ -36,8 +38,17 @@ fun GlobalBannerAd(navController: NavHostController) {
     val activity = context as? Activity ?: return
     val manager = remember { BannerAdManager.getInstance() }
 
-    LaunchedEffect(activity) {
-        manager.initialize(activity)
+    // Anchored adaptive banner: exact height for this device width, so the
+    // Compose container never leaves a white strip above/below the ad.
+    val configuration = LocalConfiguration.current
+    val adSize = remember(configuration.screenWidthDp) {
+        AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+            context, configuration.screenWidthDp
+        )
+    }
+
+    LaunchedEffect(activity, adSize) {
+        manager.initialize(activity, adSize)
     }
 
     LaunchedEffect(shouldShowBanner) {
@@ -55,16 +66,14 @@ fun GlobalBannerAd(navController: NavHostController) {
     }
 
     val adView = manager.getAdView()
-    // Only occupy layout space when the banner should actually show.
-    // Previously the AndroidView was always composed with a fixed 50.dp height,
-    // leaving a blank white strip on screens where the ad was hidden (GONE still
-    // consumes space inside a Column). This was the "double gap" below the ad on
-    // non-home screens.
+    // Only occupy layout space when the banner should actually show, and use the
+    // adaptive size's exact height — a fixed 50.dp container mismatched the real
+    // ad height and left a white strip (the "double gap").
     if (adView != null && shouldShowBanner) {
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(adSize.height.dp),
             factory = { adView },
             update = { view ->
                 view.visibility = View.VISIBLE

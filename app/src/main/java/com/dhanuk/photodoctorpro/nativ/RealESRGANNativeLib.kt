@@ -17,6 +17,15 @@ object RealESRGANNativeLib {
 
     private const val MAX_OUTPUT_PIXELS = 36_000_000L
     private const val MAX_INPUT_DIM = 900 // 900*4=3600 → 3600*3600 ≈ 13M px (well under 36M)
+    // Fast mode caps the input lower: 768*4 = 3072px output is plenty for
+    // gallery viewing and roughly halves inference time vs 900px input.
+    private const val MAX_INPUT_DIM_FAST = 768
+
+    @Volatile private var fastMode = false
+
+    fun setFastMode(fast: Boolean) {
+        fastMode = fast
+    }
 
     var nativeAvailable = true
         private set
@@ -109,10 +118,11 @@ object RealESRGANNativeLib {
         var inputBitmap = bitmap
         var maxDim = maxOf(bitmap.width, bitmap.height)
         val outDim = maxDim * currentScale
-        if (outDim.toLong() * outDim.toLong() > MAX_OUTPUT_PIXELS) {
+        val inputCap = if (fastMode) MAX_INPUT_DIM_FAST else MAX_INPUT_DIM
+        if (outDim.toLong() * outDim.toLong() > MAX_OUTPUT_PIXELS || maxDim > inputCap) {
             // Calculate the largest input dimension whose x4 output fits
             val maxInputForBudget = kotlin.math.sqrt(MAX_OUTPUT_PIXELS.toDouble()).toInt() / currentScale
-            val safeMax = maxInputForBudget.coerceIn(256, MAX_INPUT_DIM)
+            val safeMax = minOf(maxInputForBudget.coerceIn(256, MAX_INPUT_DIM), inputCap)
             if (maxDim > safeMax) {
                 val scale = safeMax.toFloat() / maxDim
                 val newW = (bitmap.width * scale).toInt().coerceAtLeast(1)

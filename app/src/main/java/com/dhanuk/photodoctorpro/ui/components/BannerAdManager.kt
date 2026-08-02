@@ -27,21 +27,23 @@ class BannerAdManager private constructor() {
         }
     }
 
-    fun initialize(activity: Activity) {
+    fun initialize(activity: Activity, adSize: AdSize = AdSize.BANNER) {
         val current = activityRef?.get()
-        if (current != null && current === activity && adView != null) return
-        if (adView != null && current !== activity) {
+        // Recreate if the requested size changed (rotation / adaptive resize).
+        val sizeChanged = adView?.adSize != adSize
+        if (current != null && current === activity && adView != null && !sizeChanged) return
+        if (adView != null && (current !== activity || sizeChanged)) {
             destroy()
         }
         activityRef = WeakReference(activity)
         if (adView == null) {
-            createAdView(activity)
+            createAdView(activity, adSize)
         }
     }
 
-    private fun createAdView(activity: Activity) {
+    private fun createAdView(activity: Activity, adSize: AdSize) {
         adView = AdView(activity).apply {
-            setAdSize(AdSize.BANNER)
+            setAdSize(adSize)
             adUnitId = BuildConfig.ADMOB_BANNER_ID
             adListener = object : AdListener() {
                 override fun onAdLoaded() {

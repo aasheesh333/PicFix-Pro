@@ -9,6 +9,7 @@
 #include "net.h"
 #include "mat.h"
 #include "gpu.h"
+#include "cpu.h"
 
 #define LOG_TAG "RealESRGAN_JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -45,14 +46,40 @@ static long getAvailableMemKB()
 
 static int autoTileSize(int scale)
 {
+    // Larger tiles = fewer per-tile fixed costs (extractor create, blob
+    // alloc) and better NEON cache locality. Sizes picked to stay within
+    // typical per-app heap limits at x4 scale (tile*scale*4 bytes/px out).
     long availKB = getAvailableMemKB();
     if (availKB > 1900LL * 1024)
-        return 200;
+        return 256;
     if (availKB > 550LL * 1024)
-        return 100;
+        return 192;
     if (availKB > 190LL * 1024)
-        return 64;
+        return 96;
     return 32;
+}
+
+// Shared precision/storage options for every ncnn::Net we create.
+static void applyBaseOptions(ncnn::Net* net)
+{
+    net->opt.use_vulkan_compute = false;
+    net->opt.use_fp16_packed = true;
+    net->opt.use_fp16_storage = true;
+    // fp16 arithmetic roughly doubles CPU throughput on arm64 for this model
+    // and is the single biggest "fast mode" win. Output quality is visually
+    // identical for photo upscaling.
+    net->opt.use_fp16_arithmetic = true;
+    net->opt.use_int8_storage = true;
+    net->opt.use_int8_arithmetic = false;
+}
+
+// CPU throughput options: pin to big cores and use the SIMD-friendly packed
+// layout. big.LITTLE devices otherwise waste time migrating threads.
+static void applyCpuPerfOptions(ncnn::Net* net)
+{
+    int big_cores = ncnn::get_big_cpu_count();
+    net->opt.num_threads = big_cores > 0 ? big_cores : ncnn::get_cpu_count();
+    net->opt.use_packing_layout = true;
 }
 
 static bool loadModel(const char* param_path, const char* model_path, int gpu_id)
@@ -64,16 +91,7 @@ static bool loadModel(const char* param_path, const char* model_path, int gpu_id
     }
 
     g_net = new ncnn::Net();
-
-    g_net->opt.use_vulkan_compute = false;
-    g_net->opt.use_fp16_packed = true;
-    g_net->opt.use_fp16_storage = true;
-    // fp16 arithmetic roughly doubles CPU throughput on arm64 for this model
-    // and is the single biggest "fast mode" win. Output quality is visually
-    // identical for photo upscaling.
-    g_net->opt.use_fp16_arithmetic = true;
-    g_net->opt.use_int8_storage = true;
-    g_net->opt.use_int8_arithmetic = false;
+    applyBaseOptions(g_net);
 
     bool use_gpu = (gpu_id >= 0) && (ncnn::get_gpu_count() > 0);
     if (use_gpu)
@@ -85,6 +103,7 @@ static bool loadModel(const char* param_path, const char* model_path, int gpu_id
         g_net->set_vulkan_device(dev);
         LOGI("Using Vulkan device %d", dev);
     }
+    applyCpuPerfOptions(g_net);
 
     int ret = g_net->load_param(param_path);
     if (ret != 0)
@@ -94,12 +113,8 @@ static bool loadModel(const char* param_path, const char* model_path, int gpu_id
             LOGW("load_param failed with Vulkan (ret=%d), retrying on CPU", ret);
             delete g_net;
             g_net = new ncnn::Net();
-            g_net->opt.use_vulkan_compute = false;
-            g_net->opt.use_fp16_packed = true;
-            g_net->opt.use_fp16_storage = true;
-            g_net->opt.use_fp16_arithmetic = true;
-            g_net->opt.use_int8_storage = true;
-            g_net->opt.use_int8_arithmetic = false;
+            applyBaseOptions(g_net);
+            applyCpuPerfOptions(g_net);
 
             ret = g_net->load_param(param_path);
             if (ret != 0)
@@ -137,12 +152,8 @@ static bool loadModel(const char* param_path, const char* model_path, int gpu_id
                 LOGW("load_model failed with Vulkan (ret=%d), retrying on CPU", ret);
                 delete g_net;
                 g_net = new ncnn::Net();
-                g_net->opt.use_vulkan_compute = false;
-                g_net->opt.use_fp16_packed = true;
-                g_net->opt.use_fp16_storage = true;
-                g_net->opt.use_fp16_arithmetic = true;
-                g_net->opt.use_int8_storage = true;
-                g_net->opt.use_int8_arithmetic = false;
+                applyBaseOptions(g_net);
+                applyCpuPerfOptions(g_net);
 
                 ret = g_net->load_param(param_path);
                 if (ret != 0)

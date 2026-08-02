@@ -8,9 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -37,7 +35,10 @@ fun AppScaffold() {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                Column {
+                // navigationBarsPadding keeps the whole stack above the system
+                // nav buttons on every device WITHOUT the old white Spacer that
+                // produced the "double gap" below the ad on non-home screens.
+                Column(modifier = Modifier.navigationBarsPadding()) {
                     ErrorBanner.GlobalErrorBanner()
                     GlobalBannerAd(navController)
                     AnimatedVisibility(
@@ -53,9 +54,6 @@ fun AppScaffold() {
                     ) {
                         BottomNavigationBar(navController)
                     }
-                    Spacer(
-                        modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)
-                    )
                 }
             }
         ) { padding ->
