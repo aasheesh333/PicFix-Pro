@@ -35,6 +35,7 @@ fun AppScaffold() {
 
     CompositionLocalProvider(LocalGlobalNavigationState provides globalNavigationState) {
         Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 Column {
                     ErrorBanner.GlobalErrorBanner()
@@ -52,10 +53,6 @@ fun AppScaffold() {
                     ) {
                         BottomNavigationBar(navController)
                     }
-                    // Always reserve space for the system navigation bar so the
-                    // banner ad never slides under it — regardless of whether the
-                    // bottom nav is visible. BottomNavigationBar no longer adds
-                    // its own navigationBars padding (removed to avoid double gap).
                     Spacer(
                         modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)
                     )
