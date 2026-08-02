@@ -83,6 +83,9 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         CrashReporter.unregisterActivity(this)
         if (isFinishing) {
+            // Stop any in-flight native enhancement before tearing down the net,
+            // otherwise the tile loop keeps the phone pegged after app close.
+            try { com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib.cancelEnhance() } catch (_: Exception) {}
             AdManager.cleanup()
             ImageEnhancer.shutdown()
         }

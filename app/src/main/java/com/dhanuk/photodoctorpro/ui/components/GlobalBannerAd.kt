@@ -55,14 +55,19 @@ fun GlobalBannerAd(navController: NavHostController) {
     }
 
     val adView = manager.getAdView()
-    if (adView != null) {
+    // Only occupy layout space when the banner should actually show.
+    // Previously the AndroidView was always composed with a fixed 50.dp height,
+    // leaving a blank white strip on screens where the ad was hidden (GONE still
+    // consumes space inside a Column). This was the "double gap" below the ad on
+    // non-home screens.
+    if (adView != null && shouldShowBanner) {
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             factory = { adView },
             update = { view ->
-                view.visibility = if (shouldShowBanner) View.VISIBLE else View.GONE
+                view.visibility = View.VISIBLE
             }
         )
     }

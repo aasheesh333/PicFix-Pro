@@ -48,6 +48,8 @@ object RealESRGANNativeLib {
 
     private external fun nativeCleanup()
 
+    private external fun nativeCancel()
+
     external fun isVulkanAvailable(): Boolean
 
     private fun copyModelToCache(
@@ -145,6 +147,18 @@ object RealESRGANNativeLib {
         }
 
         return result
+    }
+
+    /**
+     * Ask the native tile loop to abort at the next tile boundary. Safe to call
+     * from any thread; the flag is a plain volatile bool on the C++ side.
+     * Called from the ViewModel's coroutine cancellation handler so closing the
+     * app mid-enhance does not leave native code running at 100% CPU.
+     */
+    fun cancelEnhance() {
+        if (nativeAvailable) {
+            try { nativeCancel() } catch (_: UnsatisfiedLinkError) {}
+        }
     }
 
     fun cleanup() {

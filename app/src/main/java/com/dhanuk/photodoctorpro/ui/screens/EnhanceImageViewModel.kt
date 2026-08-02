@@ -116,6 +116,11 @@ class EnhanceImageViewModel(
                 ) }
                 if (oldEnhanced != null && oldEnhanced !== original && oldEnhanced !== enhanced && !oldEnhanced.isRecycled) oldEnhanced.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
+                // Tell native code to stop the tile loop immediately, otherwise
+                // it keeps running with the input bitmap's pixels locked and the
+                // phone hangs at 100% CPU even after the app is closed.
+                try { com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib.cancelEnhance() } catch (_: Exception) {}
+                _uiState.update { it.copy(isLoading = false, progress = 0f) }
                 throw ce
             } catch (e: Exception) {
                 if (com.dhanuk.photodoctorpro.BuildConfig.DEBUG) {
@@ -196,6 +201,9 @@ class EnhanceImageViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        // Signal native cancellation first so the tile loop sees the flag before
+        // the coroutine teardown completes.
+        try { com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib.cancelEnhance() } catch (_: Exception) {}
         enhanceJob?.cancel()
         enhanceJob = null
         // Do not call ImageEnhancer.shutdown() here: onCleared fires on back-navigation,
