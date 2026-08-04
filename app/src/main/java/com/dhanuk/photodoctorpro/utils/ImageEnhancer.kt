@@ -125,13 +125,14 @@ object ImageEnhancer {
 
         var current = src
 
-        // 1) Unsharp mask: out = src*1.5 - blur*0.5. Restores edge texture the
-        //    model smoothed over (skin pores, hair, fabric) without halos.
+        // 1) Unsharp mask: out = src*1.3 - blur*0.3. Restores edge texture the
+        //    model smoothed over (skin pores, hair, fabric) without halos or
+        //    the over-baked look stronger amounts produced.
         try {
             val blurred = Mat()
             Imgproc.GaussianBlur(current, blurred, org.opencv.core.Size(0.0, 0.0), 2.0)
             val sharpened = Mat()
-            Core.addWeighted(current, 1.5, blurred, -0.5, 0.0, sharpened)
+            Core.addWeighted(current, 1.3, blurred, -0.3, 0.0, sharpened)
             blurred.release()
             current.release()
             current = sharpened
@@ -155,24 +156,8 @@ object ImageEnhancer {
             current = out
         } catch (_: Exception) {}
 
-        // 3) Very subtle monochrome grain — kills the "AI plastic" look and
-        //    makes flat areas (sky, skin) look photographic.
-        try {
-            val noise = Mat(current.size(), org.opencv.core.CvType.CV_8UC3)
-            val rng = java.util.Random(42)
-            val bytes = ByteArray((noise.total() * noise.channels()).toInt())
-            rng.nextBytes(bytes)
-            noise.put(0, 0, bytes)
-            // Center around 0 and scale to ~±2 levels: invisible in detail,
-            // breaks up banding in flat areas.
-            val noiseF = Mat()
-            noise.convertTo(noiseF, org.opencv.core.CvType.CV_32FC3, 1.0 / 64.0, -2.0)
-            val currentF = Mat()
-            current.convertTo(currentF, org.opencv.core.CvType.CV_32FC3)
-            Core.add(currentF, noiseF, currentF)
-            currentF.convertTo(current, org.opencv.core.CvType.CV_8UC3)
-            noise.release(); noiseF.release(); currentF.release()
-        } catch (_: Exception) {}
+        // 3) (grain pass removed — it made 2x results look noisy/dirty; CLAHE +
+        //    the gentler unsharp above are enough texture for the "photo" look)
 
         // Restore the alpha channel — the passes above run on a BGR copy and
         // would otherwise make every pixel opaque.
@@ -256,33 +241,10 @@ object ImageEnhancer {
             { progress: Float -> onProgress(progress * 0.9f) }
         } else null
 
-        val x4Result = RealESRGANNativeLib.enhance(bitmap, progressLambda) ?: return null
-
-        return when (scaleFactor) {
-            2 -> {
-                val w = bitmap.width * 2
-                val h = bitmap.height * 2
-                Bitmap.createScaledBitmap(x4Result, w, h, true).also {
-                    if (it !== x4Result) x4Result.recycle()
-                }
-            }
-            4 -> x4Result
-            6, 8 -> {
-                val targetW = bitmap.width * scaleFactor
-                val targetH = bitmap.height * scaleFactor
-                // Simple Android-native resize — no channel-order headaches
-                Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
-                    if (it !== x4Result) x4Result.recycle()
-                }
-            }
-            else -> {
-                val targetW = bitmap.width * scaleFactor
-                val targetH = bitmap.height * scaleFactor
-                Bitmap.createScaledBitmap(x4Result, targetW, targetH, true).also {
-                    if (it !== x4Result) x4Result.recycle()
-                }
-            }
-        }
+        // The native lib now owns all scaling: it pre-scales the input for
+        // scales < 4 so its x4 output is already the final target size, and
+        // restores the result to bitmap.width/height x targetScale otherwise.
+        return RealESRGANNativeLib.enhance(bitmap, scaleFactor, progressLambda)
     }
 
     private fun enhanceWithOpenCv(bitmap: Bitmap, scaleFactor: Int): Bitmap {
@@ -293,9 +255,19 @@ object ImageEnhancer {
             return Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
         }
 
+        // Fallback safety: run the expensive filters at a capped size (the
+        // edgePreserving/detailEnhance/CLAHE stack is the slow part), then do
+        // one fast native upscale to the final target. Without this, a 4x of a
+        // big photo meant 100+MP Mats and multi-minute stalls.
+        val workMaxDim = 4096
+        val targetMaxDim = maxOf(targetW, targetH)
+        val workScale = if (targetMaxDim > workMaxDim) workMaxDim.toFloat() / targetMaxDim else 1f
+        val workW = (targetW * workScale).toInt().coerceAtLeast(1)
+        val workH = (targetH * workScale).toInt().coerceAtLeast(1)
+
         // Use Android's built-in Lanczos via createScaledBitmap for the resize
         // (fast, no channel-order issues), then apply OpenCV enhancement filters.
-        val upscaled = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+        val upscaled = Bitmap.createScaledBitmap(bitmap, workW, workH, true)
 
         val src = Mat()
         Utils.bitmapToMat(upscaled, src)
@@ -340,9 +312,14 @@ object ImageEnhancer {
         val rgba = Mat()
         Imgproc.cvtColor(current, rgba, Imgproc.COLOR_BGR2RGBA)
         current.release()
-        val result = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(rgba, result)
+        val filtered = Bitmap.createBitmap(workW, workH, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(rgba, filtered)
         rgba.release()
-        return result
+
+        // Final fast native upscale to the user's target size.
+        if (workW == targetW && workH == targetH) return filtered
+        return Bitmap.createScaledBitmap(filtered, targetW, targetH, true).also {
+            if (it !== filtered) filtered.recycle()
+        }
     }
 }

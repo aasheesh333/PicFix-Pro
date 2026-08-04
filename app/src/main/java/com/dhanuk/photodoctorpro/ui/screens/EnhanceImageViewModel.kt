@@ -143,7 +143,10 @@ class EnhanceImageViewModel(
      */
     private fun maxOutputPixelsForDevice(context: Context): Long {
         val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-        val memoryClassMb = activityManager?.memoryClass ?: 96
+        // The manifest sets android:largeHeap="true", so getLargeMemoryClass()
+        // reflects the real budget (previously getMemoryClass() under-estimated
+        // and every 2x of a normal photo was rejected as "too big").
+        val memoryClassMb = activityManager?.largeMemoryClass ?: 256
         // Reserve ~60% of the heap for one ARGB_8888 output bitmap (4 bytes/px).
         val usableBytes = (memoryClassMb.toLong() * 1024L * 1024L * 60L) / 100L
         return (usableBytes / 4L).coerceAtLeast(8_000_000L)

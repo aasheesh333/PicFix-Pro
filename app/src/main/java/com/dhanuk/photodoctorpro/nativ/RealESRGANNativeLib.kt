@@ -108,32 +108,57 @@ object RealESRGANNativeLib {
 
     fun enhance(
         bitmap: Bitmap,
+        targetScale: Int,
         onProgress: ((Float) -> Unit)? = null
     ): Bitmap? {
         if (!nativeAvailable || !isInitialized) return null
 
-        // Downscale the input if the x4 output would exceed the memory budget.
-        // This keeps ncnn viable for large phone photos instead of falling
-        // through to the slow OpenCV path.
-        var inputBitmap = bitmap
-        var maxDim = maxOf(bitmap.width, bitmap.height)
-        val outDim = maxDim * currentScale
+        // The model always upscales its input x4. For requested scales below 4
+        // (e.g. 2x), feed the model a pre-scaled input so its x4 output is
+        // already the final target size: ~4x less inference work for 2x and no
+        // wasteful huge intermediate (previously a 3000px image at 2x built a
+        // 12000x12000 = 576MB bitmap and often OOM'd, falling back to the slow
+        // OpenCV path which caused the 5-10 minute hangs + glitches).
+        val modelInputScale = targetScale / 4f
+
+        var inputBitmap: Bitmap = bitmap
+        var preW = bitmap.width
+        var preH = bitmap.height
+        if (targetScale < 4) {
+            preW = (bitmap.width * modelInputScale).toInt().coerceAtLeast(1)
+            preH = (bitmap.height * modelInputScale).toInt().coerceAtLeast(1)
+            if (preW != bitmap.width || preH != bitmap.height) {
+                inputBitmap = Bitmap.createScaledBitmap(bitmap, preW, preH, true)
+            }
+        }
+
+        // Cap the model input so the x4 output stays within the memory budget
+        // (and time budget on the heavy x4plus model).
         val inputCap = if (fastMode) MAX_INPUT_DIM_FAST else MAX_INPUT_DIM
+        var maxDim = maxOf(preW, preH)
+        val outDim = maxDim * currentScale
         if (outDim.toLong() * outDim.toLong() > MAX_OUTPUT_PIXELS || maxDim > inputCap) {
-            // Calculate the largest input dimension whose x4 output fits
             val maxInputForBudget = kotlin.math.sqrt(MAX_OUTPUT_PIXELS.toDouble()).toInt() / currentScale
             val safeMax = minOf(maxInputForBudget.coerceIn(256, MAX_INPUT_DIM), inputCap)
             if (maxDim > safeMax) {
                 val scale = safeMax.toFloat() / maxDim
-                val newW = (bitmap.width * scale).toInt().coerceAtLeast(1)
-                val newH = (bitmap.height * scale).toInt().coerceAtLeast(1)
-                inputBitmap = Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+                val newW = (preW * scale).toInt().coerceAtLeast(1)
+                val newH = (preH * scale).toInt().coerceAtLeast(1)
+                if (newW != preW || newH != preH) {
+                    val scaled = Bitmap.createScaledBitmap(inputBitmap, newW, newH, true)
+                    if (inputBitmap !== bitmap) inputBitmap.recycle()
+                    inputBitmap = scaled
+                }
                 maxDim = maxOf(newW, newH)
             }
         }
 
         val outPixels = inputBitmap.width.toLong() * currentScale * inputBitmap.height.toLong() * currentScale
-        val heapBudget = Runtime.getRuntime().maxMemory() / 4L
+        // Tiling bounds ncnn's internal memory, and the caller (ViewModel)
+        // already guards the FINAL output size, so a relaxed budget is safe.
+        // The old maxMemory/4 here rejected common photo sizes and silently
+        // dropped this method to the slow OpenCV fallback.
+        val heapBudget = Runtime.getRuntime().maxMemory() / 2L
         if (outPixels > MAX_OUTPUT_PIXELS || outPixels > heapBudget) return null
 
         val callback = onProgress?.let { cb ->
@@ -146,17 +171,25 @@ object RealESRGANNativeLib {
 
         val result = nativeEnhance(inputBitmap, callback)
 
-        // If we downscaled the input, upscale the ncnn result back to the
-        // user's expected output size (original dimensions × scaleFactor).
-        if (inputBitmap !== bitmap && result != null) {
-            val targetW = bitmap.width * currentScale
-            val targetH = bitmap.height * currentScale
+        if (inputBitmap !== bitmap && inputBitmap.isRecycled) return null
+
+        // Restore to the user's expected output size (original x targetScale) —
+        // never bitmap.width * 4, which created the huge intermediate.
+        if (result != null) {
+            val targetW = bitmap.width * targetScale
+            val targetH = bitmap.height * targetScale
+            if (result.width == targetW && result.height == targetH) {
+                if (inputBitmap !== bitmap) inputBitmap.recycle()
+                return result
+            }
             val upscaled = Bitmap.createScaledBitmap(result, targetW, targetH, true)
             result.recycle()
+            if (inputBitmap !== bitmap) inputBitmap.recycle()
             return upscaled
         }
 
-        return result
+        if (inputBitmap !== bitmap) inputBitmap.recycle()
+        return null
     }
 
     /**

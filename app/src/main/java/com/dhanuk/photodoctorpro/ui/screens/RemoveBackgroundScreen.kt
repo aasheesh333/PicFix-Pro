@@ -196,6 +196,7 @@ fun RemoveBackgroundScreen(navController: NavController) {
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(if (uiState.isRefining) stringResource(R.string.refine_edges) else stringResource(R.string.remove_background)) },
