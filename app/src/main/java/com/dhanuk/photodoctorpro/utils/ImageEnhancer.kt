@@ -16,12 +16,21 @@ import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
 object ImageEnhancer {
 
     @Volatile private var tierInitialized = 0
-    private const val MODEL_DIR_STANDARD = "realesrgan-x4plus-anime"
-    private const val MODEL_DIR_HD = "realesrgan-x4plus"
-    private const val MODEL_NAME = "x4"
+    // Both tiers now use the same lightweight Real-ESRGAN anime video v3 model
+    // (~1.2MB, 37 layers — roughly 25x fewer FLOPs than the old realesrgan-x4plus
+    // GAN model). The old x4plus took 3-5 minutes for a 2x on CPU-only phones;
+    // this model does the same job in ~10-25s with a clean (artifact-free)
+    // output. The tiers differ in input cap (standard 768, hd 900), so HD keeps
+    // a slightly larger model output.
+    private const val MODEL_DIR_STANDARD = "realesr-animevideov3-x4"
+    private const val MODEL_DIR_HD = "realesr-animevideov3-x4"
+    private const val MODEL_NAME = "realesr-animevideov3-x4"
     private const val MODEL_SCALE = 4
 
     @Volatile private var currentModelDir: String = MODEL_DIR_STANDARD
+    // Tracks the user's tier independently of the model dir (both tiers now
+    // share one model file) so Fast keeps the 768px input cap and HD the 900px.
+    @Volatile private var currentModeIsStandard = true
 
     private val enhanceLock = Mutex()
 
@@ -29,6 +38,7 @@ object ImageEnhancer {
         RealESRGANNativeLib.cleanup()
         tierInitialized = 0
         currentModelDir = MODEL_DIR_STANDARD
+        currentModeIsStandard = true
     }
 
     suspend fun initializeIfNeeded(context: Context, modelDir: String) = withContext(Dispatchers.Default) {
@@ -37,12 +47,14 @@ object ImageEnhancer {
                 "hd" -> MODEL_DIR_HD
                 else -> MODEL_DIR_STANDARD
             }
+            val isStandard = modelDir != "hd"
             // Tell the native lib whether to use the smaller fast-mode input cap.
-            RealESRGANNativeLib.setFastMode(resolvedDir == MODEL_DIR_STANDARD)
-            if (resolvedDir == currentModelDir && tierInitialized != 0) return@withLock
+            RealESRGANNativeLib.setFastMode(isStandard)
+            if (resolvedDir == currentModelDir && isStandard == currentModeIsStandard && tierInitialized != 0) return@withLock
             RealESRGANNativeLib.cleanup()
             tierInitialized = 0
             currentModelDir = resolvedDir
+            currentModeIsStandard = isStandard
             tryInitNcnn(context, useGpu = true)
             if (tierInitialized == 0) {
                 tryInitNcnn(context, useGpu = false)
@@ -216,8 +228,8 @@ object ImageEnhancer {
         if (useGpu && tierInitialized == 1) return true
         if (!useGpu && tierInitialized == 2) return true
 
-        // Keep the fast-mode input cap in sync with whichever model dir is active.
-        RealESRGANNativeLib.setFastMode(currentModelDir == MODEL_DIR_STANDARD)
+        // Keep the fast-mode input cap in sync with whichever tier is active.
+        RealESRGANNativeLib.setFastMode(currentModeIsStandard)
 
         val initialized = try {
             RealESRGANNativeLib.initialize(context, currentModelDir, MODEL_NAME, MODEL_SCALE, useGpu)

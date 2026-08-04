@@ -298,6 +298,7 @@
     <!-- v2: Enhance quality toggle -->
     <string name="quality_fast">Fast</string>
     <string name="quality_high">High Quality</string>
+    <string name="enhance_engine_fmt">Engine: %1$s</string>
 
     <!-- v2: Pixel budget guard -->
     <string name="enhance_too_large">This image is too large to upscale %1$dx on this device. Try a smaller scale or a smaller image.</string>

@@ -234,6 +234,15 @@ fun EnhanceImageScreen(navController: NavController) {
                 }
             }
 
+            if (uiState.engineInfo.isNotBlank() && uiState.enhancedBitmap != null) {
+                Text(
+                    text = stringResource(R.string.enhance_engine_fmt, uiState.engineInfo),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+
             if (uiState.originalBitmap == null) {
                 Button(
                     onClick = {

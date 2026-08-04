@@ -10,6 +10,7 @@
 #include "mat.h"
 #include "gpu.h"
 #include "cpu.h"
+#include "benchmark.h"
 
 #define LOG_TAG "RealESRGAN_JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -26,6 +27,10 @@ static std::string g_output_blob_name;
 // every iteration and aborts cleanly instead of running to completion on a
 // dead bitmap (which was hanging the phone at 100% CPU after app close).
 static volatile bool g_cancelled = false;
+
+// Diagnostic string reported back to Kotlin after each enhance run, e.g.
+// "CPU · 4 tiles · 12.4s". Lets the UI show which engine produced the result.
+static char g_engine_info[256] = {0};
 
 static long getAvailableMemKB()
 {
@@ -66,19 +71,24 @@ static void applyBaseOptions(ncnn::Net* net)
     net->opt.use_fp16_packed = true;
     net->opt.use_fp16_storage = true;
     // fp16 arithmetic roughly doubles CPU throughput on arm64 for this model
-    // and is the single biggest "fast mode" win. Output quality is visually
-    // identical for photo upscaling.
-    net->opt.use_fp16_arithmetic = true;
+    // and is the single biggest "fast mode" win. Only enable it on hardware
+    // that actually has the half-float instructions (ARMv8.2 asimdhp) — on
+    // older ARMv8.0 cores ncnn would otherwise silently fall back to fp32
+    // conversions with no speedup.
+    net->opt.use_fp16_arithmetic = ncnn::cpu_support_arm_asimdhp() != 0;
     net->opt.use_int8_storage = true;
     net->opt.use_int8_arithmetic = false;
 }
 
 // CPU throughput options: pin to big cores and use the SIMD-friendly packed
-// layout. big.LITTLE devices otherwise waste time migrating threads.
+// layout. big.LITTLE devices otherwise waste time migrating threads. Capped at
+// 4 threads: the model is light, and saturating every core makes the UI janky
+// while the enhance runs.
 static void applyCpuPerfOptions(ncnn::Net* net)
 {
     int big_cores = ncnn::get_big_cpu_count();
-    net->opt.num_threads = big_cores > 0 ? big_cores : ncnn::get_cpu_count();
+    int threads = big_cores > 0 ? big_cores : ncnn::get_cpu_count();
+    net->opt.num_threads = threads > 4 ? 4 : threads;
     net->opt.use_packing_layout = true;
 }
 
@@ -366,6 +376,8 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
     LOGI("Tiling: tile=%d xtiles=%d ytiles=%d prepadding=%d",
          tile_size, xtiles, ytiles, prepadding);
 
+    double t_start = (double)ncnn::get_current_time();
+
     const float mean_vals[3] = {0.f, 0.f, 0.f};
     const float norm_vals[3] = {1.f / 255.f, 1.f / 255.f, 1.f / 255.f};
     const float out_mean[3] = {0.f, 0.f, 0.f};
@@ -537,7 +549,12 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
 
     reportProgress(env, progress_listener, on_progress_mid, 1.0f);
 
-    LOGI("Enhancement complete");
+    double elapsed = ncnn::get_current_time() - t_start;
+    const char* engine = g_net->opt.use_vulkan_compute ? "GPU" : "CPU";
+    snprintf(g_engine_info, sizeof(g_engine_info), "%s · %d tiles · %.1fs",
+             engine, total_tiles, elapsed / 1000.0);
+    LOGI("Enhancement complete (%s)", g_engine_info);
+
     return out_bitmap;
 }
 
@@ -571,6 +588,13 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_isVulkanAvailable(
     int gpu_count = ncnn::get_gpu_count();
     LOGI("Vulkan GPU count: %d", gpu_count);
     return gpu_count > 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeGetLastEngineInfo(
+    JNIEnv* env, jobject thiz)
+{
+    return env->NewStringUTF(g_engine_info);
 }
 
 }

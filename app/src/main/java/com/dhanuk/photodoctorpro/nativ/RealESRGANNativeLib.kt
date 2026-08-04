@@ -15,6 +15,13 @@ object RealESRGANNativeLib {
     private val initLock = Any()
     @Volatile private var currentScale = 4
 
+    // Filled in after each successful nativeEnhance with e.g.
+    // "CPU · realesr-animevideov3-x4 · 4 tiles · 12.4s" — lets the UI (and
+    // debugging) show exactly which engine produced the result.
+    @Volatile private var lastEngineInfo: String = ""
+    val engineInfo: String
+        get() = lastEngineInfo
+
     private const val MAX_OUTPUT_PIXELS = 36_000_000L
     private const val MAX_INPUT_DIM = 900 // 900*4=3600 → 3600*3600 ≈ 13M px (well under 36M)
     // Fast mode caps the input lower: 768*4 = 3072px output is plenty for
@@ -59,6 +66,8 @@ object RealESRGANNativeLib {
 
     private external fun nativeCancel()
 
+    private external fun nativeGetLastEngineInfo(): String
+
     external fun isVulkanAvailable(): Boolean
 
     private fun copyModelToCache(
@@ -88,8 +97,8 @@ object RealESRGANNativeLib {
 
     fun initialize(
         context: Context,
-        modelDir: String = "realesrgan-x4plus-anime",
-        modelName: String = "x4",
+        modelDir: String = "realesr-animevideov3-x4",
+        modelName: String = "realesr-animevideov3-x4",
         scale: Int = 4,
         useGpu: Boolean = true
     ): Boolean {
@@ -172,6 +181,10 @@ object RealESRGANNativeLib {
         val result = nativeEnhance(inputBitmap, callback)
 
         if (inputBitmap !== bitmap && inputBitmap.isRecycled) return null
+
+        if (result != null) {
+            lastEngineInfo = try { nativeGetLastEngineInfo() } catch (_: Exception) { "" }
+        }
 
         // Restore to the user's expected output size (original x targetScale) —
         // never bitmap.width * 4, which created the huge intermediate.

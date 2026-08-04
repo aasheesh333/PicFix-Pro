@@ -112,7 +112,8 @@ class EnhanceImageViewModel(
                     enhancedBitmap = enhanced,
                     isLoading = false,
                     scaleFactor = scaleFactor,
-                    progress = 1f
+                    progress = 1f,
+                    engineInfo = com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib.engineInfo
                 ) }
                 if (oldEnhanced != null && oldEnhanced !== original && oldEnhanced !== enhanced && !oldEnhanced.isRecycled) oldEnhanced.recycle()
             } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -231,7 +232,8 @@ data class EnhanceImageUiState(
     val savedFilePath: String? = null,
     val progress: Float = 0f,
     val qualityMode: String = "standard",
-    val isModelReady: Boolean = false
+    val isModelReady: Boolean = false,
+    val engineInfo: String = ""
 )
 
 private const val KEY_URI = "selectedImageUri"
