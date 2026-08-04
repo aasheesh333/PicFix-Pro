@@ -347,7 +347,12 @@ Java_com_dhanuk_photodoctorpro_nativ_RealESRGANNativeLib_nativeEnhance(
     int tile_size = autoTileSize(scale);
     int TILE_SIZE_X = tile_size;
     int TILE_SIZE_Y = tile_size;
-    int prepadding = 10;
+    // prepadding must cover the model's receptive field so adjacent tiles
+    // don't show boundary seams after we crop the valid region back out. The
+    // current realesr-general-x4v3 net (SRVGGNet-compact, ~34 3x3 convs) has
+    // a larger effective RF than the old x4plus — 16 keeps tiles seamless.
+    // Cheap relative cost: (tile+2*pad)^2 / tile^2 ≈ 1.56x for tile=256.
+    int prepadding = 16;
 
     int xtiles = (w + TILE_SIZE_X - 1) / TILE_SIZE_X;
     int ytiles = (h + TILE_SIZE_Y - 1) / TILE_SIZE_Y;

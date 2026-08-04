@@ -16,17 +16,24 @@ object RealESRGANNativeLib {
     @Volatile private var currentScale = 4
 
     // Filled in after each successful nativeEnhance with e.g.
-    // "CPU · realesr-animevideov3-x4 · 4 tiles · 12.4s" — lets the UI (and
+    // "CPU · realesr-general-x4v3 · 4 tiles · 12.4s" — lets the UI (and
     // debugging) show exactly which engine produced the result.
     @Volatile private var lastEngineInfo: String = ""
     val engineInfo: String
         get() = lastEngineInfo
 
-    private const val MAX_OUTPUT_PIXELS = 36_000_000L
-    private const val MAX_INPUT_DIM = 900 // 900*4=3600 → 3600*3600 ≈ 13M px (well under 36M)
-    // Fast mode caps the input lower: 768*4 = 3072px output is plenty for
-    // gallery viewing and roughly halves inference time vs 900px input.
+    private const val MAX_OUTPUT_PIXELS = 40_000_000L
+    // Fast-mode hard cap. HD mode goes higher per scale (see effectiveHdCap
+    // below) so the model genuinely adds more detail at 6x/8x instead of just
+    // bilinear-stretching the same capped output.
     private const val MAX_INPUT_DIM_FAST = 768
+    // Absolute MaxInputDim clamp (a guardrail against the worst-case memory).
+    // Real HD caps per scale: 2x/4x=900, 6x=1200, 8x=1500 — chosen so the x4
+    // model output stays under MAX_OUTPUT_PIXELS (1500*4=6000 px → 36M px ✓).
+    private const val MAX_INPUT_DIM_HARD = 1600
+    private const val MAX_INPUT_DIM_HD_2X = 900
+    private const val MAX_INPUT_DIM_HD_6X = 1200
+    private const val MAX_INPUT_DIM_HD_8X = 1500
 
     @Volatile private var fastMode = false
 
@@ -97,8 +104,8 @@ object RealESRGANNativeLib {
 
     fun initialize(
         context: Context,
-        modelDir: String = "realesr-animevideov3-x4",
-        modelName: String = "realesr-animevideov3-x4",
+        modelDir: String = "realesr-general-x4v3",
+        modelName: String = "x4",
         scale: Int = 4,
         useGpu: Boolean = true
     ): Boolean {
@@ -142,13 +149,28 @@ object RealESRGANNativeLib {
         }
 
         // Cap the model input so the x4 output stays within the memory budget
-        // (and time budget on the heavy x4plus model).
-        val inputCap = if (fastMode) MAX_INPUT_DIM_FAST else MAX_INPUT_DIM
+        // and within the user's chosen time/quality tier.
+        //  - Fast mode: 768px cap for every scale — fast and consistent.
+        //  - HD mode: scale-aware. 2x/4x use 900; 6x uses 1200; 8x uses 1500 —
+        //    so a 6x/8x request actually feeds more of the original image to
+        //    the model and gains genuinely finer detail. (Previously all
+        //    scales shared the same 900 cap → the model produced 3600px output
+        //    regardless of x; higher scales just bilinearly stretched → "saare
+        //    x options same result".)
+        val inputCap = if (fastMode) {
+            MAX_INPUT_DIM_FAST
+        } else {
+            when (targetScale) {
+                6 -> MAX_INPUT_DIM_HD_6X
+                8 -> MAX_INPUT_DIM_HD_8X
+                else -> MAX_INPUT_DIM_HD_2X // 2x and 4x share 900
+            }
+        }
         var maxDim = maxOf(preW, preH)
         val outDim = maxDim * currentScale
         if (outDim.toLong() * outDim.toLong() > MAX_OUTPUT_PIXELS || maxDim > inputCap) {
             val maxInputForBudget = kotlin.math.sqrt(MAX_OUTPUT_PIXELS.toDouble()).toInt() / currentScale
-            val safeMax = minOf(maxInputForBudget.coerceIn(256, MAX_INPUT_DIM), inputCap)
+            val safeMax = minOf(maxInputForBudget.coerceIn(256, MAX_INPUT_DIM_HARD), inputCap)
             if (maxDim > safeMax) {
                 val scale = safeMax.toFloat() / maxDim
                 val newW = (preW * scale).toInt().coerceAtLeast(1)

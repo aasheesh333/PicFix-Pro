@@ -16,15 +16,18 @@ import com.dhanuk.photodoctorpro.nativ.RealESRGANNativeLib
 object ImageEnhancer {
 
     @Volatile private var tierInitialized = 0
-    // Both tiers now use the same lightweight Real-ESRGAN anime video v3 model
-    // (~1.2MB, 37 layers — roughly 25x fewer FLOPs than the old realesrgan-x4plus
-    // GAN model). The old x4plus took 3-5 minutes for a 2x on CPU-only phones;
-    // this model does the same job in ~10-25s with a clean (artifact-free)
-    // output. The tiers differ in input cap (standard 768, hd 900), so HD keeps
-    // a slightly larger model output.
-    private const val MODEL_DIR_STANDARD = "realesr-animevideov3-x4"
-    private const val MODEL_DIR_HD = "realesr-animevideov3-x4"
-    private const val MODEL_NAME = "realesr-animevideov3-x4"
+    // RealESRGAN "general x4 v3" — the compact SRVGGNet (~2.4MB, ~600K params)
+    // trained on real-world photos (DF2K-degraded), NOT anime. Same architecture
+    // family as realesr-animevideov3 so it stays as fast on CPU (~10-25s for 2x
+    // at the Fast input cap), but it gives genuine photo detail instead of the
+    // anime smearing. Both tiers use this single model file; Fast mode keeps a
+    // 768px input cap and HD mode uses a scale-aware cap (900/900/1200/1500 for
+    // 2x/4x/6x/8x) so higher scales get real extra detail — instead of all
+    // scales baking the same capped detail and only differing in bilinear
+    // stretch (the cause of the "all x options give the same result" bug).
+    private const val MODEL_DIR_STANDARD = "realesr-general-x4v3"
+    private const val MODEL_DIR_HD = "realesr-general-x4v3"
+    private const val MODEL_NAME = "x4"
     private const val MODEL_SCALE = 4
 
     @Volatile private var currentModelDir: String = MODEL_DIR_STANDARD
